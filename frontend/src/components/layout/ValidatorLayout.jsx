@@ -20,7 +20,7 @@ import { useAuth } from '../../context/AuthContext'
 
 export const VALIDATOR_SIDEBAR_MENU = [
   { id: 'dashboard', label: 'Beranda & Kuota', icon: LayoutDashboard, href: '/validator' },
-  { id: 'scan', label: 'Skrining QR & AI', icon: ScanLine, href: '/validator/scan' },
+  { id: 'foodscan', label: 'Scan Hidangan AI', icon: ScanLine, href: '/validator/foodscan' },
   { id: 'handover', label: 'Distribusi & Serah Terima', icon: ClipboardCheck, href: '/validator/handover' },
   { id: 'incidents', label: 'Lapor Insiden', icon: Siren, href: '/validator/incidents' },
   { id: 'history', label: 'Riwayat & Presensi', icon: History, href: '/validator/history' },

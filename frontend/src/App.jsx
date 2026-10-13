@@ -30,7 +30,6 @@ import { SppgIncidentsPage } from './pages/sppg/SppgIncidentsPage'
 import { SppgBillingPage } from './pages/sppg/SppgBillingPage'
 import { SppgCompliancePage } from './pages/sppg/SppgCompliancePage'
 import { ValidatorDashboardPage } from './pages/validator/ValidatorDashboardPage'
-import { ValidatorScanPage } from './pages/validator/ValidatorScanPage'
 import { ValidatorHandoverPage } from './pages/validator/ValidatorHandoverPage'
 import { ValidatorIncidentsPage } from './pages/validator/ValidatorIncidentsPage'
 import { ValidatorHistoryPage } from './pages/validator/ValidatorHistoryPage'
@@ -194,9 +193,7 @@ export default function App() {
   if (path === '/validator' || path.startsWith('/validator/')) {
     return (
       <RequireRole roles={['validator', 'superadmin']}>
-        {path === '/validator/scan' ? (
-          <ValidatorScanPage />
-        ) : path === '/validator/foodscan' ? (
+        {path === '/validator/scan' || path === '/validator/foodscan' ? (
           <ValidatorFoodScanPage />
         ) : path === '/validator/handover' ? (
           <ValidatorHandoverPage />

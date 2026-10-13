@@ -41,7 +41,7 @@ const TODAY_PACKAGE_ID = 'PKG-B'
  */
 
 const QUICK_ACTIONS = [
-  { label: 'Mulai Scan Boks', desc: 'Verifikasi QR + inspeksi visual AI', icon: ScanLine, href: '/validator/scan', tone: 'amber' },
+  { label: 'Mulai Scan Hidangan', desc: 'Pengenalan menu + kesegaran masakan AI', icon: ScanLine, href: '/validator/foodscan', tone: 'amber' },
   { label: 'Serah Terima BAST', desc: '13 master tote, suhu holding & tanda tangan', icon: ClipboardCheck, href: '/validator/handover', tone: 'emerald' },
   { label: 'Laporkan Makanan Rusak', desc: 'Tombol siaga cepat ke Satgas MBG', icon: Siren, href: '/validator/incidents', tone: 'rose' },
 ]

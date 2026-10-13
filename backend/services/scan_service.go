@@ -64,8 +64,12 @@ type CompartmentPrediction struct {
 	// Kosong pada layanan AI lawas; caller menjatuhkannya ke menuDisplayName.
 	MenuDisplayName string             `json:"menu_display_name"`
 	MenuConfidence  float64            `json:"menu_confidence"`
-	Mixed           bool               `json:"mixed"`
-	Alternatives    map[string]float64 `json:"alternatives"`
+	// DetectedCategory adalah kategori umum dari model deteksi objek
+	// (mis. lauk, sayur, makanan_pokok). Kosong pada layanan AI lawas.
+	DetectedCategory    string             `json:"detected_category"`
+	DetectionConfidence float64            `json:"detection_confidence"`
+	Mixed               bool               `json:"mixed"`
+	Alternatives        map[string]float64 `json:"alternatives"`
 }
 
 // Prediction is the JSON contract of POST {AI_BACKEND_URL}/predict-tray
@@ -212,6 +216,13 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 	image := in.Image
 	fileName := in.FileName
 	qrToken := strings.TrimSpace(in.QRToken)
+	boxID := strings.TrimSpace(in.BoxID)
+	batchID := strings.TrimSpace(in.BatchID)
+	holdingTempC := in.HoldingTempC
+	releaseTempC := in.ReleaseTempC
+	durationMS := in.DurationMS
+	rating := in.Rating
+	feedback := in.Feedback
 	if len(image) == 0 {
 		return nil, ErrImageRequired
 	}
@@ -444,22 +455,27 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 		_ = os.WriteFile(filepath.Join("uploads", ".gitignore"), []byte("*\n!.gitignore\n"), 0644)
 
 		entry := &models.ScanLog{
-			ID:           scanID,
-			BoxID:        boxID,
-			QRToken:      qrToken,
-			BatchID:      strings.TrimSpace(batchID),
-			ImageRef:     savedFileName,
-			AIClass:      pred.ClassName,
-			AIConfidence: pred.Confidence,
-			VisualScore:  score,
-			HoldingTempC: holdingTempC,
-			ReleaseTempC: releaseTempC,
-			Verdict:      verdict,
-			Reason:       note,
-			ActorID:      actorID,
-			CreatedAt:    now,
-			Rating:       rating,
-			Feedback:     feedback,
+			ID:             scanID,
+			BoxID:          boxID,
+			QRToken:        qrToken,
+			BatchID:        strings.TrimSpace(batchID),
+			ImageRef:       savedFileName,
+			AIClass:        freshClass,
+			AIConfidence:   freshConfidence,
+			VisualScore:    score,
+			HoldingTempC:   holdingTempC,
+			ReleaseTempC:   releaseTempC,
+			DurationMS:     durationMS,
+			Verdict:        verdict,
+			Reason:         note,
+			ActorID:        actorID,
+			CreatedAt:      now,
+			Rating:         rating,
+			Feedback:       feedback,
+			MenuName:       menuName,
+			MenuClass:      menuClass,
+			MenuDisplay:    menuDisplay,
+			MenuConfidence: menuConfidence,
 		}
 		if err := s.repo.InsertScan(ctx, entry); err != nil {
 			return nil, fmt.Errorf("menyimpan scan log: %w", err)
@@ -467,21 +483,30 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 	}
 
 	result := &models.ScanResult{
-		ID:           scanID,
-		BoxID:        boxID,
-		QRToken:      qrToken,
-		BatchID:      batchID,
-		ScannedAt:    now.In(wib).Format("15:04") + " WIB",
-		Score:        score,
-		Verdict:      verdict,
-		VerdictLabel: verdictLabel,
-		ReleaseTemp:  derefFloat(releaseTempC),
-		HoldTemp:     derefFloat(holdingTempC),
-		Checks:       checks,
-		Note:         note,
-		AIClass:      pred.ClassName,
-		AIConfidence: pred.Confidence,
-		AILatencyMS:  pred.LatencyMS,
+		ID:                  scanID,
+		BoxID:               boxID,
+		QRToken:             qrToken,
+		BatchID:             batchID,
+		MenuName:            menuName,
+		MenuClass:           menuClass,
+		MenuDisplay:         menuDisplay,
+		MenuConfidence:      menuConfidence,
+		FreshnessClass:      freshClass,
+		FreshnessDisplay:    freshDisplay,
+		FreshnessConfidence: freshConfidence,
+		BatchInfo:           batchInfo,
+		ScannedAt:           now.In(wib).Format("15:04") + " WIB",
+		Score:               score,
+		Verdict:             verdict,
+		VerdictLabel:        verdictLabel,
+		ReleaseTemp:         derefFloat(releaseTempC),
+		HoldTemp:            derefFloat(holdingTempC),
+		Checks:              checks,
+		Compartments:        compartments,
+		Note:                note,
+		AIClass:             freshClass,
+		AIConfidence:        freshConfidence,
+		AILatencyMS:         pred.LatencyMS,
 	}
 
 	// Makronutrien: utamakan total dari batch/resep; bila tidak ada, fallback

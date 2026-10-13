@@ -41,6 +41,11 @@ type ScanLog struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	Rating       int       `json:"rating,omitempty"`
 	Feedback     string    `json:"feedback,omitempty"`
+	MenuName     string    `json:"menuName,omitempty"`
+	MenuClass    string    `json:"menuClass,omitempty"`
+	MenuDisplay  string    `json:"menuDisplay,omitempty"`
+	// MenuConfidence adalah keyakinan model menu (0-1) pada foto.
+	MenuConfidence float64 `json:"menuConfidence,omitempty"`
 }
 
 // ScanCheck is one row on the decision card checklist.

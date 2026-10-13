@@ -51,6 +51,34 @@ var componentAliases = map[string][]string{
 	"yogurt":         {"yogurt", "minuman"},
 	"air_mineral":    {"air mineral", "minuman"},
 
+	// --- Kelas checkpoint makanan_indo.pt (29 makanan Indonesia) ---
+	"nasi_goreng":         {"nasi goreng", "nasi"},
+	"mie_goreng":          {"mie goreng", "mie"},
+	"bakso":               {"bakso"},
+	"pempek":              {"pempek"},
+	"spaghetti":           {"spaghetti", "pasta", "mie"},
+	"pizza":               {"pizza", "roti"},
+	"burger":              {"burger", "roti", "daging"},
+	"ayam_goreng":         {"ayam goreng", "ayam"},
+	"ikan_goreng":         {"ikan goreng", "ikan"},
+	"rendang_sapi":        {"rendang", "daging sapi", "daging"},
+	"sate":                {"sate", "ayam", "daging"},
+	"steak":               {"steak", "daging sapi", "daging"},
+	"tahu_goreng":         {"tahu"},
+	"tempe_goreng":        {"tempe"},
+	"telur_goreng":        {"telur"},
+	"telur_rebus":         {"telur"},
+	"nugget":              {"nugget", "ayam"},
+	"terong_balado":       {"terong", "terung", "balado", "sayur"},
+	"tumis_kangkung":      {"kangkung", "sayur"},
+	"apel":                {"apel", "buah"},
+	"kiwi":                {"kiwi", "buah"},
+	"nanas":               {"nanas", "buah"},
+	"stroberi":            {"stroberi", "buah"},
+	"biskuit_choco_chips": {"biskuit", "kue"},
+	"donat":               {"donat", "kue"},
+	"kentang_goreng":      {"kentang", "kripik"},
+
 	// --- Kelas checkpoint bawaan (Food-101) ---
 	"chicken_curry":      {"ayam"},
 	"chicken_wings":      {"ayam"},
@@ -220,6 +248,11 @@ func matchCompartment(comp CompartmentPrediction, expected []string) models.Comp
 			match.Note = fmt.Sprintf("%s belum meyakinkan, perlu verifikasi petugas",
 				match.PredictedDisplay)
 		}
+	}
+	// Tampilkan kategori model deteksi objek (mis. lauk, sayur) agar hasil
+	// Pendekatan 1 terlihat jelas di kartu keputusan.
+	if category := strings.TrimSpace(comp.DetectedCategory); category != "" {
+		match.Note = "deteksi: " + category + " · " + match.Note
 	}
 	return match
 }

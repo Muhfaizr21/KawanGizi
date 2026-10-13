@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import DETECTOR_MODEL_PATH, NON_FOOD_CATEGORIES, _clamp_box, app
+from app.main import DETECTOR_MODEL_PATH, MENU_MODEL_PATH, NON_FOOD_CATEGORIES, _clamp_box, app
 
 
 def test_clamp_box_keeps_coordinates_inside_image():
@@ -17,7 +17,11 @@ def test_clamp_box_fixes_inverted_or_degenerate_boxes():
     assert x2 == 300 and y2 == 400
 
 
-def test_detector_model_defaults_to_repo_checkpoint():
+def test_menu_model_defaults_to_indonesian_food_checkpoint():
+    assert MENU_MODEL_PATH.endswith('makanan_indo.pt')
+
+
+def test_detector_model_defaults_to_category_checkpoint():
     assert DETECTOR_MODEL_PATH.endswith('objek_deteksi.pt')
 
 
