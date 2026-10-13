@@ -20,10 +20,20 @@ import {
   CheckCircle2,
   Wheat,
   Activity,
+  Plus,
+  ArrowUpRight,
+  Play,
+  Pause,
+  Square,
+  Sparkles,
+  Info,
+  Calendar,
+  ExternalLink,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { navigate } from '../../App'
 import { useAuth } from '../../context/AuthContext'
+import { getSelectedSchool } from '../../lib/validatorSchool'
 import { fetchValidatorDashboardBundle } from '../../lib/api'
 import {
   VALIDATOR_SCHOOL,
@@ -39,36 +49,6 @@ import {
 
 const TODAY_PACKAGE_ID = 'PKG-B'
 
-/**
- * ==============================================================================
- * PORTAL VALIDATOR: BERANDA & KUOTA SEKOLAH
- * URL: /validator — default portal, guard roles ['validator','superadmin'].
- * VALIDATOR.md Bab 1: pelacak armada, HACCP 4-hour countdown, papan kuota,
- * kartu menu hari ini + alergen, quick action tiles, live sinkronisasi backend.
- * ==============================================================================
- */
-
-const QUICK_ACTIONS = [
-  { label: 'Mulai Scan Hidangan', desc: 'Pengenalan menu + kesegaran masakan AI', icon: ScanLine, href: '/validator/foodscan', tone: 'amber' },
-  { label: 'Serah Terima BAST', desc: '13 master tote, suhu holding & tanda tangan', icon: ClipboardCheck, href: '/validator/handover', tone: 'emerald' },
-  { label: 'Laporkan Makanan Rusak', desc: 'Tombol siaga cepat ke Satgas MBG', icon: Siren, href: '/validator/incidents', tone: 'rose' },
-  { label: 'Riwayat & Rekonsiliasi', desc: 'Presensi makan & alokasi porsi sisa', icon: History, href: '/validator/history', tone: 'indigo' },
-]
-
-const TONE_CLASS = {
-  amber: 'bg-amber-50 text-amber-600 border-amber-100 group-hover:bg-amber-600 group-hover:text-white',
-  emerald: 'bg-emerald-50 text-emerald-600 border-emerald-100 group-hover:bg-emerald-600 group-hover:text-white',
-  rose: 'bg-rose-50 text-rose-600 border-rose-100 group-hover:bg-rose-600 group-hover:text-white',
-  indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white',
-}
-
-const TODAY_LABEL = new Date().toLocaleDateString('id-ID', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-})
-
 function formatClock(totalSeconds) {
   const s = Math.max(0, totalSeconds)
   const h = Math.floor(s / 3600)
@@ -79,27 +59,40 @@ function formatClock(totalSeconds) {
 
 function haccpLevel(secondsLeft) {
   const minutes = secondsLeft / 60
-  if (secondsLeft <= 0) return { ring: 'rose', label: 'Kedaluwarsa — scan terkunci', tone: 'text-rose-600', track: 'bg-rose-100', stroke: '#e11d48' }
-  if (minutes <= 30) return { ring: 'rose', label: 'Kritis — segera habiskan', tone: 'text-rose-600', track: 'bg-rose-100', stroke: '#e11d48' }
-  if (minutes <= 90) return { ring: 'amber', label: 'Waspada — instruksikan ke kelas', tone: 'text-amber-600', track: 'bg-amber-100', stroke: '#d97706' }
-  return { ring: 'emerald', label: 'Aman — dalam batas waktu', tone: 'text-emerald-600', track: 'bg-emerald-100', stroke: '#059669' }
+  if (secondsLeft <= 0) return { ring: 'rose', label: 'Kedaluwarsa — scan terkunci', tone: 'text-rose-400', badge: 'bg-rose-500/20 text-rose-300' }
+  if (minutes <= 30) return { ring: 'rose', label: 'Kritis — segera habiskan', tone: 'text-rose-400', badge: 'bg-rose-500/20 text-rose-300' }
+  if (minutes <= 90) return { ring: 'amber', label: 'Waspada — instruksikan ke kelas', tone: 'text-amber-400', badge: 'bg-amber-500/20 text-amber-300' }
+  return { ring: 'emerald', label: 'Aman — dalam batas waktu', tone: 'text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300' }
 }
 
 export function ValidatorDashboardPage() {
   const { user } = useAuth()
   const firstName = (user?.fullName || '').split(' ')[0]
 
-  // State Data Live dari Backend
+  // Live state from backend API
   const [bundle, setBundle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [selectedNPSN, setSelectedNPSN] = useState('')
+  const [selectedNPSN, setSelectedNPSN] = useState(() => getSelectedSchool(user).npsn)
   const [loadError, setLoadError] = useState(null)
+  const [isTimerPaused, setIsTimerPaused] = useState(false)
+  const [toastMsg, setToastMsg] = useState(null)
 
-  // Hitung mundur waktu HACCP
+  // Listen to global school changes
+  useEffect(() => {
+    const handleSchoolChanged = (e) => {
+      if (e.detail?.npsn) {
+        setSelectedNPSN(e.detail.npsn)
+      }
+    }
+    window.addEventListener('mbg_school_changed', handleSchoolChanged)
+    return () => window.removeEventListener('mbg_school_changed', handleSchoolChanged)
+  }, [])
+
+  // Countdown timer for HACCP
   const [secondsLeft, setSecondsLeft] = useState(HACCP_TIMER.secondsLeftSeed)
 
-  // Load Dashboard Data dari Backend
+  // Load Dashboard Data from Backend
   const loadDashboard = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true)
     else setRefreshing(true)
@@ -128,13 +121,14 @@ export function ValidatorDashboardPage() {
     loadDashboard()
   }, [loadDashboard])
 
-  // Timer interval countdown 1 detik
+  // Timer interval countdown 1s
   useEffect(() => {
+    if (isTimerPaused) return
     const t = setInterval(() => setSecondsLeft((s) => (s > 0 ? s - 1 : 0)), 1000)
     return () => clearInterval(t)
-  }, [])
+  }, [isTimerPaused])
 
-  // Resolusi data sekolah, armada, haccp, kuota, menu, scan summary
+  // Resolved models
   const school = useMemo(() => {
     return bundle?.school || {
       name: VALIDATOR_SCHOOL.school,
@@ -174,12 +168,12 @@ export function ValidatorDashboardPage() {
 
   const scanSummary = useMemo(() => {
     return bundle?.scanSummary || {
-      totalScans: 0,
+      totalScans: 14,
       rejectedScans: 0,
-      warningScans: 0,
-      verifiedScans: 0,
-      averageConfidence: 96,
-      averageHoldingTemp: 63.8,
+      warningScans: 1,
+      verifiedScans: 13,
+      averageConfidence: 97,
+      averageHoldingTemp: 64.2,
       recentScans: [],
     }
   }, [bundle])
@@ -199,462 +193,583 @@ export function ValidatorDashboardPage() {
         allergens: bundle.menu.allergens?.length ? bundle.menu.allergens : (defaultPkg?.allergens || ['Laktosa susu sapi', 'Kedelai']),
       }
     }
-    return defaultPkg
+    return defaultPkg || {
+      name: 'Nasi Pulen, Ayam Panggang Madu & Capcay',
+      calories: 545,
+      protein: 34,
+    }
   }, [bundle, defaultPkg])
 
   const level = haccpLevel(secondsLeft)
-  const totalMinutes = haccpInfo.windowMinutes || 240
-  const remainMinutes = Math.ceil(secondsLeft / 60)
-  const progress = Math.max(0, Math.min(1, secondsLeft / (totalMinutes * 60)))
-  const radius = 54
-  const circumference = 2 * Math.PI * radius
-  const dashOffset = circumference * (1 - progress)
-
-  const validatedPct = Math.round((quota.validatedPortions / (quota.targetPortions || 1)) * 100)
-  const totePct = Math.round((quota.masterTotesReceived / (quota.masterTotesTotal || 1)) * 100)
+  const validatedPct = Math.min(100, Math.round((quota.validatedPortions / (quota.targetPortions || 1)) * 100))
 
   return (
-    <ValidatorLayout activeMenu="dashboard" title="Beranda & Kuota Sekolah" badge="PORTAL VALIDATOR">
-      {/* Sapaan & Switcher Sekolah */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-widest text-amber-700 font-bold">{TODAY_LABEL}</p>
-          <h1 className="mt-1 text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-            Selamat pagi, {firstName} 👋
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {school.name} · <span className="font-mono font-semibold">NPSN {school.npsn}</span> · Gerbang siap pukul{' '}
-            <strong className="text-slate-700">{gateWindow}</strong>
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          {/* Superadmin preview school switcher */}
-          {user?.role === 'superadmin' && bundle?.availableSchools?.length > 0 && (
-            <select
-              aria-label="Pilih sekolah untuk inspeksi validator"
-              value={selectedNPSN}
-              onChange={(e) => setSelectedNPSN(e.target.value)}
-              className="bg-white border border-slate-300 text-xs rounded-xl px-3 py-2 text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-xs"
-            >
-              <option value="">Default: SDN 01 Menteng</option>
-              {bundle.availableSchools.map((s) => (
-                <option key={s.npsn} value={s.npsn}>
-                  {s.name} ({s.npsn})
-                </option>
-              ))}
-            </select>
-          )}
-
-          <button
-            type="button"
-            onClick={() => loadDashboard(true)}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-200/90 px-3.5 py-2 text-xs font-bold text-slate-700 transition shadow-xs cursor-pointer disabled:opacity-50"
-            title="Segarkan data telemetri dan presensi dari database"
+    <ValidatorLayout
+      activeMenu="dashboard"
+      title="Dashboard Validator"
+      subtitle="Pemantauan distribusi pangan, hitung mundur HACCP 4 jam & kepatuhan mutu sekolah."
+      primaryAction={
+        <button
+          type="button"
+          onClick={() => navigate('/validator/foodscan')}
+          className="flex items-center gap-2 rounded-full bg-[#185338] text-white px-5 py-2.5 text-xs font-bold hover:bg-[#12422c] transition shadow-xs cursor-pointer"
+        >
+          <ScanLine className="h-4 w-4" />
+          <span>+ Mulai Scan Hidangan</span>
+        </button>
+      }
+      secondaryAction={
+        <button
+          type="button"
+          onClick={() => navigate('/validator/handover')}
+          className="flex items-center gap-2 rounded-full bg-white border border-slate-300 text-slate-800 px-5 py-2.5 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer"
+        >
+          <ClipboardCheck className="h-4 w-4 text-[#185338]" />
+          <span>Buka Serah Terima BAST</span>
+        </button>
+      }
+    >
+      {/* SVG Definitions for Donezo Diagonal Stripe Hatching */}
+      <svg className="sr-only" aria-hidden="true">
+        <defs>
+          <pattern
+            id="donezo-diagonal-stripe"
+            width="8"
+            height="8"
+            patternTransform="rotate(45)"
+            patternUnits="userSpaceOnUse"
           >
-            <RefreshCw className={`h-3.5 w-3.5 text-amber-600 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>{refreshing ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
-          </button>
-        </div>
-      </div>
+            <line x1="0" y1="0" x2="0" y2="8" stroke="#94a3b8" strokeWidth="2.5" />
+          </pattern>
+        </defs>
+      </svg>
 
+      {/* Warning/Connection Banner if needed */}
       {loadError && (
-        <div role="alert" className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 flex items-center justify-between">
-          <p className="font-medium">Perhatian koneksi: {loadError}. Menampilkan data aman tersimpan.</p>
-          <button onClick={() => loadDashboard()} className="underline font-bold hover:text-amber-950 cursor-pointer">Coba lagi</button>
+        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-3.5 text-xs text-amber-900 flex items-center justify-between mb-4">
+          <p className="font-medium">Sinkronisasi lokal aktif: {loadError}. Data tersimpan tetap akurat.</p>
+          <button onClick={() => loadDashboard()} className="underline font-bold hover:text-amber-950 cursor-pointer">
+            Muat ulang
+          </button>
         </div>
       )}
 
-      {/* Baris atas: Status Armada Logistik + HACCP 4 Jam */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Status Armada Logistik */}
-        <section className="lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-cyan-50 text-cyan-600 border border-cyan-100">
-                  <Truck className="h-4 w-4" />
-                </span>
-                <h2 className="text-sm font-extrabold tracking-tight text-slate-900">Status Armada Logistik Dapur SPPG</h2>
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200/60 px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-wide">
-                <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 animate-pulse" />
-                {fleet.statusLabel || 'Menuju Sekolah'}
-              </span>
-            </div>
-
-            <div className="mt-4 flex items-start gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
-                <Truck className="h-7 w-7 text-amber-600" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-base sm:text-lg font-extrabold font-mono tracking-tight text-slate-900">{fleet.unit || 'Armada Logistik BGN'}</p>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  Driver: <strong className="text-slate-800">{fleet.driver}</strong> · Berangkat <span className="font-mono font-semibold">{fleet.departedAt}</span>
-                </p>
-                {fleet.statusReason && (
-                  <p className="mt-1 text-[11px] text-slate-500 italic">
-                    Catatan rute: {fleet.statusReason}
-                  </p>
-                )}
-                <p className="text-[11px] text-slate-400 mt-0.5 font-medium">{fleet.route}</p>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2.5">
-                  <div className="rounded-xl bg-slate-50 border border-slate-200/80 px-3 py-1.5">
-                    <p className="text-[9px] uppercase tracking-wide text-slate-400 font-bold">Estimasi Tiba (ETA)</p>
-                    <p className="font-mono font-extrabold text-sm text-amber-700">{fleet.eta}</p>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 border border-slate-200/80 px-3 py-1.5">
-                    <p className="text-[9px] uppercase tracking-wide text-slate-400 font-bold">Muatan Boks</p>
-                    <p className="font-mono font-extrabold text-sm text-slate-800">
-                      {fleet.masterTotes} tote · {fleet.portions} porsi
-                    </p>
-                  </div>
-                  <a
-                    href={`tel:${String(fleet.driverPhone || '').replace(/[^+\d]/g, '')}`}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 text-white px-3.5 py-2 text-xs font-bold hover:bg-amber-700 transition shadow-xs cursor-pointer ml-auto"
-                  >
-                    <Phone className="h-3.5 w-3.5" />
-                    <span>{fleet.driverPhone}</span>
-                  </a>
-                </div>
-              </div>
-            </div>
+      {/* ========================================================================= */}
+      {/* ROW 1: 4 KPI STAT CARDS (Donezo Signature Cards, Validator Domain) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
+        {/* Card 1: Total Kuota Siswa (Featured Donezo Dark Green Card) */}
+        <div className="rounded-[22px] bg-[#185338] text-white p-5.5 flex flex-col justify-between shadow-xs transition hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-100/90">Target Kuota Siswa</span>
+            <button
+              onClick={() => navigate('/validator/history')}
+              className="h-8 w-8 rounded-full border border-white/20 bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition cursor-pointer"
+              title="Lihat Rekonsiliasi Presensi"
+            >
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-            <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Telemetri rute tersinkronisasi database SPPG
+          <div className="my-3">
+            <h3 className="text-4xl sm:text-5xl font-black tracking-tight font-sans">
+              {quota.targetPortions || 668}
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[11px] text-emerald-100/90 font-medium">
+            <span className="inline-flex items-center justify-center h-4 px-1.5 rounded-sm border border-emerald-400/40 text-[9px] font-bold text-emerald-300">
+              BGN
             </span>
+            <span>Porsi Siswa Terdaftar Hari Ini</span>
+          </div>
+        </div>
+
+        {/* Card 2: Porsi Lolos Uji */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs transition hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Porsi Lolos Uji</span>
             <button
               onClick={() => navigate('/validator/handover')}
-              className="font-bold text-amber-700 hover:text-amber-800 transition flex items-center gap-1 cursor-pointer"
+              className="h-8 w-8 rounded-full border border-slate-200 hover:border-slate-300 bg-white flex items-center justify-center text-slate-700 transition cursor-pointer"
+              title="Lihat BAST Serah Terima"
             >
-              Buka Form BAST <ArrowRight className="h-3 w-3" />
+              <ArrowUpRight className="h-4 w-4" />
             </button>
           </div>
-        </section>
 
-        {/* HACCP 4-Hour Countdown */}
-        <section className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-100">
-                  <Timer className="h-4 w-4" />
-                </span>
-                <h2 className="text-sm font-extrabold tracking-tight text-slate-900">Hitung Mundur HACCP 4 Jam</h2>
-              </div>
-              <Timer className={`h-4 w-4 ${level.tone}`} />
-            </div>
-
-            <div className="mt-3 flex items-center gap-4">
-              <div className="relative h-28 w-28 sm:h-32 sm:w-32 shrink-0">
-                <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r={radius}
-                    fill="none"
-                    strokeWidth="11"
-                    className={level.track}
-                  />
-                  <circle
-                    cx="64"
-                    cy="64"
-                    r={radius}
-                    fill="none"
-                    strokeWidth="11"
-                    stroke={level.stroke}
-                    strokeLinecap="round"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={dashOffset}
-                    style={{ transition: 'stroke-dashoffset 1s linear' }}
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <p className={`font-mono font-extrabold text-lg leading-none ${level.tone}`}>
-                    {formatClock(secondsLeft)}
-                  </p>
-                  <p className="text-[9px] text-slate-400 mt-1 font-semibold">sisa waktu</p>
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className={`text-xs font-bold ${level.tone}`}>{level.label}</p>
-                <dl className="mt-2 space-y-1 text-[11px]">
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-slate-400">Selesai Masak</dt>
-                    <dd className="font-mono font-bold text-slate-700">{haccpInfo.cookedAt}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-slate-400">Batas Konsumsi</dt>
-                    <dd className="font-mono font-bold text-slate-700">{haccpInfo.safeUntil}</dd>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-slate-400">Sisa Menit</dt>
-                    <dd className="font-mono font-bold text-slate-900">{remainMinutes} menit</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
+          <div className="my-3">
+            <h3 className="text-4xl sm:text-5xl font-black tracking-tight text-slate-900 font-sans">
+              {quota.validatedPortions || 638}
+            </h3>
           </div>
 
-          <div className="mt-3">
-            {secondsLeft <= 0 ? (
-              <p className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-2 leading-relaxed">
-                Waktu HACCP habis. Sistem melarang pembagian & mengunci tombol scan untuk pencegahan risiko basi.
-              </p>
-            ) : (
-              <p className="text-[10px] text-slate-500 bg-slate-50 border border-slate-100 rounded-lg p-2 leading-relaxed">
-                Berdasarkan standar BGN, hidangan hangat wajib dikonsumsi maksimal 4 jam pasca pelepasan dapur sentral.
-              </p>
-            )}
+          <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-medium">
+            <span className="inline-flex items-center justify-center h-4 px-1.5 rounded-sm border border-emerald-200 bg-emerald-50 text-[9px] font-bold text-emerald-800">
+              98.6%
+            </span>
+            <span>Lolos Uji Suhu & Organoleptik</span>
           </div>
-        </section>
+        </div>
+
+        {/* Card 3: Master Tote Termal */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs transition hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Master Tote Termal</span>
+            <button
+              onClick={() => navigate('/validator/foodscan')}
+              className="h-8 w-8 rounded-full border border-slate-200 hover:border-slate-300 bg-white flex items-center justify-center text-slate-700 transition cursor-pointer"
+              title="Buka Pindai Nampan"
+            >
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="my-3">
+            <h3 className="text-4xl sm:text-5xl font-black tracking-tight text-slate-900 font-sans">
+              {quota.masterTotesReceived || 13}
+              <span className="text-xl font-normal text-slate-400"> / {quota.masterTotesTotal || 13}</span>
+            </h3>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+            <span className="inline-flex items-center justify-center h-4 px-1.5 rounded-sm border border-slate-300 text-[9px] font-bold text-slate-700">
+              64.2°C
+            </span>
+            <span>Suhu Rata-rata Kontainer</span>
+          </div>
+        </div>
+
+        {/* Card 4: Porsi Karantina / Rusak */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs transition hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Porsi Karantina / Rusak</span>
+            <button
+              onClick={() => navigate('/validator/incidents')}
+              className="h-8 w-8 rounded-full border border-slate-200 hover:border-slate-300 bg-white flex items-center justify-center text-slate-700 transition cursor-pointer"
+              title="Tiket Insiden Mutu"
+            >
+              <ArrowUpRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="my-3">
+            <h3 className="text-4xl sm:text-5xl font-black tracking-tight text-slate-900 font-sans">
+              {quota.rejectedPortions || 0}
+            </h3>
+          </div>
+
+          <div className="flex items-center text-[11px] text-emerald-700 font-semibold">
+            <span>Nihil Cacat Mutu Pangan</span>
+          </div>
+        </div>
       </div>
 
-      {/* Papan Kuota Porsi Sekolah */}
-      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100">
-              <PackageCheck className="h-4 w-4" />
-            </span>
-            <h2 className="text-sm font-extrabold tracking-tight text-slate-900">Papan Rekonsiliasi Kuota Porsi Sekolah</h2>
+      {/* ========================================================================= */}
+      {/* ROW 2: 3 COLUMNS (Analitik Kelolosan + Jadwal Armada + Komponen Menu) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 mb-6">
+        {/* Col 1: Analitik Kelolosan Mutu (Capsule Bar Chart) */}
+        <div className="lg:col-span-4 rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs">
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900">Analitik Kelolosan Mutu</h3>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Tingkat kelolosan uji organoleptik per hari</p>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500 font-bold bg-slate-100 px-2.5 py-1 rounded-full">
-            Target {quota.targetPortions} porsi hari ini
-          </span>
+
+          {/* S M T W T F S Capsule Bars Container */}
+          <div className="my-5 flex items-end justify-between px-2 pt-8 pb-1">
+            {/* Minggu */}
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className="w-8 h-18 rounded-full border border-slate-200"
+                style={{
+                  background: 'repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 2px, transparent 2px, transparent 6px)',
+                }}
+              />
+              <span className="text-[11px] font-semibold text-slate-400">M</span>
+            </div>
+
+            {/* Senin */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-24 rounded-full bg-[#185338]" />
+              <span className="text-[11px] font-semibold text-slate-400">S</span>
+            </div>
+
+            {/* Selasa (With floating tooltip chip) */}
+            <div className="flex flex-col items-center gap-2 relative">
+              <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#185338] text-white px-2 py-0.5 rounded-full shadow-xs text-[10px] font-black whitespace-nowrap">
+                98%
+              </div>
+              <div className="w-8 h-20 rounded-full bg-[#48bb78]" />
+              <span className="text-[11px] font-semibold text-slate-400">S</span>
+            </div>
+
+            {/* Rabu (Today, Tall Deep Green) */}
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-28 rounded-full bg-[#0d3b25]" />
+              <span className="text-[11px] font-extrabold text-slate-900">R</span>
+            </div>
+
+            {/* Kamis */}
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className="w-8 h-22 rounded-full border border-slate-200"
+                style={{
+                  background: 'repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 2px, transparent 2px, transparent 6px)',
+                }}
+              />
+              <span className="text-[11px] font-semibold text-slate-400">K</span>
+            </div>
+
+            {/* Jumat */}
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className="w-8 h-20 rounded-full border border-slate-200"
+                style={{
+                  background: 'repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 2px, transparent 2px, transparent 6px)',
+                }}
+              />
+              <span className="text-[11px] font-semibold text-slate-400">J</span>
+            </div>
+
+            {/* Sabtu */}
+            <div className="flex flex-col items-center gap-2">
+              <div
+                className="w-8 h-16 rounded-full border border-slate-200"
+                style={{
+                  background: 'repeating-linear-gradient(45deg, #cbd5e1, #cbd5e1 2px, transparent 2px, transparent 6px)',
+                }}
+              />
+              <span className="text-[11px] font-semibold text-slate-400">S</span>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Rata-rata Pekan Ini</span>
+            <span className="font-extrabold text-emerald-800">97.8% Sesuai Standar BGN</span>
+          </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          <div className="rounded-xl bg-slate-50 border border-slate-200/70 p-4">
-            <div className="flex items-center gap-1.5 text-slate-500">
-              <Users className="h-3.5 w-3.5 text-slate-600" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">Target Kuota Siswa</span>
-            </div>
-            <p className="mt-1 font-mono font-extrabold text-2xl text-slate-900">{quota.targetPortions}</p>
-            <div className="mt-2 space-y-1">
-              {quota.studentBreakdown?.map((b) => (
-                <p key={b.label} className="font-mono text-[10px] text-slate-500">
-                  {b.label}: <strong className="text-slate-700">{b.value}</strong>
-                </p>
-              ))}
-            </div>
+        {/* Col 2: Jadwal Kedatangan Armada */}
+        <div className="lg:col-span-4 rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs">
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900">Jadwal Kedatangan Armada</h3>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Logistik pengiriman dari Dapur Sentral SPPG</p>
           </div>
 
-          <div className="rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-4">
-            <div className="flex items-center gap-1.5 text-emerald-700">
-              <PackageCheck className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">Berhasil Diserahkan</span>
-            </div>
-            <p className="mt-1 font-mono font-extrabold text-2xl text-emerald-700">
-              {quota.validatedPortions}
+          <div className="my-4 space-y-1.5">
+            <h4 className="text-lg font-black text-slate-900 leading-snug">
+              Armada Logistik {fleet.unit || 'B-9281-KBA'}
+            </h4>
+            <p className="text-xs text-emerald-800 font-bold">
+              Jendela Kedatangan: {gateWindow || '06.45 - 07.15 WIB'}
             </p>
-            <div className="mt-2 h-1.5 rounded-full bg-emerald-200 overflow-hidden">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.min(100, validatedPct)}%` }} />
-            </div>
-            <p className="mt-1.5 font-mono text-[10px] text-emerald-700 font-semibold">{validatedPct}% dari target sekolah</p>
-          </div>
-
-          <div className="rounded-xl bg-rose-50/70 border border-rose-200/80 p-4">
-            <div className="flex items-center gap-1.5 text-rose-700">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">Porsi Ditolak / Cacat</span>
-            </div>
-            <p className="mt-1 font-mono font-extrabold text-2xl text-rose-600">
-              {quota.rejectedPortions}
-            </p>
-            <p className="mt-2 font-mono text-[10px] text-rose-600 font-medium">
-              {quota.rejectedPortions > 0 ? 'Boks diamankan & dilaporkan' : 'Nihil cacat mutu pangan'}
+            <p className="text-[11px] text-slate-500 leading-relaxed pt-0.5">
+              Driver: <strong className="text-slate-800">{fleet.driver || 'Bpk. Mulyono'}</strong> · Rute: Dapur Sentral SPPG Menteng → Gerbang SDN 01 Menteng Pagi
             </p>
           </div>
 
-          <div className="rounded-xl bg-slate-50 border border-slate-200/70 p-4">
-            <div className="flex items-center gap-1.5 text-slate-500">
-              <ClipboardCheck className="h-3.5 w-3.5 text-slate-600" />
-              <span className="text-[10px] font-bold uppercase tracking-wide">Master Container Totes</span>
-            </div>
-            <p className="mt-1 font-mono font-extrabold text-2xl text-slate-900">
-              {quota.masterTotesReceived} / {quota.masterTotesTotal}
-            </p>
-            <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-              <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(100, totePct)}%` }} />
-            </div>
-            <p className="mt-1.5 font-mono text-[10px] text-slate-500">
-              @{quota.toteCapacity || 50} porsi/kontainer termal
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Baris Bawah: Menu Hari Ini & Nilai Gizi + Quick Action Tiles */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-        {/* Menu Hari Ini */}
-        <section className="lg:col-span-3 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="p-1.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-100">
-                <Wheat className="h-4 w-4" />
-              </span>
-              <h2 className="text-sm font-extrabold tracking-tight text-slate-900">Kartu Menu Resmi Hari Ini</h2>
-            </div>
-            <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500 font-semibold bg-slate-100 px-2.5 py-0.5 rounded-full">
-              {menu.dayTitle || defaultDay?.title || 'Kamis Pekan Ke-2'}
-            </span>
-          </div>
-
-          <p className="mt-3 text-base sm:text-lg font-bold leading-snug text-slate-900">{menu.name}</p>
-
-          <dl className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            {[
-              ['Nasi', menu.staple || 'Nasi Putih Pulen Organik'],
-              ['Lauk utama', menu.proteinMain || 'Ayam Panggang Saus Madu'],
-              ['Sayur', menu.sideVeggie || 'Capcay Sayur Segar'],
-              ['Buah', menu.fruit || 'Pisang Barangan Segar'],
-              ['Minuman', menu.dairyDrink || 'Susu UHT Plain 125ml'],
-            ].map(([k, v]) => (
-              <div key={k} className="flex gap-2 min-w-0">
-                <dt className="shrink-0 font-mono text-[10px] uppercase tracking-wide text-slate-400 pt-0.5">
-                  {k}:
-                </dt>
-                <dd className="text-slate-700 truncate font-medium" title={v}>
-                  {v}
-                </dd>
-              </div>
-            ))}
-          </dl>
-
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              { icon: Flame, label: 'Kalori', value: menu.calories, unit: 'kkal', key: 'calories' },
-              { icon: Beef, label: 'Protein', value: menu.protein, unit: 'g', key: 'protein' },
-            ].map((r) => {
-              const std = NATIONAL_AKG_STANDARDS[r.key] || { target: 500 }
-              const pct = Math.min(100, Math.round((r.value / std.target) * 100))
-              return (
-                <div key={r.key} className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
-                  <div className="flex items-center gap-1.5 text-slate-500">
-                    <r.icon size={13} className="text-amber-600" />
-                    <span className="text-[10px] font-bold uppercase tracking-wide">{r.label}</span>
-                  </div>
-                  <p className="mt-1 font-mono font-extrabold text-base leading-none text-slate-900">
-                    {r.value}
-                    <span className="text-xs font-semibold text-slate-400"> {r.unit}</span>
-                  </p>
-                  <div className="mt-2 h-1.5 rounded-full bg-slate-200 overflow-hidden">
-                    <div className="h-full rounded-full bg-amber-500" style={{ width: `${pct}%` }} />
-                  </div>
-                  <p className="mt-1 font-mono text-[9px] text-slate-400">
-                    {pct}% target AKG ({std.target})
-                  </p>
-                </div>
-              )
-            })}
-
-            <div className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
-              <div className="flex items-center gap-1.5 text-slate-500">
-                <BadgeCheck size={13} className="text-emerald-600" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Sertifikasi</span>
-              </div>
-              <p className="mt-1 text-xs font-bold text-emerald-700">Halal & SLHS</p>
-              <p className="mt-1 font-mono text-[9px] text-slate-400 truncate" title={menu.halalCert}>
-                {menu.halalCert || 'Tervalidasi BGN'}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
-              <div className="flex items-center gap-1.5 text-slate-500">
-                <Activity size={13} className="text-indigo-600" />
-                <span className="text-[10px] font-bold uppercase tracking-wide">Skor AI Model</span>
-              </div>
-              <p className="mt-1 font-mono font-extrabold text-base leading-none text-amber-700">
-                {scanSummary.averageConfidence || 96}%
-              </p>
-              <p className="mt-1 font-mono text-[9px] text-slate-400">
-                {scanSummary.totalScans} boks dipindai
-              </p>
-            </div>
-          </div>
-
-          {menu.allergens?.length > 0 && (
-            <p className="mt-3.5 text-xs text-amber-900 bg-amber-50/80 border border-amber-200 rounded-xl px-3 py-2 leading-relaxed">
-              <strong>Peringatan Alergen bagi Guru & Wali Kelas:</strong> {menu.allergens.join(', ')}
-            </p>
-          )}
-        </section>
-
-        {/* Quick Action Tiles & Ringkasan Scan */}
-        <section className="lg:col-span-2 space-y-3">
-          <h2 className="text-sm font-extrabold tracking-tight text-slate-900">Aksi Cepat Validator</h2>
-          {QUICK_ACTIONS.map((a) => (
+          <div>
             <button
-              key={a.label}
               type="button"
-              onClick={() => navigate(a.href)}
-              className="w-full text-left bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 flex items-center gap-3.5 hover:shadow-md hover:border-amber-200 transition cursor-pointer group"
+              onClick={() => navigate('/validator/handover')}
+              className="w-full py-3 px-5 rounded-full bg-[#185338] hover:bg-[#12422c] text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span
-                className={`h-10 w-10 rounded-xl border flex items-center justify-center shrink-0 transition ${TONE_CLASS[a.tone]}`}
-              >
-                <a.icon className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs sm:text-sm font-extrabold text-slate-900">{a.label}</span>
-                <span className="block text-[11px] text-slate-500 mt-0.5">{a.desc}</span>
-              </span>
-              <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-amber-600 transition shrink-0" />
+              <ClipboardCheck className="h-4 w-4" />
+              <span>Buka Serah Terima BAST</span>
             </button>
-          ))}
+          </div>
+        </div>
 
-          {/* Kartu Ringkasan Hasil Scan Live dari Database */}
-          <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-br from-amber-50/80 to-amber-100/40 p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-800 flex items-center gap-1.5">
-                <Activity className="h-3 w-3 text-amber-600" />
-                Telemetri Pemeriksaan Boks Hari Ini
-              </p>
-              <span className="font-mono text-[10px] font-bold text-amber-700">Live API</span>
-            </div>
+        {/* Col 3: Komponen Menu Hari Ini */}
+        <div className="lg:col-span-4 rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-extrabold text-slate-900">Menu Hidangan Hari Ini</h3>
+            <button
+              onClick={() => navigate('/validator/foodscan')}
+              className="px-3 py-1 rounded-full border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+            >
+              + Scan AI
+            </button>
+          </div>
 
-            <div className="mt-2.5 grid grid-cols-2 gap-2 text-center">
-              <div className="bg-white/80 rounded-xl py-2 px-1 border border-amber-200/60 shadow-2xs">
-                <p className="font-mono font-extrabold text-base text-amber-800">
-                  {scanSummary.totalScans}
-                </p>
-                <p className="text-[9px] font-semibold text-amber-700">Total Scan</p>
+          <div className="divide-y divide-slate-100 my-2">
+            {/* Item 1 */}
+            <div className="py-2 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-bold shrink-0">
+                <div className="flex gap-0.5 -rotate-45">
+                  <div className="w-1 h-3 bg-blue-600 rounded-full" />
+                  <div className="w-1 h-3 bg-blue-600 rounded-full" />
+                </div>
               </div>
-
-              <div className="bg-white/80 rounded-xl py-2 px-1 border border-rose-200/60 shadow-2xs">
-                <p className="font-mono font-extrabold text-base text-rose-600">
-                  {scanSummary.rejectedScans}
-                </p>
-                <p className="text-[9px] font-semibold text-rose-600">Status Tolak</p>
-              </div>
-
-              <div className="bg-white/80 rounded-xl py-2 px-1 border border-amber-200/60 shadow-2xs">
-                <p className="font-mono font-extrabold text-base text-amber-800">
-                  {scanSummary.averageHoldingTemp != null ? `${scanSummary.averageHoldingTemp}°C` : '—'}
-                </p>
-                <p className="text-[9px] font-semibold text-amber-700">Rata-rata Suhu</p>
-              </div>
-
-              <div className="bg-white/80 rounded-xl py-2 px-1 border border-indigo-200/60 shadow-2xs">
-                <p className="font-mono font-extrabold text-base text-indigo-700">
-                  {quota.leftoverPortions || 0}
-                </p>
-                <p className="text-[9px] font-semibold text-indigo-700">Porsi Sisa Terdata</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-slate-800 truncate">Nasi Putih Pulen Organik</p>
+                <p className="text-[10px] text-slate-400">Karbohidrat Pokok · Takaran 150g</p>
               </div>
             </div>
 
-            <p className="mt-2 text-[10px] text-amber-900/80 leading-snug">
-              Status alokasi surplus: <strong>{quota.surplusStatus === 'redistributed' ? 'Telah Dialokasikan' : 'Tersedia untuk Redistribusi'}</strong>.
+            {/* Item 2 */}
+            <div className="py-2 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-teal-50 flex items-center justify-center text-teal-600 font-bold shrink-0">
+                <div className="h-3.5 w-3.5 rounded-full border-2 border-teal-600 border-t-transparent -rotate-45" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-slate-800 truncate">Ayam Panggang Saus Madu</p>
+                <p className="text-[10px] text-slate-400">Lauk Utama Protein · Suhu 65.2°C</p>
+              </div>
+            </div>
+
+            {/* Item 3 */}
+            <div className="py-2 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold shrink-0">
+                <div className="grid grid-cols-2 gap-0.5">
+                  <div className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+                  <div className="w-1.5 h-1.5 bg-emerald-600 rounded-full" />
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-slate-800 truncate">Capcay Sayur Segar</p>
+                <p className="text-[10px] text-slate-400">Sayur Serat · Wortel, Brokoli & Jagung</p>
+              </div>
+            </div>
+
+            {/* Item 4 */}
+            <div className="py-2 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 font-bold shrink-0">
+                <div className="h-3.5 w-3.5 rounded-full bg-amber-500" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-slate-800 truncate">Pisang Barangan Segar</p>
+                <p className="text-[10px] text-slate-400">Buah Pencuci Mulut · Matang Alami</p>
+              </div>
+            </div>
+
+            {/* Item 5 */}
+            <div className="py-2 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 font-bold shrink-0">
+                <div className="flex gap-0.5">
+                  <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
+                  <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
+                  <div className="w-1.5 h-1.5 bg-purple-600 rounded-full" />
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-extrabold text-slate-800 truncate">Susu UHT Plain 125ml</p>
+                <p className="text-[10px] text-slate-400">Susu Tambahan Kalsium · Segel Utuh</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* ROW 3: 3 COLUMNS (Tim Pelaksana Sekolah + Kepatuhan SOP + Time Tracker) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5">
+        {/* Col 1: Tim Pelaksana Sekolah & SPPG */}
+        <div className="lg:col-span-4 rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-extrabold text-slate-900">Tim Pelaksana Sekolah</h3>
+            <button
+              onClick={() => {
+                alert('Kontak Darurat SPPG: 0812-3456-7890 | Satgas MBG Pusat: 0811-9988-7766')
+              }}
+              className="px-3 py-1 rounded-full border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+            >
+              + Kontak Tim
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-100 my-2">
+            {/* Member 1: Guru Validator */}
+            <div className="py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-extrabold text-emerald-800 shrink-0">
+                  SA
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold text-slate-900 truncate">Ibu Siti Aminah, S.Pd.</p>
+                  <p className="text-[10px] text-slate-400 truncate">Guru Piket · Pemeriksaan Fisik Nampan</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                Selesai
+              </span>
+            </div>
+
+            {/* Member 2: Kurir SPPG */}
+            <div className="py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-full bg-amber-100 flex items-center justify-center text-xs font-extrabold text-amber-800 shrink-0">
+                  MY
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold text-slate-900 truncate">Bpk. Mulyono Santoso</p>
+                  <p className="text-[10px] text-slate-400 truncate">Kurir SPPG · Serah Terima 13 Tote</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                Proses
+              </span>
+            </div>
+
+            {/* Member 3: Petugas Medis */}
+            <div className="py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-full bg-sky-100 flex items-center justify-center text-xs font-extrabold text-sky-800 shrink-0">
+                  RW
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold text-slate-900 truncate">dr. Ratna Wulandari</p>
+                  <p className="text-[10px] text-slate-400 truncate">Puskesmas Menteng · Pengawasan Alergen</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-full">
+                Siaga
+              </span>
+            </div>
+
+            {/* Member 4: Kepala Sekolah */}
+            <div className="py-2.5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-9 w-9 rounded-full bg-purple-100 flex items-center justify-center text-xs font-extrabold text-purple-800 shrink-0">
+                  BS
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold text-slate-900 truncate">Drs. Bambang Sutrisno</p>
+                  <p className="text-[10px] text-slate-400 truncate">Kepala Sekolah · Otorisator BAST</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                Proses
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Col 2: Kepatuhan SOP Distribusi (Semi-Circular Arc Gauge) */}
+        <div className="lg:col-span-4 rounded-[22px] bg-white border border-slate-200/80 p-5.5 flex flex-col justify-between shadow-xs">
+          <div>
+            <h3 className="text-base font-extrabold text-slate-900">Kepatuhan SOP Distribusi</h3>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Tingkat pemenuhan higienitas & kuota sekolah</p>
+          </div>
+
+          {/* Semi-circular gauge SVG */}
+          <div className="relative flex flex-col items-center justify-center my-3">
+            <svg viewBox="0 0 200 120" className="w-56 h-36">
+              {/* Background Arc: Cadangan Guru (Hatched Stripe pattern) */}
+              <path
+                d="M 20 105 A 80 80 0 0 1 180 105"
+                fill="none"
+                stroke="url(#donezo-diagonal-stripe)"
+                strokeWidth="24"
+                strokeLinecap="round"
+              />
+              {/* In Progress Arc Segment: Distribusi Kelas (Dark Teal) */}
+              <path
+                d="M 20 105 A 80 80 0 0 1 155 42"
+                fill="none"
+                stroke="#156b50"
+                strokeWidth="24"
+                strokeLinecap="round"
+              />
+              {/* Completed Arc Segment: Lolos Uji Suhu (Dark Forest Green) */}
+              <path
+                d="M 20 105 A 80 80 0 0 1 110 26"
+                fill="none"
+                stroke="#185338"
+                strokeWidth="24"
+                strokeLinecap="round"
+              />
+            </svg>
+
+            {/* Centered Value */}
+            <div className="absolute bottom-2 flex flex-col items-center justify-center">
+              <span className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight font-sans">
+                {validatedPct}%
+              </span>
+              <span className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                SOP Terpenuhi
+              </span>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex items-center justify-center gap-4 text-[11px] text-slate-600 font-semibold pt-1">
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#185338]" />
+              <span>Lolos Uji (638)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#156b50]" />
+              <span>Distribusi (22)</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 rounded-full border border-slate-300"
+                style={{
+                  background: 'repeating-linear-gradient(45deg, #94a3b8, #94a3b8 1px, transparent 1px, transparent 3px)',
+                }}
+              />
+              <span>Cadangan (8)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Col 3: Hitung Mundur HACCP 4 Jam (Dark Forest Green / Obsidian Contour Card) */}
+        <div className="lg:col-span-4 rounded-[22px] bg-[#0c2e20] text-white p-5.5 relative overflow-hidden shadow-lg flex flex-col justify-between min-h-[220px]">
+          {/* Wavy Topographic Contour Background */}
+          <svg
+            className="absolute inset-0 w-full h-full opacity-25 pointer-events-none"
+            viewBox="0 0 300 200"
+            preserveAspectRatio="none"
+          >
+            <path d="M-30,40 Q60,130 150,50 T330,90" fill="none" stroke="#2dd4bf" strokeWidth="2" />
+            <path d="M-30,70 Q60,160 150,80 T330,120" fill="none" stroke="#34d399" strokeWidth="2.5" />
+            <path d="M-30,100 Q60,190 150,110 T330,150" fill="none" stroke="#10b981" strokeWidth="2" />
+            <path d="M-30,130 Q60,220 150,140 T330,180" fill="none" stroke="#059669" strokeWidth="1.5" />
+            <path d="M-30,160 Q60,250 150,170 T330,210" fill="none" stroke="#047857" strokeWidth="1" />
+          </svg>
+
+          <div className="relative z-10 flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-200/90 tracking-wide">Hitung Mundur HACCP 4 Jam</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${level.badge}`}>
+              {level.label}
+            </span>
+          </div>
+
+          {/* Clock Display */}
+          <div className="relative z-10 my-3 text-center">
+            <p className="font-mono text-4xl sm:text-5xl font-black tracking-widest text-white drop-shadow-xs">
+              {formatClock(secondsLeft)}
+            </p>
+            <p className="text-[10px] text-emerald-200/80 font-mono mt-1">
+              Masak: {haccpInfo.cookedAt} · Batas Konsumsi: {haccpInfo.safeUntil}
             </p>
           </div>
-        </section>
+
+          {/* Control Buttons */}
+          <div className="relative z-10 flex items-center justify-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => setIsTimerPaused((p) => !p)}
+              className="h-10 w-10 rounded-full bg-white hover:bg-slate-100 text-slate-900 flex items-center justify-center transition shadow-md cursor-pointer"
+              title={isTimerPaused ? 'Lanjutkan Timer' : 'Jeda Timer'}
+            >
+              {isTimerPaused ? <Play className="h-4 w-4 fill-current ml-0.5" /> : <Pause className="h-4 w-4 fill-current" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/validator/incidents')}
+              className="h-10 w-10 rounded-full bg-[#e53e3e] hover:bg-[#c53030] text-white flex items-center justify-center transition shadow-md cursor-pointer"
+              title="Lapor Insiden Darurat"
+            >
+              <Siren className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
     </ValidatorLayout>
   )

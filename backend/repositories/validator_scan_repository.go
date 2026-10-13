@@ -53,9 +53,7 @@ func (r *pgValidatorScanRepository) GetContext(ctx context.Context, userRole, us
 	}
 
 	// Tentukan NPSN sekolah target berdasarkan role & hierarki
-	if userRole == models.RoleValidator && userNPSN != "" {
-		targetNPSN = userNPSN
-	} else if requestedNPSN != "" {
+	if requestedNPSN != "" {
 		targetNPSN = requestedNPSN
 	} else if userNPSN != "" {
 		targetNPSN = userNPSN
@@ -496,28 +494,16 @@ func (r *pgValidatorScanRepository) GetHandoverBundle(ctx context.Context, userR
 		`, userID).Scan(&userNPSN, &userSPPGID)
 	}
 
-	if userRole == models.RoleSuperadmin {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
-	} else if userRole == models.RoleValidator {
-		if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+	if requestedNPSN != "" {
+		targetNPSN = requestedNPSN
+	} else if userNPSN != "" {
+		targetNPSN = userNPSN
+	} else if requestedSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, requestedSPPGID).Scan(&targetNPSN)
+	} else if userSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, userSPPGID).Scan(&targetNPSN)
 	} else {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+		targetNPSN = "33.210.130"
 	}
 
 	// 1. Ambil data profil sekolah
@@ -970,28 +956,16 @@ func (r *pgValidatorScanRepository) GetIncidentBundle(ctx context.Context, userR
 		`, userID).Scan(&userNPSN, &userSPPGID)
 	}
 
-	if userRole == models.RoleSuperadmin {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
-	} else if userRole == models.RoleValidator {
-		if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+	if requestedNPSN != "" {
+		targetNPSN = requestedNPSN
+	} else if userNPSN != "" {
+		targetNPSN = userNPSN
+	} else if requestedSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, requestedSPPGID).Scan(&targetNPSN)
+	} else if userSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, userSPPGID).Scan(&targetNPSN)
 	} else {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+		targetNPSN = "33.210.130"
 	}
 
 	// 1. Profil Sekolah
@@ -1406,28 +1380,16 @@ func (r *pgValidatorScanRepository) GetHistoryBundle(ctx context.Context, userRo
 		`, userID).Scan(&userNPSN, &userSPPGID)
 	}
 
-	if userRole == models.RoleSuperadmin {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
-	} else if userRole == models.RoleValidator {
-		if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+	if requestedNPSN != "" {
+		targetNPSN = requestedNPSN
+	} else if userNPSN != "" {
+		targetNPSN = userNPSN
+	} else if requestedSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, requestedSPPGID).Scan(&targetNPSN)
+	} else if userSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, userSPPGID).Scan(&targetNPSN)
 	} else {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+		targetNPSN = "33.210.130"
 	}
 
 	// 1. Profil Sekolah
@@ -1788,28 +1750,16 @@ func (r *pgValidatorScanRepository) GetDashboardBundle(ctx context.Context, user
 		`, userID).Scan(&userNPSN, &userSPPGID)
 	}
 
-	if userRole == models.RoleSuperadmin {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
-	} else if userRole == models.RoleValidator {
-		if userNPSN != "" {
-			targetNPSN = userNPSN
-		} else if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+	if requestedNPSN != "" {
+		targetNPSN = requestedNPSN
+	} else if userNPSN != "" {
+		targetNPSN = userNPSN
+	} else if requestedSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, requestedSPPGID).Scan(&targetNPSN)
+	} else if userSPPGID != "" {
+		_ = database.Pool().QueryRow(ctx, `SELECT npsn FROM schools WHERE sppg_id = $1 ORDER BY npsn LIMIT 1`, userSPPGID).Scan(&targetNPSN)
 	} else {
-		if requestedNPSN != "" {
-			targetNPSN = requestedNPSN
-		} else {
-			targetNPSN = "33.210.130"
-		}
+		targetNPSN = "33.210.130"
 	}
 
 	// 1. Profil Sekolah
@@ -2121,22 +2071,20 @@ func (r *pgValidatorScanRepository) GetDashboardBundle(ctx context.Context, user
 		RecentScans:        recentScans,
 	}
 
-	// 7. Pilihan Sekolah untuk Superadmin Switcher
+	// 7. Pilihan Sekolah untuk Switcher
 	var schoolOptions []models.ValidatorSchoolOption
-	if userRole == models.RoleSuperadmin {
-		schRows, err := database.Pool().Query(ctx, `
-			SELECT s.npsn, s.name, s.sppg_id, COALESCE(k.name, 'SPPG Sentral')
-			FROM schools s
-			LEFT JOIN sppg_kitchens k ON s.sppg_id = k.id
-			ORDER BY s.name ASC
-		`)
-		if err == nil {
-			defer schRows.Close()
-			for schRows.Next() {
-				var opt models.ValidatorSchoolOption
-				if err := schRows.Scan(&opt.NPSN, &opt.Name, &opt.SPPGID, &opt.SPPGName); err == nil {
-					schoolOptions = append(schoolOptions, opt)
-				}
+	schRows, err := database.Pool().Query(ctx, `
+		SELECT s.npsn, s.name, s.sppg_id, COALESCE(k.name, 'SPPG Sentral')
+		FROM schools s
+		LEFT JOIN sppg_kitchens k ON s.sppg_id = k.id
+		ORDER BY s.name ASC
+	`)
+	if err == nil {
+		defer schRows.Close()
+		for schRows.Next() {
+			var opt models.ValidatorSchoolOption
+			if err := schRows.Scan(&opt.NPSN, &opt.Name, &opt.SPPGID, &opt.SPPGName); err == nil {
+				schoolOptions = append(schoolOptions, opt)
 			}
 		}
 	}

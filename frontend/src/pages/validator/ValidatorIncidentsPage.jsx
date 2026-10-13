@@ -20,6 +20,8 @@ import {
   ArrowRight,
   Truck,
   ExternalLink,
+  ArrowUpRight,
+  Plus,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { useAuth } from '../../context/AuthContext'
@@ -32,37 +34,28 @@ import {
 } from '../../data/validatorData'
 import { fetchValidatorIncidents, submitValidatorIncident } from '../../lib/api'
 
-/**
- * ==============================================================================
- * PORTAL VALIDATOR: LAPOR INSIDEN CEPAT (PANIC BUTTON & TIKET SINKRONISASI)
- * URL: /validator/incidents
- * VALIDATOR.md Bab 4: kategori terstruktur, foto bukti watermark, severity,
- * protokol tindakan pertama, sinkronisasi real-time ke Dapur SPPG & Satgas MBG.
- * ==============================================================================
- */
-
 const SEVERITY_CHIP = {
-  low: 'bg-amber-50 text-amber-700 border-amber-200',
-  medium: 'bg-orange-50 text-orange-700 border-orange-200',
-  high: 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse',
+  low: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  medium: 'bg-amber-50 text-amber-800 border-amber-200',
+  high: 'bg-rose-50 text-rose-800 border-rose-200 animate-pulse',
 }
 
 const SEVERITY_DOT = {
-  low: 'bg-amber-500',
-  medium: 'bg-orange-500',
+  low: 'bg-emerald-500',
+  medium: 'bg-amber-500',
   high: 'bg-rose-600',
 }
 
 const EVIDENCE_SLOTS = [
-  { id: 1, watermark: 'Foto 1 · kondisi utama' },
-  { id: 2, watermark: 'Foto 2 · detail kontaminasi' },
-  { id: 3, watermark: 'Foto 3 · kemasan / label batch' },
+  { id: 1, watermark: 'Foto 1 · Kondisi Utama' },
+  { id: 2, watermark: 'Foto 2 · Detail Kontaminasi' },
+  { id: 3, watermark: 'Foto 3 · Label / Batch Boks' },
 ]
 
 export function ValidatorIncidentsPage() {
   const { user } = useAuth()
 
-  // Data Bundle dari Backend
+  // Data Bundle from Backend
   const [bundle, setBundle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -78,7 +71,7 @@ export function ValidatorIncidentsPage() {
   const [showProtocol, setShowProtocol] = useState(true)
 
   // Filter & Search Tiket
-  const [activeFilter, setActiveFilter] = useState('all') // 'all' | 'active' | 'resolved' | 'high'
+  const [activeFilter, setActiveFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
 
   const showToast = (message, tone = 'info') => {
@@ -92,7 +85,7 @@ export function ValidatorIncidentsPage() {
     error: 'border-rose-200 bg-rose-50 text-rose-900',
   }
 
-  // Load Data dari API Backend
+  // Load Data from Backend API
   const loadData = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true)
     else setRefreshing(true)
@@ -104,7 +97,6 @@ export function ValidatorIncidentsPage() {
       if (data) {
         setBundle(data)
       } else {
-        // Fallback baseline
         setBundle({
           school: {
             npsn: '33.210.130',
@@ -182,13 +174,11 @@ export function ValidatorIncidentsPage() {
           'success',
         )
 
-        // Reset form
         setCategory('')
         setPhotos([])
         setDescription('')
         setSeverity('low')
 
-        // Reload data segar dari backend
         await loadData(true)
       } else {
         throw new Error('Respon server kosong')
@@ -204,21 +194,17 @@ export function ValidatorIncidentsPage() {
   const selectedCat = INCIDENT_CATEGORIES.find((c) => c.id === category)
   const selectedSev = SEVERITY_LEVELS.find((s) => s.id === severity)
 
-  // Metrik Tiket
   const tickets = bundle?.tickets || []
   const activeTicketsCount = tickets.filter((t) => t.status !== 'resolved').length
   const resolvedTicketsCount = tickets.filter((t) => t.status === 'resolved').length
   const highSeverityCount = tickets.filter((t) => t.severity === 'high' && t.status !== 'resolved').length
 
-  // Filter Tiket
   const filteredTickets = useMemo(() => {
     return tickets.filter((t) => {
-      // 1. Status Filter
       if (activeFilter === 'active' && t.status === 'resolved') return false
       if (activeFilter === 'resolved' && t.status !== 'resolved') return false
       if (activeFilter === 'high' && t.severity !== 'high') return false
 
-      // 2. Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase()
         const matchId = t.id?.toLowerCase().includes(q)
@@ -232,132 +218,156 @@ export function ValidatorIncidentsPage() {
   }, [tickets, activeFilter, searchQuery])
 
   return (
-    <ValidatorLayout activeMenu="incidents" title="Lapor Insiden Cepat" badge="PANIC BUTTON & TIKET">
+    <ValidatorLayout
+      activeMenu="incidents"
+      title="Lapor Insiden & Siaga Mutu"
+      subtitle="Eskalasi temuan organoleptik, kontaminasi asing, dan respons tanggap darurat Satgas MBG."
+      primaryAction={
+        <button
+          type="button"
+          onClick={() => {
+            setCategory('')
+            setDescription('')
+            setPhotos([])
+          }}
+          className="flex items-center gap-2 rounded-full bg-[#185338] text-white px-5 py-2.5 text-xs font-bold hover:bg-[#12422c] transition shadow-xs cursor-pointer"
+        >
+          <Plus className="h-4 w-4" />
+          <span>+ Tiket Baru</span>
+        </button>
+      }
+      secondaryAction={
+        <button
+          type="button"
+          onClick={() => loadData(true)}
+          disabled={refreshing}
+          className="flex items-center gap-2 rounded-full bg-white border border-slate-300 text-slate-800 px-5 py-2.5 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin text-[#185338]' : ''}`} />
+          <span>Segarkan Data</span>
+        </button>
+      }
+    >
       {toast && (
         <div
           role="status"
           aria-live="polite"
-          className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-xs animate-in fade-in transition shadow-sm ${tones[toast.tone]}`}
+          className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-xs animate-in fade-in transition shadow-xs ${tones[toast.tone]}`}
         >
           <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-current opacity-80" />
-          <p className="leading-relaxed font-semibold flex-1">{toast.message}</p>
+          <p className="leading-relaxed font-bold flex-1">{toast.message}</p>
         </div>
       )}
 
-      {/* Header Context Bar: Sinkronisasi Lintas Role */}
-      <section className="rounded-2xl border border-slate-200/80 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white p-5 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                <ShieldAlert className="h-3 w-3 text-rose-400" />
-                Jalur Eskalasi Darurat MBG
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/10 text-slate-300 border border-white/10">
-                <Clock className="h-3 w-3 text-amber-400" />
-                SLA Tindak Lanjut: &lt; 15 Menit
-              </span>
+      {/* ========================================================================= */}
+      {/* TOP 4 STAT CARDS (Donezo Style) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
+        {/* Card 1: Total Tiket Masuk */}
+        <div className="rounded-[22px] bg-[#185338] text-white p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-100/90">Total Tiket Masuk</span>
+            <div className="h-7 w-7 rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white">
+              <ArrowUpRight className="h-3.5 w-3.5" />
             </div>
-            <h1 className="text-base sm:text-lg font-extrabold tracking-tight">
-              {bundle?.school?.name || 'SDN 01 Menteng Pagi'}
-              <span className="ml-2 font-mono text-xs font-normal text-slate-400">
-                (NPSN: {bundle?.school?.npsn || '33.210.130'})
-              </span>
-            </h1>
-            <p className="text-xs text-slate-300 flex items-center gap-2 flex-wrap">
-              <span>Dapur Induk: <strong>{bundle?.parentSppg?.name || 'Dapur Sentral SPPG-01 Menteng'}</strong></span>
-              <span className="text-slate-500">·</span>
-              <span className="font-mono text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 text-[11px]">
-                Batch: {bundle?.activeBatch || 'MBG-2026-SPPG01-SDN01P-B01'}
-              </span>
-            </p>
           </div>
-
-          <div className="flex items-center gap-2.5 self-start md:self-auto">
-            {/* Superadmin School Switcher */}
-            {user?.role === 'superadmin' && bundle?.availableSchools?.length > 0 && (
-              <select
-                aria-label="Pilih sekolah untuk pantauan tiket insiden"
-                value={selectedNPSN}
-                onChange={(e) => setSelectedNPSN(e.target.value)}
-                className="bg-slate-800 border border-slate-700 text-xs rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
-              >
-                <option value="">Semua Sekolah / Default</option>
-                {bundle.availableSchools.map((s) => (
-                  <option key={s.npsn} value={s.npsn}>
-                    {s.name} ({s.npsn})
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <button
-              type="button"
-              onClick={() => loadData(true)}
-              disabled={refreshing}
-              className="inline-flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3 py-2 text-xs font-bold transition text-white cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>{refreshing ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
-            </button>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight font-mono">{tickets.length}</h3>
           </div>
+          <p className="text-[11px] text-emerald-200/80 font-medium">SLA penanganan: &lt; 15 menit</p>
         </div>
 
-        {/* Metrik Ringkas Insiden */}
-        <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/5">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Tiket Masuk</p>
-            <p className="text-lg font-black text-white mt-0.5">{tickets.length}</p>
+        {/* Card 2: Tiket Aktif */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Tiket Dalam Tindak Lanjut</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
           </div>
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/5">
-            <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Tiket Aktif / Proses</p>
-            <p className="text-lg font-black text-amber-400 mt-0.5">{activeTicketsCount}</p>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {activeTicketsCount}
+            </h3>
           </div>
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/5">
-            <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Tuntas Diselesaikan</p>
-            <p className="text-lg font-black text-emerald-400 mt-0.5">{resolvedTicketsCount}</p>
-          </div>
-          <div className="bg-white/5 rounded-xl p-2.5 border border-white/5">
-            <p className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">Sirene Satgas Merah</p>
-            <p className="text-lg font-black text-rose-400 mt-0.5">{highSeverityCount}</p>
-          </div>
+          <span className="text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full self-start">
+            Sedang Diinvestigasi SPPG
+          </span>
         </div>
-      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Form Laporan Insiden */}
-        <section className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-5">
+        {/* Card 3: Tuntas */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Tuntas Diselesaikan</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {resolvedTicketsCount}
+            </h3>
+          </div>
+          <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full self-start">
+            Penggantian Porsi Berhasil
+          </span>
+        </div>
+
+        {/* Card 4: Sirene Kritis */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Sirene Satgas Merah</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {highSeverityCount}
+            </h3>
+          </div>
+          <span className="text-[11px] text-slate-400 font-medium">
+            {highSeverityCount > 0 ? 'Batch Wajib Diisolasi' : 'Kondisi Pangan Steril'}
+          </span>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* FORMULIR ESKALASI DARURAT & PROTOKOL (2 Columns) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
+        {/* Formulir Pelaporan (7 cols) */}
+        <section className="lg:col-span-7 bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 space-y-5">
           <div>
             <div className="flex items-center gap-2">
-              <Siren className="h-4 w-4 text-rose-600 animate-bounce" />
-              <h2 className="text-sm font-extrabold tracking-tight text-slate-900">
+              <Siren className="h-4 w-4 text-rose-600" />
+              <h2 className="text-base font-extrabold tracking-tight text-slate-900">
                 Formulir Eskalasi Darurat Mutu Makanan
               </h2>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
-              Laporkan bau basi, benda asing, atau reaksi medis siswa secara seketika. Tiket ini langsung terdistribusi ke
-              terminal dapur SPPG dan dasbor pusat Satgas MBG untuk tindakan karantina porsi.
+            <p className="mt-1 text-xs text-slate-400 font-medium">
+              Laporkan bau basi, benda asing, atau reaksi medis siswa secara langsung ke terminal SPPG dan dasbor pusat Satgas MBG.
             </p>
           </div>
 
           {/* 1 · Kategori Insiden */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
               1 · Kategori Insiden Mutu
             </p>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {INCIDENT_CATEGORIES.map((c) => (
                 <button
                   key={c.id}
                   type="button"
                   onClick={() => setCategory(c.id)}
-                  className={`text-left rounded-xl border p-3 transition cursor-pointer ${
+                  className={`text-left rounded-2xl border p-3.5 transition cursor-pointer ${
                     category === c.id
-                      ? 'border-rose-300 bg-rose-50/70 ring-1 ring-rose-200 shadow-xs'
-                      : 'border-slate-200 bg-slate-50/60 hover:border-slate-300'
+                      ? 'border-[#185338] bg-emerald-50/50 ring-1 ring-[#185338]/20 shadow-xs'
+                      : 'border-slate-200 bg-slate-50/60 hover:bg-slate-50'
                   }`}
                 >
-                  <p className="text-xs font-bold text-slate-800">{c.label}</p>
+                  <p className="text-xs font-black text-slate-900">{c.label}</p>
                   <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">{c.desc}</p>
                 </button>
               ))}
@@ -366,10 +376,10 @@ export function ValidatorIncidentsPage() {
 
           {/* 2 · Foto Bukti Watermark */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              2 · Foto Bukti Terverifikasi (Maks. 3 Foto Digital)
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              2 · Foto Bukti Terverifikasi (Maks. 3 Foto)
             </p>
-            <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {EVIDENCE_SLOTS.map((slot) => {
                 const filled = photos.includes(slot.id)
                 return (
@@ -377,22 +387,22 @@ export function ValidatorIncidentsPage() {
                     key={slot.id}
                     type="button"
                     onClick={() => togglePhoto(slot.id)}
-                    className={`relative rounded-xl border-2 border-dashed aspect-[4/3] flex flex-col items-center justify-center gap-1.5 transition cursor-pointer ${
+                    className={`relative rounded-2xl border-2 border-dashed aspect-[4/3] flex flex-col items-center justify-center gap-1.5 transition cursor-pointer ${
                       filled
-                        ? 'border-amber-400 bg-amber-50/70 shadow-inner'
-                        : 'border-slate-300 bg-slate-50 hover:border-slate-400'
+                        ? 'border-[#185338] bg-emerald-50/70 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/70 hover:border-slate-300'
                     }`}
                   >
                     {filled ? (
-                      <ImageIcon className="h-6 w-6 text-amber-600" />
+                      <ImageIcon className="h-6 w-6 text-[#185338]" />
                     ) : (
                       <Camera className="h-6 w-6 text-slate-400" />
                     )}
-                    <span className="text-[10px] font-semibold text-slate-600">
+                    <span className="text-[10px] font-extrabold text-slate-700">
                       {filled ? 'Foto Tersimpan' : 'Ambil Foto'}
                     </span>
-                    <span className="absolute bottom-1.5 left-1.5 right-1.5 font-mono text-[8px] text-slate-500 bg-white/90 rounded px-1 py-0.5 truncate border border-slate-200">
-                      {slot.watermark} · {bundle?.school?.npsn || '33.210.130'}
+                    <span className="absolute bottom-2 left-2 right-2 font-mono text-[8px] text-slate-500 bg-white/90 rounded-md px-1.5 py-0.5 truncate border border-slate-200">
+                      {slot.watermark}
                     </span>
                   </button>
                 )
@@ -402,17 +412,17 @@ export function ValidatorIncidentsPage() {
 
           {/* 3 · Derajat Keparahan */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
               3 · Derajat Keparahan (Severity Level)
             </p>
-            <div className="mt-2 space-y-2">
+            <div className="space-y-2">
               {SEVERITY_LEVELS.map((s) => (
                 <label
                   key={s.id}
-                  className={`flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition ${
+                  className={`flex items-start gap-3 rounded-2xl border p-3.5 cursor-pointer transition ${
                     severity === s.id
-                      ? 'border-rose-300 bg-rose-50/60 ring-1 ring-rose-200'
-                      : 'border-slate-200 bg-slate-50/60 hover:border-slate-300'
+                      ? 'border-[#185338] bg-emerald-50/40 ring-1 ring-[#185338]/20'
+                      : 'border-slate-200 bg-slate-50/60 hover:bg-slate-50'
                   }`}
                 >
                   <input
@@ -421,12 +431,12 @@ export function ValidatorIncidentsPage() {
                     value={s.id}
                     checked={severity === s.id}
                     onChange={() => setSeverity(s.id)}
-                    className="mt-1 accent-rose-600"
+                    className="mt-1 accent-[#185338]"
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
                       <span className={`h-2 w-2 rounded-full ${SEVERITY_DOT[s.id]}`} />
-                      <span className="text-xs font-bold text-slate-800">{s.label}</span>
+                      <span className="text-xs font-black text-slate-900">{s.label}</span>
                     </span>
                     <span className="block text-[11px] text-slate-500 mt-0.5 leading-snug">{s.desc}</span>
                   </span>
@@ -437,36 +447,23 @@ export function ValidatorIncidentsPage() {
 
           {/* 4 · Kronologi Singkat */}
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
               4 · Kronologi Singkat Kejadian
             </p>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              placeholder="Contoh: Ditemukan 2 boks dengan aroma asam menyengat di Kelas 3B pukul 07:26, porsi ditahan sebelum dibagikan ke siswa..."
-              className="mt-2 w-full rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-3 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition resize-y"
+              placeholder="Contoh: Ditemukan 2 boks dengan aroma asam menyengat di Kelas 3B pukul 07:26, porsi ditahan sebelum dibagikan..."
+              className="w-full rounded-2xl bg-slate-50/70 border border-slate-200 p-3.5 text-xs leading-relaxed focus:outline-none focus:border-[#185338] focus:bg-white transition resize-y"
             />
           </div>
-
-          {selectedSev?.id === 'high' && (
-            <div className="text-[11px] text-rose-800 bg-rose-50 border border-rose-200 rounded-xl p-3 leading-relaxed flex items-start gap-2 animate-in fade-in">
-              <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">Protokol Darurat Merah Diaktifkan:</p>
-                <p className="mt-0.5 text-rose-700">
-                  Push sirene akan langsung berbunyi di konsol kendali Satgas MBG & Manajer Dapur SPPG.
-                  Mohon <strong>ISOLASI SELURUH BOKS</strong> di sekolah agar tidak dibagikan ke kelas lain.
-                </p>
-              </div>
-            </div>
-          )}
 
           <button
             type="button"
             onClick={submitReport}
             disabled={submitting}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white px-4 py-3.5 text-sm font-extrabold transition shadow-md shadow-rose-500/20 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-3.5 px-6 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-black transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
           >
             {submitting ? (
               <>
@@ -482,17 +479,17 @@ export function ValidatorIncidentsPage() {
           </button>
         </section>
 
-        {/* Protokol Tindakan & Detail Terpilih */}
-        <section className="space-y-5 self-start">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
+        {/* Sidebar Kanan: Protokol Tindakan & Detail (5 cols) */}
+        <section className="lg:col-span-5 space-y-5 self-start">
+          <div className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6">
             <button
               type="button"
               onClick={() => setShowProtocol((v) => !v)}
-              className="w-full flex items-center justify-between gap-2 cursor-pointer"
+              className="w-full flex items-center justify-between gap-2 cursor-pointer text-left"
             >
-              <div className="flex items-center gap-2 text-left">
+              <div className="flex items-center gap-2">
                 <ShieldAlert className="h-4 w-4 text-rose-600" />
-                <h2 className="text-sm font-extrabold tracking-tight text-slate-900">
+                <h2 className="text-sm font-extrabold text-slate-900">
                   Protokol Tindakan Pertama
                 </h2>
               </div>
@@ -502,10 +499,10 @@ export function ValidatorIncidentsPage() {
             </button>
 
             {showProtocol && (
-              <ol className="mt-3.5 space-y-3">
+              <ol className="mt-4 space-y-3">
                 {PROTOCOL_STEPS.map((step, i) => (
                   <li key={step} className="flex items-start gap-3">
-                    <span className="h-6 w-6 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 text-[11px] font-extrabold font-mono shadow-xs">
+                    <span className="h-6 w-6 rounded-full bg-[#185338] text-white flex items-center justify-center shrink-0 text-[11px] font-extrabold font-mono shadow-xs">
                       {i + 1}
                     </span>
                     <p className="text-xs text-slate-700 leading-relaxed font-medium">{step}</p>
@@ -515,65 +512,67 @@ export function ValidatorIncidentsPage() {
             )}
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
-            <h2 className="text-sm font-extrabold tracking-tight text-slate-900">Kategori Terpilih</h2>
+          <div className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6">
+            <h2 className="text-sm font-extrabold text-slate-900">Kategori Terpilih</h2>
             {selectedCat ? (
-              <div className="mt-2.5 rounded-xl bg-slate-50 border border-slate-100 p-3.5 space-y-1.5">
+              <div className="mt-3 rounded-2xl bg-slate-50/70 border border-slate-100 p-4 space-y-2">
                 <p className="text-xs font-bold text-slate-800">{selectedCat.label}</p>
                 <p className="text-[11px] text-slate-500 leading-relaxed">{selectedCat.desc}</p>
                 <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between">
                   <span className="text-[10px] font-mono uppercase tracking-wide text-slate-400">
                     Severity:
                   </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${SEVERITY_CHIP[severity]}`}>
+                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${SEVERITY_CHIP[severity]}`}>
                     {selectedSev?.label}
                   </span>
                 </div>
               </div>
             ) : (
-              <p className="mt-2 text-[11px] text-slate-400 italic">Belum ada kategori yang dipilih pada formulir.</p>
+              <p className="mt-2 text-[11px] text-slate-400 italic">Pilih kategori insiden pada formulir.</p>
             )}
           </div>
 
-          {/* Info Kontak Darurat SPPG */}
-          <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-2">
-            <p className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-              <Building2 className="h-3.5 w-3.5 text-amber-700" />
-              Kontak Siaga Dapur Induk
+          {/* Kontak Siaga Dapur Induk */}
+          <div className="bg-emerald-50/60 border border-emerald-200/70 rounded-[22px] p-5 space-y-2">
+            <p className="text-xs font-extrabold text-[#185338] flex items-center gap-1.5">
+              <Building2 className="h-4 w-4" />
+              Kontak Siaga Dapur SPPG
             </p>
-            <p className="text-[11px] text-amber-800 leading-relaxed">
+            <p className="text-xs text-slate-700 leading-relaxed">
               Kepala Dapur: <strong>{bundle?.parentSppg?.headChef || 'Chef Junaedi'}</strong>
               <br />
               Ahli Gizi: <strong>{bundle?.parentSppg?.nutritionist || 'Siti Rahma, S.Gz'}</strong>
               <br />
-              Telepon Siaga: <strong className="font-mono">{bundle?.parentSppg?.phone || '+62 812-3456-7890'}</strong>
+              Telepon Siaga: <strong className="font-mono text-[#185338]">{bundle?.parentSppg?.phone || '+62 812-3456-7890'}</strong>
             </p>
           </div>
         </section>
       </div>
 
-      {/* Pelacak Status Tiket Insiden Real-Time */}
-      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
+      {/* ========================================================================= */}
+      {/* PELACAK STATUS TIKET INSIDEN & TANGGAPAN */}
+      {/* ========================================================================= */}
+      <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+            <h2 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
               <Flame className="h-4 w-4 text-orange-600" />
               Pelacak Status Tiket Insiden & Tanggapan Dapur
             </h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Seluruh riwayat penanganan, tanggapan sampel organoleptik dari SPPG, dan porsi pengganti terpantau di sini.
+            <p className="text-xs text-slate-400 font-medium mt-0.5">
+              Riwayat investigasi, sampel laboratorium dan porsi pengganti terpantau langsung.
             </p>
           </div>
 
-          {/* Quick Search */}
+          {/* Pill Search */}
           <div className="relative w-full sm:w-64">
-            <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Cari ID tiket, kategori, catatan..."
+              placeholder="Cari ID tiket, catatan..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500 focus:bg-white transition"
+              className="w-full pl-9 pr-3 py-2 rounded-full border border-slate-200 bg-slate-50/70 text-xs focus:outline-none focus:border-[#185338] focus:bg-white transition"
             />
           </div>
         </div>
@@ -583,9 +582,9 @@ export function ValidatorIncidentsPage() {
           <button
             type="button"
             onClick={() => setActiveFilter('all')}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
               activeFilter === 'all'
-                ? 'bg-slate-900 text-white shadow-xs'
+                ? 'bg-[#185338] text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -594,21 +593,21 @@ export function ValidatorIncidentsPage() {
           <button
             type="button"
             onClick={() => setActiveFilter('active')}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
               activeFilter === 'active'
                 ? 'bg-amber-600 text-white shadow-xs'
-                : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
             }`}
           >
-            Aktif / Proses ({activeTicketsCount})
+            Aktif ({activeTicketsCount})
           </button>
           <button
             type="button"
             onClick={() => setActiveFilter('resolved')}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
               activeFilter === 'resolved'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                ? 'bg-[#185338] text-white shadow-xs'
+                : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
             }`}
           >
             Selesai ({resolvedTicketsCount})
@@ -616,10 +615,10 @@ export function ValidatorIncidentsPage() {
           <button
             type="button"
             onClick={() => setActiveFilter('high')}
-            className={`px-3 py-1 rounded-full text-xs font-bold transition cursor-pointer ${
+            className={`px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${
               activeFilter === 'high'
                 ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                : 'bg-rose-50 text-rose-800 hover:bg-rose-100'
             }`}
           >
             Darurat Merah ({highSeverityCount})
@@ -631,14 +630,14 @@ export function ValidatorIncidentsPage() {
           {filteredTickets.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center bg-slate-50/50">
               <CheckCircle className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-              <p className="text-xs font-bold text-slate-700">Tidak ada tiket insiden yang sesuai filter</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Seluruh distribusi boks makanan berjalan aman dan steril.</p>
+              <p className="text-xs font-bold text-slate-700">Tidak Ada Tiket Insiden</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Seluruh distribusi boks berjalan steril dan aman.</p>
             </div>
           ) : (
             filteredTickets.map((t) => (
               <article
                 key={t.id}
-                className={`rounded-2xl border p-4 transition ${
+                className={`rounded-2xl border p-4.5 transition ${
                   t.fresh
                     ? 'border-rose-300 bg-rose-50/40 ring-1 ring-rose-200'
                     : t.status === 'resolved'
@@ -649,16 +648,16 @@ export function ValidatorIncidentsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-mono text-xs font-extrabold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                      <p className="font-mono text-xs font-extrabold text-slate-900 bg-white px-2.5 py-0.5 rounded-full border border-slate-200">
                         {t.id}
                       </p>
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${SEVERITY_CHIP[t.severity] || 'bg-slate-100 text-slate-700'}`}
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${SEVERITY_CHIP[t.severity] || 'bg-slate-100 text-slate-700'}`}
                       >
-                        {t.severityLabel || (t.severity === 'high' ? 'Tinggi / Darurat Merah' : t.severity === 'low' ? 'Rendah' : 'Sedang')}
+                        {t.severityLabel || (t.severity === 'high' ? 'Tinggi / Darurat' : t.severity === 'low' ? 'Rendah' : 'Sedang')}
                       </span>
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                           t.status === 'resolved'
                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                             : t.status === 'in_progress'
@@ -666,28 +665,22 @@ export function ValidatorIncidentsPage() {
                             : 'bg-amber-100 text-amber-800 border border-amber-200'
                         }`}
                       >
-                        {t.statusLabel || (t.status === 'resolved' ? 'Selesai' : t.status === 'in_progress' ? 'Sedang Ditindaklanjuti' : 'Baru Masuk')}
+                        {t.statusLabel || (t.status === 'resolved' ? 'Selesai' : t.status === 'in_progress' ? 'Diproses' : 'Baru')}
                       </span>
                     </div>
 
-                    <h3 className="text-sm font-bold text-slate-900 mt-2">{t.category}</h3>
-                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed font-normal">{t.note}</p>
+                    <h3 className="text-sm font-black text-slate-900 mt-2">{t.category}</h3>
+                    <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{t.note}</p>
 
                     <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-2 flex-wrap">
                       <span>Dibuka: <strong className="text-slate-600">{t.openedAt}</strong></span>
                       <span>·</span>
                       <span>Penanggung Jawab: <strong className="text-slate-600">{t.handler}</strong></span>
-                      {t.schoolName && (
-                        <>
-                          <span>·</span>
-                          <span>Sekolah: <strong className="text-slate-600">{t.schoolName}</strong></span>
-                        </>
-                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Timeline Tahapan Penanganan */}
+                {/* Timeline Tahapan */}
                 {t.timeline && (
                   <ol className="mt-3.5 grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {t.timeline.map((step) => (
@@ -719,12 +712,12 @@ export function ValidatorIncidentsPage() {
                   </ol>
                 )}
 
-                {/* Riwayat Tanggapan Resmi Dapur SPPG */}
+                {/* Tanggapan SPPG */}
                 {t.responses && t.responses.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-1.5">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                       <MessageSquare className="h-3 w-3 text-indigo-500" />
-                      Tanggapan Resmi & Uji Sampel Dapur SPPG:
+                      Tanggapan Resmi Dapur SPPG:
                     </p>
                     <div className="space-y-1">
                       {t.responses.map((resp, i) => (
@@ -741,24 +734,6 @@ export function ValidatorIncidentsPage() {
               </article>
             ))
           )}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="pt-2 flex items-center justify-between flex-wrap gap-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={() =>
-              showToast('Laporan tembusan insiden dikirimkan ke Kepala Sekolah & Komite via WhatsApp/Email resmi.', 'info')
-            }
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 hover:text-amber-800 transition cursor-pointer"
-          >
-            <Send className="h-3.5 w-3.5" />
-            <span>Kirim Tembusan Laporan ke Kepala Sekolah & Komite</span>
-          </button>
-
-          <span className="text-[10px] font-mono text-slate-400">
-            Terakhir disinkronkan: {bundle?.lastUpdated ? new Date(bundle.lastUpdated).toLocaleTimeString('id-ID') : 'Baru saja'} WIB
-          </span>
         </div>
       </section>
     </ValidatorLayout>

@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("Security posture validation failed: %v\n", err)
 	}
 
-	bootCtx, bootCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	bootCtx, bootCancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer bootCancel()
 
 	// 2. Connect database (PostgreSQL) + migrate + seed demo accounts

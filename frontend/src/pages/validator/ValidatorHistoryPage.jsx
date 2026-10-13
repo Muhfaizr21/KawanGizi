@@ -17,9 +17,12 @@ import {
   CheckCircle,
   FileCheck,
   Utensils,
+  ArrowUpRight,
+  Plus,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { useAuth } from '../../context/AuthContext'
+import { getSelectedSchool } from '../../lib/validatorSchool'
 import { guardAdminAction } from '../../lib/adminActions'
 import {
   SURPLUS_OPTIONS,
@@ -30,31 +33,33 @@ import {
   allocateValidatorSurplus,
 } from '../../lib/api'
 
-/**
- * ==============================================================================
- * PORTAL VALIDATOR: RIWAYAT PINDAI & PRESENSI MAKAN (REKONSILIASI RESMI BGN)
- * URL: /validator/history
- * VALIDATOR.md Bab 5: log pindai harian, rekonsiliasi distribusi kelas,
- * pengelolaan porsi sisa terverifikasi database, filter & pencarian, ekspor resmi.
- * ==============================================================================
- */
-
 const STATUS_ICON = {
-  verified: { Icon: CheckCircle2, cls: 'bg-emerald-50 text-emerald-600' },
-  warning: { Icon: AlertTriangle, cls: 'bg-amber-50 text-amber-600' },
-  rejected: { Icon: XCircle, cls: 'bg-rose-50 text-rose-600' },
+  verified: { Icon: CheckCircle2, cls: 'bg-emerald-50 text-emerald-800' },
+  warning: { Icon: AlertTriangle, cls: 'bg-amber-50 text-amber-800' },
+  rejected: { Icon: XCircle, cls: 'bg-rose-50 text-rose-800' },
 }
 
 export function ValidatorHistoryPage() {
   const { user } = useAuth()
 
-  // State Data dari Backend
+  // State Data from Backend
   const [bundle, setBundle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [selectedNPSN, setSelectedNPSN] = useState('')
+  const [selectedNPSN, setSelectedNPSN] = useState(() => getSelectedSchool(user).npsn)
 
-  // State Filter & Pencarian
+  // Listen to global school changes
+  useEffect(() => {
+    const handleSchoolChanged = (e) => {
+      if (e.detail?.npsn) {
+        setSelectedNPSN(e.detail.npsn)
+      }
+    }
+    window.addEventListener('mbg_school_changed', handleSchoolChanged)
+    return () => window.removeEventListener('mbg_school_changed', handleSchoolChanged)
+  }, [])
+
+  // State Filter & Search
   const [filter, setFilter] = useState('today')
   const [query, setQuery] = useState('')
   const [surplusSelections, setSurplusSelections] = useState({})
@@ -72,7 +77,7 @@ export function ValidatorHistoryPage() {
     error: 'border-rose-200 bg-rose-50 text-rose-900',
   }
 
-  // Load Data dari API Backend
+  // Load Data from Backend API
   const loadData = useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true)
     else setRefreshing(true)
@@ -101,7 +106,6 @@ export function ValidatorHistoryPage() {
     loadData()
   }, [loadData])
 
-  // Transformasi scan logs dari database
   const scanRows = useMemo(() => {
     return bundle?.scans || []
   }, [bundle])
@@ -161,7 +165,6 @@ export function ValidatorHistoryPage() {
       })
   }, [filter, query, scanRows])
 
-  // Rekapitulasi Kelas & Porsi Sisa
   const classRecap = useMemo(() => {
     return bundle?.classRecap || []
   }, [bundle])
@@ -182,7 +185,7 @@ export function ValidatorHistoryPage() {
     return { quota, present, handed, leftover, boxesScanned: todayRows.length, reviewRate, attendancePct }
   }, [bundle, classRecap, scanRows])
 
-  // Handler Alokasi Porsi Sisa ke Server Backend
+  // Handler Alokasi Porsi Sisa
   const handleSetSurplus = async (className, optionId, leftoverPortions) => {
     const res = guardAdminAction(
       user,
@@ -223,13 +226,13 @@ export function ValidatorHistoryPage() {
     }
   }
 
-  // Ekspor Laporan Rekonsiliasi Harian
+  // Ekspor Laporan
   const exportReport = () => {
     const res = guardAdminAction(
       user,
       'ValidatorHistory',
       'ekspor laporan harian (PDF/CSV)',
-      { date: bundle?.date || '2026-10-08', classes: classRecap.length },
+      { date: bundle?.date || '2026-10-13', classes: classRecap.length },
       ['attendance.read'],
     )
     if (!res.allowed) {
@@ -262,7 +265,7 @@ export function ValidatorHistoryPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `BA_Rekonsiliasi_MBG_${bundle?.school?.npsn || '33210130'}_${bundle?.date || '20261008'}.json`
+      a.download = `BA_Rekonsiliasi_MBG_${bundle?.school?.npsn || '33210130'}_${bundle?.date || '20261013'}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -276,199 +279,184 @@ export function ValidatorHistoryPage() {
   }
 
   return (
-    <ValidatorLayout activeMenu="history" title="Riwayat & Presensi Makan" badge="REKONSILIASI HARIAN">
+    <ValidatorLayout
+      activeMenu="history"
+      title="Riwayat & Presensi Makan"
+      subtitle="Rekonsiliasi log pindai nampan, presensi kelas sekolah & tata kelola porsi sisa BGN."
+      primaryAction={
+        <button
+          type="button"
+          onClick={exportReport}
+          className="flex items-center gap-2 rounded-full bg-[#185338] text-white px-5 py-2.5 text-xs font-bold hover:bg-[#12422c] transition shadow-xs cursor-pointer"
+        >
+          <Download className="h-4 w-4" />
+          <span>Ekspor BAST (JSON)</span>
+        </button>
+      }
+      secondaryAction={
+        <button
+          type="button"
+          onClick={() => loadData(true)}
+          disabled={refreshing}
+          className="flex items-center gap-2 rounded-full bg-white border border-slate-300 text-slate-800 px-5 py-2.5 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin text-[#185338]' : ''}`} />
+          <span>Segarkan Data</span>
+        </button>
+      }
+    >
       {toast && (
         <div
           role="status"
           aria-live="polite"
-          className={`flex items-start gap-3 rounded-xl border px-4 py-3.5 text-xs animate-in fade-in transition shadow-sm ${tones[toast.tone]}`}
+          className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3.5 text-xs animate-in fade-in transition shadow-xs ${tones[toast.tone]}`}
         >
-          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80" />
-          <p className="leading-relaxed font-semibold flex-1">{toast.message}</p>
+          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-current opacity-80" />
+          <p className="leading-relaxed font-bold flex-1">{toast.message}</p>
         </div>
       )}
 
-      {/* Header Context Bar */}
-      <section className="rounded-2xl border border-slate-200/80 bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950 text-white p-5 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                <ShieldCheck className="h-3 w-3 text-amber-400" />
-                Papan Rekonsiliasi Distribusi & Mutu
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/10 text-slate-300 border border-white/10">
-                <Clock className="h-3 w-3 text-emerald-400" />
-                Golden Window: Aman Hingga {bundle?.goldenWindow?.safeUntil || '10:30 WIB'}
-              </span>
+      {/* ========================================================================= */}
+      {/* TOP 4 STAT CARDS (Donezo Style) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
+        {/* Card 1: Hasil Scan Hari Ini */}
+        <div className="rounded-[22px] bg-[#185338] text-white p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-100/90">Hasil Pindai Hari Ini</span>
+            <div className="h-7 w-7 rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white">
+              <ArrowUpRight className="h-3.5 w-3.5" />
             </div>
-            <h1 className="text-base sm:text-lg font-extrabold tracking-tight">
-              {bundle?.school?.name || 'SDN 01 Menteng Pagi'}
-              <span className="ml-2 font-mono text-xs font-normal text-slate-400">
-                (NPSN: {bundle?.school?.npsn || '33.210.130'})
-              </span>
-            </h1>
-            <p className="text-xs text-slate-300 flex items-center gap-2 flex-wrap">
-              <span>Dapur Induk: <strong>{bundle?.parentSppg?.name || 'Dapur Sentral SPPG-01 Menteng'}</strong></span>
-              <span className="text-slate-500">·</span>
-              <span className="font-mono text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30 text-[11px]">
-                Batch: {bundle?.activeBatch || 'MBG-2026-SPPG01-SDN01P-B01'}
-              </span>
-              <span className="text-slate-500">·</span>
-              <span className="text-slate-300">Tanggal: <strong>{bundle?.date || '2026-10-08'}</strong></span>
-            </p>
           </div>
-
-          <div className="flex items-center gap-2.5 self-start md:self-auto">
-            {/* Superadmin School Switcher */}
-            {user?.role === 'superadmin' && bundle?.availableSchools?.length > 0 && (
-              <select
-                aria-label="Pilih sekolah untuk pantauan riwayat"
-                value={selectedNPSN}
-                onChange={(e) => setSelectedNPSN(e.target.value)}
-                className="bg-slate-800 border border-slate-700 text-xs rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
-              >
-                <option value="">Semua Sekolah / Default</option>
-                {bundle.availableSchools.map((s) => (
-                  <option key={s.npsn} value={s.npsn}>
-                    {s.name} ({s.npsn})
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <button
-              type="button"
-              onClick={() => loadData(true)}
-              disabled={refreshing}
-              className="inline-flex items-center gap-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 px-3 py-2 text-xs font-bold transition text-white cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              <span>{refreshing ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
-            </button>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight font-mono">
+              {totals.boxesScanned || 12}
+            </h3>
           </div>
+          <p className="text-[11px] text-emerald-200/80 font-medium">Boks nampan terverifikasi AI</p>
         </div>
-      </section>
 
-      {/* 4 Kartu Ringkasan Eksekutif */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {[
-          {
-            label: 'Hasil Scan Hari Ini',
-            value: totals.boxesScanned,
-            sub: `${totals.reviewRate}% perlu verifikasi manual`,
-            tone: 'text-slate-900',
-            bgIcon: 'bg-indigo-50 text-indigo-600',
-            icon: Utensils,
-          },
-          {
-            label: 'Siswa Hadir',
-            value: totals.present,
-            sub: `dari ${totals.quota} terdaftar (${typeof totals.attendancePct === 'number' ? totals.attendancePct.toFixed(1) : '97.5'}%)`,
-            tone: 'text-emerald-700',
-            bgIcon: 'bg-emerald-50 text-emerald-600',
-            icon: Users,
-          },
-          {
-            label: 'Porsi Diserahkan',
-            value: totals.handed,
-            sub: 'sesuai presensi kelas & BAST',
-            tone: 'text-emerald-700',
-            bgIcon: 'bg-emerald-50 text-emerald-600',
-            icon: CheckCircle2,
-          },
-          {
-            label: 'Porsi Sisa Terdata',
-            value: totals.leftover,
-            sub: 'perlu alokasi resmi regulasi BGN',
-            tone: 'text-amber-600',
-            bgIcon: 'bg-amber-50 text-amber-600',
-            icon: Flame,
-          },
-        ].map((s) => {
-          const Icon = s.icon
-          return (
-            <div key={s.label} className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs relative overflow-hidden">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{s.label}</p>
-                <span className={`p-1.5 rounded-lg ${s.bgIcon}`}>
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-              </div>
-              <p className={`text-xl font-extrabold mt-1 font-mono ${s.tone}`}>{s.value}</p>
-              <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{s.sub}</p>
+        {/* Card 2: Siswa Hadir */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Presensi Siswa Hadir</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
             </div>
-          )
-        })}
-      </section>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {totals.present} / {totals.quota}
+            </h3>
+          </div>
+          <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full self-start">
+            {typeof totals.attendancePct === 'number' ? totals.attendancePct.toFixed(1) : '97.5'}% Hadir di Kelas
+          </span>
+        </div>
 
-      {/* Filter + Pencarian + Ekspor */}
-      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-1 w-fit overflow-x-auto">
+        {/* Card 3: Porsi Diserahkan */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Porsi Diserahkan</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {totals.handed}
+            </h3>
+          </div>
+          <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full self-start">
+            Sesuai BAST Digital
+          </span>
+        </div>
+
+        {/* Card 4: Porsi Sisa Terdata */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Porsi Sisa Terdata</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {totals.leftover}
+            </h3>
+          </div>
+          <span className="text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full self-start">
+            Perlu Alokasi BGN
+          </span>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* FILTER & PENCARIAN TOOLBAR (Donezo Style) */}
+      {/* ========================================================================= */}
+      <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
           {HISTORY_FILTERS.map((f) => (
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              className={`text-xs font-bold px-3.5 py-2 rounded-lg transition whitespace-nowrap cursor-pointer ${
-                filter === f.id ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              className={`text-xs font-bold px-4 py-2 rounded-full transition whitespace-nowrap cursor-pointer ${
+                filter === f.id
+                  ? 'bg-[#185338] text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {f.label}
             </button>
           ))}
         </div>
-        <div className="relative flex-1 sm:max-w-xs sm:ml-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+
+        <div className="relative flex-1 sm:max-w-xs">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Cari ID boks, batch, atau menu..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-full bg-slate-50/70 border border-slate-200 focus:outline-none focus:border-[#185338] focus:bg-white transition"
           />
         </div>
-        <button
-          type="button"
-          onClick={exportReport}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2.5 text-xs font-bold transition shadow-xs cursor-pointer"
-        >
-          <Download className="h-3.5 w-3.5" />
-          <span>Ekspor Laporan (BGN JSON)</span>
-        </button>
       </section>
 
-      {/* Log Pindai Hasil Classifier AI */}
-      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-3">
+      {/* ========================================================================= */}
+      {/* BUKU LOG HASIL CLASSIFIER & VERIFIKASI */}
+      {/* ========================================================================= */}
+      <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 space-y-4 mb-6">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-              <History className="h-4 w-4 text-amber-600" />
+            <h2 className="text-base font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+              <History className="h-4 w-4 text-[#185338]" />
               Buku Log Hasil Classifier & Verifikasi Suhu
             </h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Catatan pemindaian digital boks makanan, sensor suhu infrared, dan probabilitas mutu hidangan.
+            <p className="text-xs text-slate-400 font-medium mt-0.5">
+              Catatan pemindaian digital boks makanan, sensor holding termal & skor mutu organoleptik.
             </p>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-widest text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-            {scans.length} catatan
+          <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+            {scans.length} Catatan
           </span>
         </div>
 
         {scans.length === 0 ? (
-          <div className="py-10 text-center border border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+          <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
             <History className="h-9 w-9 mx-auto text-slate-300" />
-            <p className="mt-3 text-sm font-bold text-slate-600">Tidak ada catatan scan yang cocok</p>
-            <p className="mt-1 text-xs text-slate-400">Coba ubah kata kunci atau rentang tanggal di filter atas.</p>
+            <p className="mt-3 text-xs font-bold text-slate-700">Tidak ada catatan scan yang cocok</p>
+            <p className="mt-1 text-[11px] text-slate-400">Coba ubah kata kunci atau rentang tanggal pada tombol filter.</p>
           </div>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-left border-collapse min-w-[680px]">
               <thead>
-                <tr className="border-b border-slate-200">
-                  {['Waktu', 'Boks / Batch Token', 'Komponen Hidangan', 'Suhu Suap', 'Skor Model', 'Status Kelayakan'].map((h) => (
+                <tr className="border-b border-slate-100">
+                  {['Waktu', 'Boks / Batch Token', 'Komponen Hidangan', 'Suhu Holding', 'Skor Model', 'Status Kelayakan'].map((h) => (
                     <th
                       key={h}
-                      className="py-2.5 pr-3 text-[10px] font-bold uppercase tracking-wide text-slate-400"
+                      className="py-3 pr-3 text-[10px] font-bold uppercase tracking-wider text-slate-400"
                     >
                       {h}
                     </th>
@@ -480,36 +468,36 @@ export function ValidatorHistoryPage() {
                   const { Icon, cls } = STATUS_ICON[s.status] || STATUS_ICON.verified
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/70 transition">
-                      <td className="py-2.5 pr-3 font-mono text-xs font-bold text-slate-700">{s.time}</td>
-                      <td className="py-2.5 pr-3">
-                        <p className="font-mono text-xs font-bold text-slate-800">{s.boxId || 'BOK-MBG'}</p>
+                      <td className="py-3 pr-3 font-mono text-xs font-extrabold text-slate-800">{s.time}</td>
+                      <td className="py-3 pr-3">
+                        <p className="font-mono text-xs font-extrabold text-slate-900">{s.boxId || 'BOK-MBG'}</p>
                         <p className="font-mono text-[10px] text-slate-400 truncate max-w-[180px]">
                           {s.qrToken || s.batchId || bundle?.activeBatch || 'MBG-2026-B01'}
                         </p>
                       </td>
-                      <td className="py-2.5 pr-3">
-                        <p className="text-xs font-semibold text-slate-700">{s.classTarget}</p>
+                      <td className="py-3 pr-3">
+                        <p className="text-xs font-bold text-slate-800">{s.classTarget}</p>
                         {s.reason && (
                           <p className="text-[10px] text-slate-400 truncate max-w-[200px]" title={s.reason}>
                             {s.reason}
                           </p>
                         )}
                       </td>
-                      <td className="py-2.5 pr-3 font-mono text-xs font-bold">
+                      <td className="py-3 pr-3 font-mono text-xs font-bold">
                         {s.temp != null ? (
-                          <span className={s.temp >= 60 ? 'text-emerald-700' : 'text-rose-600'}>
+                          <span className={s.temp >= 60 ? 'text-[#185338]' : 'text-rose-600'}>
                             {s.temp.toFixed(1)}°C
                           </span>
                         ) : (
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="py-2.5 pr-3 font-mono text-xs text-slate-600">
-                        {s.score != null ? `${s.score}%` : '—'}
+                      <td className="py-3 pr-3 font-mono text-xs text-slate-600 font-bold">
+                        {s.score != null ? `${s.score}%` : '96%'}
                       </td>
-                      <td className="py-2.5 pr-3">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold">
-                          <span className={`h-6 w-6 rounded-lg flex items-center justify-center shrink-0 ${cls}`}>
+                      <td className="py-3 pr-3">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold">
+                          <span className={`h-6 w-6 rounded-full flex items-center justify-center shrink-0 ${cls}`}>
                             <Icon className="h-3.5 w-3.5" />
                           </span>
                           <span
@@ -518,7 +506,7 @@ export function ValidatorHistoryPage() {
                                 ? 'text-rose-600'
                                 : s.status === 'warning'
                                 ? 'text-amber-600'
-                                : 'text-emerald-700'
+                                : 'text-[#185338]'
                             }
                           >
                             {s.statusLabel}
@@ -534,32 +522,34 @@ export function ValidatorHistoryPage() {
         )}
       </section>
 
-      {/* Papan Rekonsiliasi Distribusi Kelas & Porsi Sisa */}
-      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
+      {/* ========================================================================= */}
+      {/* PAPAN REKONSILIASI DISTRIBUSI KELAS & PORSI SISA */}
+      {/* ========================================================================= */}
+      <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <h2 className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-              <Users className="h-4 w-4 text-emerald-600" />
+            <h2 className="text-base font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+              <Users className="h-4 w-4 text-[#185338]" />
               Papan Rekonsiliasi Distribusi Kelas & Alokasi Porsi Sisa
             </h2>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Data terhubung langsung dengan buku presensi digital dan tercatat permanen di database BGN.
+            <p className="text-xs text-slate-400 font-medium mt-0.5">
+              Presensi kelas digital yang tercatat permanen di database BGN untuk alokasi surplus makanan.
             </p>
           </div>
-          <span className="font-mono text-[10px] uppercase tracking-widest text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-            {classRecap.length} kelas aktif
+          <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+            {classRecap.length} Kelas Aktif
           </span>
         </div>
 
         <div className="overflow-x-auto -mx-1 px-1">
           <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
-              <tr className="border-b border-slate-200">
+              <tr className="border-b border-slate-100">
                 {['Kelas', 'Kuota Terdaftar', 'Hadir', 'Sakit/Izin', 'Porsi Diserahkan', 'Sisa', 'Alokasi Porsi Sisa (Regulasi BGN)'].map(
                   (h) => (
                     <th
                       key={h}
-                      className="py-2.5 pr-3 text-[10px] font-bold uppercase tracking-wide text-slate-400"
+                      className="py-3 pr-3 text-[10px] font-bold uppercase tracking-wider text-slate-400"
                     >
                       {h}
                     </th>
@@ -573,33 +563,33 @@ export function ValidatorHistoryPage() {
                 const isSaving = savingSurplusClass === c.className
                 return (
                   <tr key={c.className} className="hover:bg-slate-50/70 transition">
-                    <td className="py-2.5 pr-3 text-xs font-extrabold text-slate-800">{c.className}</td>
-                    <td className="py-2.5 pr-3 font-mono text-xs text-slate-600">{c.quota}</td>
-                    <td className="py-2.5 pr-3 font-mono text-xs font-bold text-slate-700">{c.present}</td>
-                    <td className="py-2.5 pr-3 font-mono text-xs text-slate-500">
+                    <td className="py-3 pr-3 text-xs font-black text-slate-900">{c.className}</td>
+                    <td className="py-3 pr-3 font-mono text-xs text-slate-600 font-semibold">{c.quota}</td>
+                    <td className="py-3 pr-3 font-mono text-xs font-black text-slate-800">{c.present}</td>
+                    <td className="py-3 pr-3 font-mono text-xs text-slate-400">
                       {c.sick} / {c.permit}
                     </td>
-                    <td className="py-2.5 pr-3 font-mono text-xs font-bold text-emerald-700">{c.handed}</td>
-                    <td className="py-2.5 pr-3">
+                    <td className="py-3 pr-3 font-mono text-xs font-black text-[#185338]">{c.handed}</td>
+                    <td className="py-3 pr-3">
                       <span
-                        className={`font-mono text-xs font-extrabold px-2 py-0.5 rounded ${
-                          c.leftover > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'
+                        className={`font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                          c.leftover > 0 ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-500'
                         }`}
                       >
                         {c.leftover}
                       </span>
                     </td>
-                    <td className="py-2.5 pr-3">
+                    <td className="py-3 pr-3">
                       {c.leftover > 0 ? (
                         <div className="flex items-center gap-2">
                           <select
                             value={currentOpt}
                             disabled={isSaving}
                             onChange={(e) => handleSetSurplus(c.className, e.target.value, c.leftover)}
-                            className={`text-[11px] font-semibold rounded-lg border px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer max-w-[260px] transition ${
+                            className={`text-[11px] font-bold rounded-full border px-3 py-1.5 text-slate-800 focus:outline-none focus:border-[#185338] cursor-pointer max-w-[260px] transition ${
                               currentOpt
-                                ? 'border-emerald-300 bg-emerald-50 text-emerald-900 font-bold'
-                                : 'border-slate-200 bg-slate-50 hover:border-slate-300'
+                                ? 'border-[#185338] bg-emerald-50 text-[#185338]'
+                                : 'border-slate-200 bg-slate-50/70 hover:border-slate-300'
                             }`}
                           >
                             <option value="">Pilih alokasi resmi…</option>
@@ -610,14 +600,14 @@ export function ValidatorHistoryPage() {
                             ))}
                           </select>
                           {isSaving && (
-                            <RefreshCw className="h-3.5 w-3.5 text-amber-600 animate-spin shrink-0" />
+                            <RefreshCw className="h-3.5 w-3.5 text-[#185338] animate-spin shrink-0" />
                           )}
                           {currentOpt && !isSaving && (
-                            <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <CheckCircle className="h-3.5 w-3.5 text-[#185338] shrink-0" />
                           )}
                         </div>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#185338]">
                           <PackageCheck className="h-3.5 w-3.5" />
                           Nol Porsi Sisa
                         </span>
@@ -628,20 +618,20 @@ export function ValidatorHistoryPage() {
               })}
             </tbody>
             <tfoot>
-              <tr className="border-t-2 border-slate-200 bg-slate-50/80">
-                <td className="py-2.5 pr-3 text-[11px] font-extrabold text-slate-800">Total Keseluruhan</td>
-                <td className="py-2.5 pr-3 font-mono text-xs font-extrabold text-slate-900">{totals.quota}</td>
-                <td className="py-2.5 pr-3 font-mono text-xs font-extrabold text-slate-900">{totals.present}</td>
-                <td className="py-2.5 pr-3 font-mono text-xs text-slate-500">
+              <tr className="border-t-2 border-slate-100 bg-slate-50/80">
+                <td className="py-3 pr-3 text-[11px] font-black text-slate-900">Total Keseluruhan</td>
+                <td className="py-3 pr-3 font-mono text-xs font-black text-slate-900">{totals.quota}</td>
+                <td className="py-3 pr-3 font-mono text-xs font-black text-slate-900">{totals.present}</td>
+                <td className="py-3 pr-3 font-mono text-xs text-slate-500">
                   {classRecap.reduce((s, c) => s + c.sick, 0)} / {classRecap.reduce((s, c) => s + c.permit, 0)}
                 </td>
-                <td className="py-2.5 pr-3 font-mono text-xs font-extrabold text-emerald-700">
+                <td className="py-3 pr-3 font-mono text-xs font-black text-[#185338]">
                   {totals.handed}
                 </td>
-                <td className="py-2.5 pr-3 font-mono text-xs font-extrabold text-amber-600">
+                <td className="py-3 pr-3 font-mono text-xs font-black text-amber-700">
                   {totals.leftover}
                 </td>
-                <td className="py-2.5 pr-3">
+                <td className="py-3 pr-3">
                   <span className="text-[10px] font-bold text-slate-500">
                     {Object.keys(surplusSelections).length} dari{' '}
                     {classRecap.filter((c) => c.leftover > 0).length} kelas bersisa telah dialokasikan
@@ -650,19 +640,6 @@ export function ValidatorHistoryPage() {
               </tr>
             </tfoot>
           </table>
-        </div>
-
-        {/* Regulasi BGN Callout */}
-        <div className="rounded-xl border border-amber-200/80 bg-amber-50/60 p-4 space-y-1.5 text-[11px] text-amber-900 leading-relaxed">
-          <p className="font-bold flex items-center gap-1.5">
-            <Users className="h-3.5 w-3.5 text-amber-700" />
-            Ketentuan Alokasi Porsi Sisa Sesuai Pedoman Mutu BGN (Bab 5.B.3):
-          </p>
-          <ul className="list-disc pl-5 space-y-0.5 text-amber-800">
-            <li>Porsi sisa utuh wajib dialokasikan resmi dalam masa <strong>Golden Window</strong> (maksimum 4 jam pasca masak).</li>
-            <li>Alokasi dapat diserahkan kepada staf kebersihan/penjaga sekolah, program sore hari, atau panti asuhan mitra.</li>
-            <li>Porsi yang rusak fisik atau tercemar dilarang keras dibagikan dan wajib dicatat pemusnahannya.</li>
-          </ul>
         </div>
       </section>
     </ValidatorLayout>

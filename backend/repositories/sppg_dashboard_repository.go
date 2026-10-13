@@ -372,11 +372,15 @@ func (r *pgSppgDashboardRepository) GetDashboardBundle(ctx context.Context, sppg
 		if ticketLvl == 1 {
 			sev = "red"
 		}
+		notes := ticketMsg
+		if strings.TrimSpace(notes) == "" {
+			notes = "Laporan insiden baru masuk dari sekolah binaan (memerlukan tindakan)"
+		}
 		activeAlert = &models.SppgDashboardAlert{
 			ID:        ticketID,
 			Title:     "Peringatan Operasional Dapur Aktif",
 			Severity:  sev,
-			Notes:     ticketMsg,
+			Notes:     notes,
 			Timestamp: ticketClock,
 		}
 	}

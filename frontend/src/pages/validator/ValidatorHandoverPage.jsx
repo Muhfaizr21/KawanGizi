@@ -18,25 +18,18 @@ import {
   RotateCcw,
   Sparkles,
   Info,
+  ArrowUpRight,
+  Plus,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { useAuth } from '../../context/AuthContext'
+import { getSelectedSchool } from '../../lib/validatorSchool'
 import { guardAdminAction } from '../../lib/adminActions'
 import {
   fetchValidatorHandoverBundle,
   submitValidatorBast,
   resetValidatorHandover,
 } from '../../lib/api'
-
-/**
- * ==============================================================================
- * PORTAL VALIDATOR: SERAH TERIMA & BAST DIGITAL
- * URL: /validator/handover
- * VALIDATOR.md Bab 3: scan Master QR kontainer (13× untuk 650 porsi),
- * input suhu holding (≥60°C), rekonsiliasi porsi, tanda tangan digital 2 pihak,
- * penerbitan BAST resmi dan sinkronisasi real-time ke SPPG dan Superadmin.
- * ==============================================================================
- */
 
 const TEMP_MIN_WARM = 60
 const TEMP_DANGER = 55
@@ -51,7 +44,7 @@ const PRESET_SIGNATURE_TEACHER = [
   [{ x: 0.35, y: 0.45 }, { x: 0.65, y: 0.42 }, { x: 0.80, y: 0.55 }, { x: 0.88, y: 0.65 }],
 ]
 
-// Kanvas tanda tangan ringan berbasis SVG
+// Kanvas tanda tangan ringan berbasis SVG dengan estetika Donezo
 function SignaturePad({ label, sublabel, strokes, onChange, accent, defaultStrokes }) {
   const [drawing, setDrawing] = useState(false)
 
@@ -87,18 +80,18 @@ function SignaturePad({ label, sublabel, strokes, onChange, accent, defaultStrok
   const hasInk = strokes.some((s) => s.length > 1)
 
   return (
-    <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs">
+    <div className="rounded-[20px] border border-slate-200/90 bg-white p-4.5 shadow-xs">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-extrabold text-slate-800">{label}</p>
-          <p className="text-[11px] text-slate-500 mt-0.5 truncate">{sublabel}</p>
+          <p className="text-[11px] text-slate-400 mt-0.5 truncate">{sublabel}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {!hasInk && defaultStrokes && (
             <button
               type="button"
               onClick={() => onChange(defaultStrokes)}
-              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 transition cursor-pointer"
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 transition cursor-pointer"
             >
               <Sparkles className="h-3 w-3" />
               Tanda Tangan Cepat
@@ -108,7 +101,7 @@ function SignaturePad({ label, sublabel, strokes, onChange, accent, defaultStrok
             type="button"
             onClick={() => onChange([])}
             disabled={!hasInk}
-            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:bg-transparent transition cursor-pointer"
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:bg-transparent transition cursor-pointer"
           >
             <Trash2 className="h-3 w-3" />
             Hapus
@@ -134,7 +127,7 @@ function SignaturePad({ label, sublabel, strokes, onChange, accent, defaultStrok
                 d={toPath(stroke)}
                 fill="none"
                 stroke={accent}
-                strokeWidth="1.6"
+                strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 vectorEffect="non-scaling-stroke"
@@ -147,7 +140,7 @@ function SignaturePad({ label, sublabel, strokes, onChange, accent, defaultStrok
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <PenLine className="h-5 w-5 text-slate-300" />
             <p className="mt-1 text-[10px] font-semibold text-slate-400">
-              Tanda tangan digital di sini atau gunakan tombol cepat
+              Goreskan tanda tangan digital di sini
             </p>
           </div>
         )}
@@ -168,10 +161,10 @@ function Toast({ message, tone = 'info' }) {
     <div
       role="status"
       aria-live="polite"
-      className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-xs shadow-sm transition animate-in fade-in ${tones[tone]}`}
+      className={`mb-4 flex items-start gap-3 rounded-2xl border px-4 py-3 text-xs shadow-xs transition animate-in fade-in ${tones[tone]}`}
     >
       <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-70" />
-      <p className="leading-relaxed font-medium">{message}</p>
+      <p className="leading-relaxed font-semibold">{message}</p>
     </div>
   )
 }
@@ -183,7 +176,18 @@ export function ValidatorHandoverPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [bundle, setBundle] = useState(null)
-  const [selectedNpsn, setSelectedNpsn] = useState(user?.npsn || '33.210.130')
+  const [selectedNpsn, setSelectedNpsn] = useState(() => getSelectedSchool(user).npsn)
+
+  // Listen to global school changes
+  useEffect(() => {
+    const handleSchoolChanged = (e) => {
+      if (e.detail?.npsn) {
+        setSelectedNpsn(e.detail.npsn)
+      }
+    }
+    window.addEventListener('mbg_school_changed', handleSchoolChanged)
+    return () => window.removeEventListener('mbg_school_changed', handleSchoolChanged)
+  }, [])
 
   // Form states
   const [totes, setTotes] = useState([])
@@ -201,7 +205,7 @@ export function ValidatorHandoverPage() {
     setTimeout(() => setToast(null), 5000)
   }
 
-  // 1. Muat live bundle dari backend API
+  // Load bundle from API
   const loadBundle = useCallback(async (npsnParam, isSilent = false) => {
     if (!isSilent) setLoading(true)
     else setRefreshing(true)
@@ -214,7 +218,6 @@ export function ValidatorHandoverPage() {
       const toteItems = data.totes || []
       setTotes(toteItems)
 
-      // Cek apakah BAST sudah terbit di database
       if (data.handover?.bastSigned || data.handover?.bastNo) {
         setReceived(toteItems)
         setIssued({
@@ -248,7 +251,6 @@ export function ValidatorHandoverPage() {
     loadBundle(selectedNpsn)
   }, [loadBundle, selectedNpsn])
 
-  // Pindai master tote berikutnya
   const scanNextTote = () => {
     const res = guardAdminAction(
       user,
@@ -279,7 +281,6 @@ export function ValidatorHandoverPage() {
     showToast(`Master tote ${next.id} diterima (${next.portions} porsi) · Suhu holding ${calibratedTemp}°C.`, 'success')
   }
 
-  // Pindai semua master tote (1-click action)
   const scanAllTotes = () => {
     const res = guardAdminAction(
       user,
@@ -307,10 +308,9 @@ export function ValidatorHandoverPage() {
       at: '07:05 WIB',
     }))
     setTempLogs(logs)
-    showToast(`Seluruh ${totes.length} master tote (${totes.length * 50} porsi) berhasil dipindai & diverifikasi!`, 'success')
+    showToast(`Seluruh ${totes.length} master tote (${totes.length * 50} porsi) berhasil diverifikasi!`, 'success')
   }
 
-  // Toggle pemindaian tote individu saat diklik
   const toggleTote = (tote) => {
     const isRec = received.some((r) => r.id === tote.id)
     if (isRec) {
@@ -325,7 +325,6 @@ export function ValidatorHandoverPage() {
     }
   }
 
-  // Catat suhu holding manual
   const recordTemp = (presetVal) => {
     const rawVal = presetVal != null ? String(presetVal) : tempInput
     const value = parseFloat(String(rawVal).replace(',', '.'))
@@ -348,12 +347,12 @@ export function ValidatorHandoverPage() {
 
     if (value < TEMP_DANGER) {
       showToast(
-        `${value}°C masuk ZONA BAHAYA (< ${TEMP_DANGER}°C). Makanan berisiko dingin — wajib uji organoleptik sebelum distribusi!`,
+        `${value}°C masuk ZONA BAHAYA (< ${TEMP_DANGER}°C). Makanan berisiko dingin — lakukan uji organoleptik!`,
         'error',
       )
     } else if (value < TEMP_MIN_WARM) {
       showToast(
-        `${value}°C di bawah standar holding ${TEMP_MIN_WARM}°C — konsumsi segera & instruksikan distribusi cepat.`,
+        `${value}°C di bawah standar holding ${TEMP_MIN_WARM}°C — konsumsi segera & distribusikan cepat.`,
         'info',
       )
     } else {
@@ -364,7 +363,6 @@ export function ValidatorHandoverPage() {
     setTempInput('')
   }
 
-  // Hitung metrik dan kuota
   const totalTotes = totes.length || 13
   const toteCapacity = bundle?.toteCapacity || 50
   const receivedPortions = received.reduce((sum, t) => sum + (t.portions || toteCapacity), 0)
@@ -383,7 +381,6 @@ export function ValidatorHandoverPage() {
     validatorStrokes.some((s) => s.length > 1) &&
     !issued
 
-  // 3. Terbitkan BAST resmi & sinkronkan 3 role
   const issueBast = async () => {
     const res = guardAdminAction(
       user,
@@ -438,11 +435,10 @@ export function ValidatorHandoverPage() {
       })
 
       showToast(
-        `BAST ${result.bastNo} RESMI TERBIT! Data berhasil disinkronkan ke Dapur SPPG dan Telemetri Satgas Superadmin.`,
+        `BAST ${result.bastNo} RESMI TERBIT! Data disinkronkan ke Dapur SPPG dan Satgas MBG.`,
         'success',
       )
 
-      // Refresh bundle di latar belakang untuk memastikan semua atribut sinkron
       loadBundle(selectedNpsn, true)
     } catch (err) {
       console.error('Submit BAST error:', err)
@@ -452,7 +448,6 @@ export function ValidatorHandoverPage() {
     }
   }
 
-  // 4. Reset sesi serah terima untuk pengujian ulang
   const handleResetSession = async () => {
     if (!window.confirm('Reset sesi serah terima ini agar dapat diuji ulang dari awal?')) return
 
@@ -475,11 +470,11 @@ export function ValidatorHandoverPage() {
 
   if (loading) {
     return (
-      <ValidatorLayout activeMenu="handover" title="Serah Terima & BAST Digital" badge="BERITA ACARA">
-        <div className="flex flex-col items-center justify-center min-h-[360px] bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
-          <RefreshCw className="h-8 w-8 text-amber-600 animate-spin" />
-          <p className="mt-3 text-sm font-extrabold text-slate-800">Menghubungkan ke Dapur SPPG & Satgas...</p>
-          <p className="text-xs text-slate-500 mt-1">Mengambil data manifest boks dan token serah terima real-time.</p>
+      <ValidatorLayout activeMenu="handover" title="Serah Terima & BAST Digital">
+        <div className="flex flex-col items-center justify-center min-h-[360px] bg-white rounded-[24px] border border-slate-200/80 p-8 shadow-xs">
+          <RefreshCw className="h-8 w-8 text-[#185338] animate-spin" />
+          <p className="mt-3 text-sm font-extrabold text-slate-800">Menyambungkan ke Dapur SPPG & Satgas...</p>
+          <p className="text-xs text-slate-400 mt-1">Mengambil data manifes boks dan token serah terima real-time.</p>
         </div>
       </ValidatorLayout>
     )
@@ -505,237 +500,249 @@ export function ValidatorHandoverPage() {
   }
 
   return (
-    <ValidatorLayout activeMenu="handover" title="Serah Terima & BAST Digital" badge="BERITA ACARA">
+    <ValidatorLayout
+      activeMenu="handover"
+      title="Serah Terima & BAST Digital"
+      subtitle="Verifikasi manifes kontainer termal, pengukuran suhu fisik holding & penerbitan BAST resmi."
+      primaryAction={
+        !stageDone() && (
+          <button
+            type="button"
+            onClick={scanAllTotes}
+            className="flex items-center gap-2 rounded-full bg-[#185338] text-white px-5 py-2.5 text-xs font-bold hover:bg-[#12422c] transition shadow-xs cursor-pointer"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>Pindai Semua ({totalTotes} Tote)</span>
+          </button>
+        )
+      }
+      secondaryAction={
+        <button
+          type="button"
+          onClick={() => loadBundle(selectedNpsn, true)}
+          disabled={refreshing}
+          className="flex items-center gap-2 rounded-full bg-white border border-slate-300 text-slate-800 px-5 py-2.5 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin text-[#185338]' : ''}`} />
+          <span>Segarkan Manifes</span>
+        </button>
+      }
+    >
       {toast && <Toast message={toast.message} tone={toast.tone} />}
 
-      {/* Banner Identitas & Multi-Tenant Ruang Sekolah */}
-      <section className="bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 rounded-3xl p-5 text-white shadow-md relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      {/* ========================================================================= */}
+      {/* TOP 4 STAT CARDS (Donezo Style) */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
+        {/* Card 1: Master Tote */}
+        <div className="rounded-[22px] bg-[#185338] text-white p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-emerald-100/90">Master Tote Diterima</span>
+            <div className="h-7 w-7 rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight font-mono">
+              {received.length} / {totalTotes}
+            </h3>
+          </div>
+          <p className="text-[11px] text-emerald-200/80 font-medium">@{toteCapacity} porsi per kontainer</p>
+        </div>
 
-        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
-                <ShieldCheck className="h-3 w-3" />
-                MULTI-TENANT VALIDATOR
+        {/* Card 2: Porsi Utuh */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Porsi Diterima Utuh</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {receivedPortions}
+            </h3>
+          </div>
+          <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full self-start">
+            Target {orderedPortions} Porsi
+          </span>
+        </div>
+
+        {/* Card 3: Rata-rata Suhu Holding */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Suhu Holding Termal</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {avgTemp ? `${avgTemp}°C` : '63.8°C'}
+            </h3>
+          </div>
+          <span className="text-[11px] text-slate-500 font-medium">Standar aman: ≥60°C</span>
+        </div>
+
+        {/* Card 4: Selisih / Rusak */}
+        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-800">Selisih / Boks Rusak</span>
+            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="my-2">
+            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
+              {damagedPortions}
+            </h3>
+          </div>
+          <span className="text-[11px] text-slate-400 font-medium">
+            {damagedPortions > 0 ? 'Perlu Rekonsiliasi' : 'Nihil Cacat Mutu'}
+          </span>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* BANNER DISTRIBUSI SPPG */}
+      {/* ========================================================================= */}
+      <section className="bg-white rounded-[22px] border border-slate-200/80 p-5.5 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-emerald-50 text-[#185338] border border-emerald-100 flex items-center justify-center shrink-0">
+            <Building2 className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                SDN 01 MENTENG
               </span>
               <span className="text-slate-400 text-xs font-mono">NPSN: {school.npsn}</span>
             </div>
-            <h1 className="text-lg sm:text-xl font-black tracking-tight mt-1.5 flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-amber-400" />
-              {school.name}
-            </h1>
-            <p className="text-xs text-slate-300 mt-1 flex items-center gap-2 flex-wrap">
-              <span>Penyedia: <strong className="text-white">{parentSppg.name}</strong></span>
-              <span className="text-slate-500">•</span>
-              <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
-                Skor Keamanan {parentSppg.safetyScore}% ({parentSppg.grade})
-              </span>
-              <span className="text-slate-500">•</span>
-              <span className="text-amber-300 flex items-center gap-1">
-                <Truck className="h-3.5 w-3.5" />
-                {fleet.unit} ({fleet.driver})
-              </span>
+            <h2 className="text-lg font-black text-slate-900 tracking-tight mt-1">{school.name}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Penyedia: <strong className="text-slate-800">{parentSppg.name}</strong> · Driver: <strong className="text-slate-800">{fleet.driver}</strong> ({fleet.unit})
             </p>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2 self-start md:self-auto">
-            {isSuperadmin && bundle?.availableSchools?.length > 0 && (
-              <div className="relative">
-                <select
-                  value={selectedNpsn}
-                  onChange={(e) => setSelectedNpsn(e.target.value)}
-                  className="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-xl px-3 py-2 pr-7 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  {bundle.availableSchools.map((s) => (
-                    <option key={s.npsn} value={s.npsn}>
-                      {s.name} ({s.npsn})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
+        <div className="flex items-center gap-2">
+          {issued && (
             <button
               type="button"
-              onClick={() => loadBundle(selectedNpsn, true)}
-              disabled={refreshing}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200 transition cursor-pointer"
+              onClick={handleResetSession}
+              className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 px-4 py-2 text-xs font-bold text-rose-700 transition cursor-pointer"
             >
-              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-              Segarkan
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset Sesi BAST
             </button>
-
-            {issued && (
-              <button
-                type="button"
-                onClick={handleResetSession}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 px-3 py-2 text-xs font-bold text-rose-300 transition cursor-pointer"
-                title="Reset status untuk pengujian ulang alur serah terima"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </section>
 
-      {/* Ringkasan KPI Header */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {[
-          {
-            label: 'Master Tote Diterima',
-            value: `${received.length}/${totalTotes}`,
-            sub: `@${toteCapacity} porsi per kontainer`,
-            tone: 'text-slate-900',
-          },
-          {
-            label: 'Porsi Diterima Utuh',
-            value: `${receivedPortions} porsi`,
-            sub: `dari ${orderedPortions} dipesan`,
-            tone: 'text-emerald-700',
-          },
-          {
-            label: 'Selisih / Rusak',
-            value: damagedPortions,
-            sub: damagedPortions > 0 ? 'perlu rekonsiliasi' : 'sesuai pesanan (sempurna)',
-            tone: damagedPortions > 0 ? 'text-rose-600' : 'text-emerald-700',
-          },
-          {
-            label: 'Rata-rata Suhu Holding',
-            value: avgTemp ? `${avgTemp}°C` : '—',
-            sub: `${belowStandard} di bawah standar 60°C`,
-            tone: belowStandard > 0 ? 'text-amber-600' : 'text-emerald-700',
-          },
-        ].map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{s.label}</p>
-            <p className={`text-xl font-extrabold mt-1 font-mono ${s.tone}`}>{s.value}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">{s.sub}</p>
-          </div>
-        ))}
-      </section>
-
-      {/* BAST Certificate Banner jika sudah terbit */}
+      {/* ========================================================================= */}
+      {/* BAST RESMI TERBIT BANNER */}
+      {/* ========================================================================= */}
       {issued && (
-        <section className="rounded-3xl border-2 border-emerald-500/40 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/30 p-6 shadow-md">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-emerald-200/80 pb-4">
+        <section className="rounded-[24px] border border-emerald-300 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/40 p-6 shadow-xs mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-emerald-100 pb-4">
             <div className="flex items-start gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <div className="h-10 w-10 rounded-2xl bg-[#185338] text-white flex items-center justify-center shrink-0 shadow-xs">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest">
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest">
                   BAST RESMI TERBIT & TERVERIFIKASI
                 </span>
-                <h3 className="text-base sm:text-lg font-black text-slate-900 mt-1 font-mono">
+                <h3 className="text-lg font-black text-slate-900 mt-1 font-mono">
                   {issued.refNumber}
                 </h3>
                 <p className="text-xs text-slate-600 mt-0.5">
-                  Disahkan secara digital pada pukul <strong className="text-emerald-800">{issued.at}</strong>
+                  Disahkan secara digital pada pukul <strong className="text-emerald-900">{issued.at}</strong>
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2.5 text-xs font-bold shadow-sm transition cursor-pointer"
-              >
-                <Printer className="h-4 w-4" />
-                Cetak Dokumen BAST
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-2 rounded-full bg-[#185338] hover:bg-[#12422c] text-white px-5 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer"
+            >
+              <Printer className="h-4 w-4" />
+              Cetak Dokumen BAST
+            </button>
           </div>
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div className="rounded-xl bg-white border border-emerald-200/60 p-3">
+            <div className="rounded-xl bg-white border border-emerald-200/60 p-3.5">
               <p className="text-[10px] font-bold text-slate-400 uppercase">Ringkasan Serah Terima</p>
-              <p className="mt-1 font-extrabold text-slate-800">
+              <p className="mt-1 font-extrabold text-slate-800 text-sm">
                 {issued.totes} Master Tote · {issued.portions} Porsi
               </p>
-              <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">Rata-rata Suhu: {avgTemp || '63.8'}°C (Aman)</p>
+              <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">Suhu Holding: {avgTemp || '63.8'}°C (Aman)</p>
             </div>
-            <div className="rounded-xl bg-white border border-emerald-200/60 p-3">
+            <div className="rounded-xl bg-white border border-emerald-200/60 p-3.5">
               <p className="text-[10px] font-bold text-slate-400 uppercase">Pihak Penandatangan</p>
-              <p className="mt-1 text-slate-700 text-[11px]">
+              <p className="mt-1 text-slate-700 text-xs">
                 Kurir: <strong>{issued.driverSign}</strong>
               </p>
-              <p className="text-slate-700 text-[11px]">
+              <p className="text-slate-700 text-xs mt-0.5">
                 Validator: <strong>{issued.validatorSign}</strong>
               </p>
             </div>
-            <div className="rounded-xl bg-white border border-emerald-200/60 p-3">
+            <div className="rounded-xl bg-white border border-emerald-200/60 p-3.5">
               <p className="text-[10px] font-bold text-slate-400 uppercase">Segel Kriptografis SHA-256</p>
               <p className="mt-1 font-mono text-[10px] text-slate-600 break-all leading-tight">
                 {issued.hash}
               </p>
             </div>
           </div>
-
-          {/* Indikator Sinkronisasi 3 Role */}
-          <div className="mt-4 pt-3 border-t border-emerald-200/60 flex flex-wrap items-center gap-4 text-xs font-bold text-emerald-900">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Tersinkron ke Dapur SPPG (Manifest: Tiba & BAST)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Tersinkron ke Satgas Superadmin (Status: Tiba & Diterima Sekolah)
-            </span>
-          </div>
         </section>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Tahap 1: scan master tote */}
-        <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 flex flex-col justify-between">
+      {/* ========================================================================= */}
+      {/* 2 COLUMNS: MASTER TOTES SCAN & SUHU HOLDING */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-6">
+        {/* Kolom 1: Pindai Master QR Kontainer */}
+        <section className="lg:col-span-7 bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-                <span>1 · Pindai Master QR Kontainer</span>
+              <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+                1 · Pindai Master QR Kontainer
               </h2>
-              <span className="font-mono text-[10px] uppercase tracking-widest text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full font-bold">
+              <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
                 {received.length}/{totalTotes} SCAN
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
-              Cukup {totalTotes} scan kontainer termal (1 kontainer = 50 porsi) — verifikasi cepat di gerbang sekolah
-              tanpa membuka boks porsi satu per satu.
+            <p className="mt-1 text-xs text-slate-400 font-medium">
+              Verifikasi 13 kontainer termal (1 kontainer = 50 porsi) di gerbang penerimaan sekolah.
             </p>
 
-            <div className="mt-4 grid grid-cols-4 sm:grid-cols-5 gap-2">
+            <div className="mt-4 grid grid-cols-4 sm:grid-cols-5 gap-2.5">
               {totes.map((t) => {
                 const isReceived = received.some((r) => r.id === t.id)
                 const recData = received.find((r) => r.id === t.id)
-                const displayTemp = recData?.tempCelsius ?? t.tempCelsius
+                const displayT = recData?.tempCelsius ?? t.tempCelsius
                 return (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => toggleTote(t)}
-                    className={`rounded-xl border p-2 text-center transition cursor-pointer ${
+                    className={`rounded-2xl border p-2.5 text-center transition cursor-pointer ${
                       isReceived
-                        ? 'bg-emerald-50 border-emerald-300 shadow-2xs hover:bg-emerald-100/60'
-                        : 'bg-slate-50 border-dashed border-slate-300 hover:bg-slate-100 hover:border-slate-400'
+                        ? 'bg-emerald-50/80 border-[#185338] shadow-2xs hover:bg-emerald-100/60'
+                        : 'bg-slate-50/70 border-dashed border-slate-300 hover:bg-slate-100'
                     }`}
-                    title={`${t.id} · ${t.qr} (${isReceived ? 'Klik untuk batal' : 'Klik untuk pindai'})`}
                   >
                     <QrCode
-                      className={`h-5 w-5 mx-auto ${isReceived ? 'text-emerald-600' : 'text-slate-400'}`}
-                      strokeWidth={1.7}
+                      className={`h-5 w-5 mx-auto ${isReceived ? 'text-[#185338]' : 'text-slate-400'}`}
+                      strokeWidth={1.8}
                     />
-                    <p
-                      className={`mt-1 font-mono text-[9px] font-bold ${
-                        isReceived ? 'text-emerald-700' : 'text-slate-500'
-                      }`}
-                    >
+                    <p className={`mt-1 font-mono text-[10px] font-black ${isReceived ? 'text-[#185338]' : 'text-slate-600'}`}>
                       {t.id}
                     </p>
                     <p className="font-mono text-[9px] text-slate-400">
-                      {isReceived && displayTemp ? `${displayTemp}°` : `${t.portions}p`}
+                      {isReceived && displayT ? `${displayT}°` : `${t.portions}p`}
                     </p>
                   </button>
                 )
@@ -748,165 +755,141 @@ export function ValidatorHandoverPage() {
               type="button"
               onClick={scanNextTote}
               disabled={stageDone()}
-              className={`w-full inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-xs font-bold transition shadow-sm ${
+              className={`w-full py-3.5 px-6 rounded-full text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 ${
                 stageDone()
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
-                  : 'bg-amber-600 text-white hover:bg-amber-700 cursor-pointer shadow-amber-600/20'
+                  : 'bg-[#185338] hover:bg-[#12422c] text-white cursor-pointer'
               }`}
             >
               <Package className="h-4 w-4" />
               {stageDone()
-                ? 'Seluruh Master Tote Diterima'
+                ? 'Seluruh Master Tote Selesai Diterima'
                 : `Pindai Master Tote Berikutnya (${totalTotes - received.length} lagi)`}
             </button>
-
-            {!stageDone() && (
-              <button
-                type="button"
-                onClick={scanAllTotes}
-                className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700 transition cursor-pointer"
-              >
-                <Sparkles className="h-3.5 w-3.5 text-amber-600" />
-                Pindai Sekaligus Semua Tote ({totalTotes}/13)
-              </button>
-            )}
           </div>
         </section>
 
-        {/* Tahap 2: suhu holding */}
-        <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-              <span>2 · Catat Suhu Fisik Penerimaan</span>
-            </h2>
-            <Thermometer className="h-4 w-4 text-amber-600" />
-          </div>
-          <p className="mt-1 text-[11px] text-slate-500 leading-relaxed">
-            Standar hidangan hangat <strong>≥ {TEMP_MIN_WARM}°C</strong>. Di bawah {TEMP_DANGER}°C (zona bahaya),
-            sistem mewajibkan uji organoleptik sampel sebelum dibagikan ke kelas.
-          </p>
+        {/* Kolom 2: Suhu Holding Termal */}
+        <section className="lg:col-span-5 bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+                2 · Catat Suhu Fisik Penerimaan
+              </h2>
+              <Thermometer className="h-4 w-4 text-amber-600" />
+            </div>
+            <p className="mt-1 text-xs text-slate-400 font-medium">
+              Standar hidangan hangat <strong>≥ {TEMP_MIN_WARM}°C</strong>.
+            </p>
 
-          {/* Quick presets */}
-          <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-            <span className="text-[10px] font-bold text-slate-400">Preset Uji:</span>
-            {[64.5, 63.8, 62.5, 58.0].map((val) => (
+            {/* Preset Buttons */}
+            <div className="mt-3 flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold text-slate-400">Preset:</span>
+              {[64.5, 63.8, 62.5, 58.0].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => recordTemp(val)}
+                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold transition cursor-pointer border ${
+                    val >= TEMP_MIN_WARM
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  }`}
+                >
+                  +{val}°C
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <div className="relative flex-1">
+                <Thermometer className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={tempInput}
+                  onChange={(e) => setTempInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') recordTemp()
+                  }}
+                  placeholder="Misal: 63.8"
+                  className="w-full pl-10 pr-4 py-2.5 text-xs font-mono rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[#185338] focus:bg-white transition"
+                />
+              </div>
               <button
-                key={val}
                 type="button"
-                onClick={() => recordTemp(val)}
-                className={`rounded-lg px-2 py-1 text-[10px] font-mono font-bold transition cursor-pointer border ${
-                  val >= TEMP_MIN_WARM
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                    : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
-                }`}
+                onClick={() => recordTemp()}
+                className="rounded-full bg-[#185338] text-white px-5 py-2.5 text-xs font-bold hover:bg-[#12422c] transition cursor-pointer shrink-0"
               >
-                +{val}°C
+                Catat
               </button>
-            ))}
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50/70 max-h-36 overflow-y-auto divide-y divide-slate-100 p-1">
+              {tempLogs.length === 0 ? (
+                <p className="px-3 py-4 text-center text-[11px] text-slate-400">
+                  Belum ada catatan suhu holding.
+                </p>
+              ) : (
+                tempLogs.map((log, i) => {
+                  const ok = log.temp >= TEMP_MIN_WARM
+                  const danger = log.temp < TEMP_DANGER
+                  return (
+                    <div key={`${log.toteId}-${i}`} className="px-3 py-1.5 flex items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] font-bold text-slate-700">{log.toteId}</span>
+                      <span
+                        className={`inline-flex items-center gap-1 font-mono text-[11px] font-extrabold ${
+                          danger ? 'text-rose-600' : ok ? 'text-emerald-700' : 'text-amber-600'
+                        }`}
+                      >
+                        {danger ? (
+                          <XCircle className="h-3.5 w-3.5" />
+                        ) : ok ? (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        ) : (
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                        )}
+                        {log.temp}°C
+                      </span>
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
 
-          <div className="mt-3 flex gap-2">
-            <div className="relative flex-1">
-              <Thermometer className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                inputMode="decimal"
-                value={tempInput}
-                onChange={(e) => setTempInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') recordTemp()
-                }}
-                placeholder="contoh: 63.8"
-                className="w-full pl-9 pr-4 py-2.5 text-sm font-mono rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => recordTemp()}
-              className="rounded-xl bg-slate-900 text-white px-4 py-2.5 text-xs font-bold hover:bg-slate-800 transition cursor-pointer shrink-0"
-            >
-              Catat
-            </button>
-          </div>
-
-          <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/80 max-h-36 overflow-y-auto divide-y divide-slate-100">
-            {tempLogs.length === 0 ? (
-              <p className="px-3 py-4 text-center text-[11px] text-slate-400">
-                Belum ada suhu holding yang tercatat.
-              </p>
-            ) : (
-              tempLogs.map((log, i) => {
-                const ok = log.temp >= TEMP_MIN_WARM
-                const danger = log.temp < TEMP_DANGER
-                return (
-                  <div key={`${log.toteId}-${i}`} className="px-3 py-1.5 flex items-center justify-between gap-2">
-                    <span className="font-mono text-[11px] font-bold text-slate-700">{log.toteId}</span>
-                    <span
-                      className={`inline-flex items-center gap-1 font-mono text-[11px] font-extrabold ${
-                        danger ? 'text-rose-600' : ok ? 'text-emerald-700' : 'text-amber-600'
-                      }`}
-                    >
-                      {danger ? (
-                        <XCircle className="h-3.5 w-3.5" />
-                      ) : ok ? (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      ) : (
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                      )}
-                      {log.temp}°C
-                    </span>
-                  </div>
-                )
-              })
-            )}
-          </div>
-
-          {/* Rekonsiliasi Porsi */}
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-xl bg-slate-50 border border-slate-100 py-2">
-              <p className="font-mono font-extrabold text-sm">{orderedPortions}</p>
-              <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Dipesan</p>
-            </div>
-            <div className="rounded-xl bg-emerald-50 border border-emerald-100 py-2">
-              <p className="font-mono font-extrabold text-sm text-emerald-700">{receivedPortions}</p>
-              <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Diterima Utuh</p>
-            </div>
-            <div
-              className={`rounded-xl border py-2 ${
-                damagedPortions > 0 ? 'bg-rose-50 border-rose-100' : 'bg-slate-50 border-slate-100'
-              }`}
-            >
-              <p
-                className={`font-mono font-extrabold text-sm ${
-                  damagedPortions > 0 ? 'text-rose-600' : 'text-slate-700'
-                }`}
-              >
-                {damagedPortions}
-              </p>
-              <p className="text-[9px] uppercase tracking-wide text-slate-400 font-semibold">Bocor / Rusak</p>
-            </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span>Rata-rata Terkini</span>
+            <span className="font-mono font-black text-slate-800 text-xs">
+              {avgTemp ? `${avgTemp}°C` : '63.8°C'}
+            </span>
           </div>
         </section>
       </div>
 
-      {/* Tahap 3: tanda tangan + terbitkan BAST */}
-      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-            <span>3 · Lembar Tanda Tangan Digital BAST</span>
-          </h2>
-          <span className="font-mono text-[10px] uppercase tracking-widest text-slate-400">
-            DOKUMEN HUKUM RESMI
+      {/* ========================================================================= */}
+      {/* TAHAP 3: TANDA TANGAN DIGITAL DUA PIHAK */}
+      {/* ========================================================================= */}
+      <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div>
+            <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
+              3 · Lembar Tanda Tangan Digital BAST
+            </h2>
+            <p className="text-xs text-slate-400 font-medium">Pengesahan resmi dua pihak (Kurir Pengantar SPPG & Guru Validator)</p>
+          </div>
+          <span className="font-mono text-[10px] uppercase tracking-widest text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-bold">
+            DOKUMEN RESMI
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <SignaturePad
             label="Pihak Pertama — Sopir / Petugas Pengantar SPPG"
             sublabel={`${fleet.driver} · ${fleet.unit}`}
             strokes={driverStrokes}
             onChange={setDriverStrokes}
-            accent="#b45309"
+            accent="#185338"
             defaultStrokes={PRESET_SIGNATURE_DRIVER}
           />
           <SignaturePad
@@ -914,29 +897,26 @@ export function ValidatorHandoverPage() {
             sublabel={`${user?.fullName || 'Ibu Siti Aminah, S.Pd.'} · ${school.name}`}
             strokes={validatorStrokes}
             onChange={setValidatorStrokes}
-            accent="#0f766e"
+            accent="#185338"
             defaultStrokes={PRESET_SIGNATURE_TEACHER}
           />
         </div>
 
-        <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <div className="flex-1 rounded-xl bg-slate-50 border border-slate-100 px-3.5 py-3 min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-              Status Registrasi BAST
-            </p>
-            <p className="font-mono font-extrabold text-sm text-slate-800 truncate">
-              {issued ? issued.refNumber : `Nomor registrasi otomatis di-generate saat pengesahan`}
-            </p>
+        <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-4 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Info className="h-4 w-4 text-slate-400 shrink-0" />
+            <span>Pastikan seluruh tote telah diperiksa sebelum menekan terbitkan BAST.</span>
           </div>
+
           <button
             type="button"
             onClick={issueBast}
             disabled={!!issued || submitting}
-            className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-xs font-bold transition shadow-sm ${
+            className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full px-8 py-3.5 text-xs font-black transition shadow-xs ${
               issued
                 ? 'bg-emerald-100 text-emerald-800 cursor-default border border-emerald-200'
                 : canIssue
-                  ? 'bg-emerald-600 text-white hover:bg-emerald-700 cursor-pointer shadow-emerald-600/20 active:scale-[0.98]'
+                  ? 'bg-[#185338] hover:bg-[#12422c] text-white cursor-pointer shadow-md'
                   : 'bg-slate-200 text-slate-500 cursor-not-allowed'
             }`}
           >
@@ -948,34 +928,12 @@ export function ValidatorHandoverPage() {
               <FileSignature className="h-4 w-4" />
             )}
             {submitting
-              ? 'Memproses & Menyinkronkan...'
+              ? 'Memproses BAST...'
               : issued
                 ? 'BAST Terbit & Tersinkron'
                 : 'Terbitkan & Kirim Salinan BAST'}
           </button>
         </div>
-
-        {issued ? (
-          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-900">
-            <p className="font-extrabold flex items-center gap-1.5">
-              <ClipboardCheck className="h-4 w-4 text-emerald-700" />
-              {issued.refNumber} resmi terbit pukul {issued.at}.
-            </p>
-            <p className="mt-1 leading-relaxed text-emerald-800">
-              {issued.totes} master tote ({issued.portions} porsi). Salinan hukum otomatis dikirimkan ke
-              Dapur SPPG Sentral ({parentSppg.name}) dan Tim Satgas MBG Pusat.
-            </p>
-          </div>
-        ) : (
-          <div className="mt-4 rounded-xl border border-slate-200/60 bg-slate-50/60 p-3 flex items-start gap-2.5 text-[11px] text-slate-500">
-            <Info className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              Syarat terbit BAST: seluruh {totalTotes} master tote dipindai, suhu holding tercatat (≥60°C disarankan),
-              dan kedua tanda tangan digital telah dilengkapi. BAST yang terbit memiliki kekuatan hukum dan langsung
-              terbaca oleh Dapur SPPG dan Superadmin.
-            </p>
-          </div>
-        )}
       </section>
     </ValidatorLayout>
   )
