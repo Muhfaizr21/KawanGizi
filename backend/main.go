@@ -94,6 +94,8 @@ func main() {
 	sppgIncidentRepo := repositories.NewSppgIncidentRepository()
 	sppgBillingRepo := repositories.NewSppgBillingRepository()
 	sppgComplianceRepo := repositories.NewSppgComplianceRepository()
+	sppgDashboardRepo := repositories.NewSppgDashboardRepository()
+	validatorScanRepo := repositories.NewValidatorScanRepository()
 
 	// 4. Initialize Services (Business Logic Layer - Dependency Inversion)
 	itemService := services.NewItemService(itemRepo)
@@ -126,6 +128,8 @@ func main() {
 	sppgIncidentService := services.NewSppgIncidentService(sppgIncidentRepo)
 	sppgBillingService := services.NewSppgBillingService(sppgBillingRepo)
 	sppgComplianceService := services.NewSppgComplianceService(sppgComplianceRepo)
+	sppgDashboardService := services.NewSppgDashboardService(sppgDashboardRepo)
+	validatorScanService := services.NewValidatorScanService(validatorScanRepo)
 
 	// 5. Initialize Controllers (Presentation / HTTP Layer)
 	healthCtrl := controllers.NewHealthController()
@@ -135,6 +139,7 @@ func main() {
 	nutritionCtrl := controllers.NewNutritionController(nutritionService)
 	portalCtrl := controllers.NewPortalController(portalService)
 	validatorCtrl := controllers.NewValidatorController(validatorService)
+	validatorScanCtrl := controllers.NewValidatorScanController(validatorScanService)
 	sppgCtrl := controllers.NewSppgController(sppgService)
 	deliveryCtrl := controllers.NewDeliveryController(deliveryService)
 	attendanceCtrl := controllers.NewAttendanceController(attendanceService)
@@ -154,6 +159,7 @@ func main() {
 	sppgIncidentCtrl := controllers.NewSppgIncidentController(sppgIncidentService)
 	sppgBillingCtrl := controllers.NewSppgBillingController(sppgBillingService)
 	sppgComplianceCtrl := controllers.NewSppgComplianceController(sppgComplianceService)
+	sppgDashboardCtrl := controllers.NewSppgDashboardController(sppgDashboardService)
 
 	// 6. Initialize Routes & Middlewares
 	routerDeps := routes.RouterDependencies{
@@ -183,6 +189,8 @@ func main() {
 		SppgIncidentCtrl:   sppgIncidentCtrl,
 		SppgBillingCtrl:    sppgBillingCtrl,
 		SppgComplianceCtrl: sppgComplianceCtrl,
+		SppgDashboardCtrl:  sppgDashboardCtrl,
+		ValidatorScanCtrl:  validatorScanCtrl,
 		AuthMW:             middlewares.Auth(authService),
 		CORSOrigins:        cfg.CORSOrigins,
 		AppEnv:             cfg.AppEnv,

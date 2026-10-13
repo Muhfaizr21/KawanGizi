@@ -1260,6 +1260,133 @@ export async function requestSppgComplianceAudit(payload, sppgId = '') {
   return res?.data || null
 }
 
+/* ============================================================================
+ * SPPG COCKPIT DASHBOARD APIS
+ * ============================================================================ */
+
+export async function fetchSppgDashboardBundle(sppgId = '') {
+  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
+  const res = await api(`/api/sppg/dashboard/bundle${query}`)
+  return res?.data || null
+}
+
+export async function transitionSppgStage(payload, sppgId = '') {
+  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
+  const res = await api(`/api/sppg/dashboard/transition${query}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function triggerSppgEmergency(payload, sppgId = '') {
+  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
+  const res = await api(`/api/sppg/dashboard/emergency${query}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function resolveSppgEmergency(payload, sppgId = '') {
+  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
+  const res = await api(`/api/sppg/dashboard/emergency/resolve${query}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function fetchValidatorScanContext(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/validator/scan/context${qs}`)
+  return res?.data || null
+}
+
+export async function confirmValidatorScanDecision(payload) {
+  const res = await api('/api/validator/scan/confirm', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function fetchValidatorHandoverBundle(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/validator/handover/bundle${qs}`)
+  return res?.data || null
+}
+
+export async function submitValidatorBast(payload) {
+  const res = await api('/api/validator/handover/submit-bast', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function resetValidatorHandover(payload = {}) {
+  const res = await api('/api/validator/handover/reset', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function fetchValidatorIncidents(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/validator/incidents${qs}`)
+  return res?.data || null
+}
+
+export async function submitValidatorIncident(payload) {
+  const res = await api('/api/validator/incidents', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function fetchValidatorHistoryBundle(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  if (params.limit) q.set('limit', String(params.limit))
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/validator/history/bundle${qs}`)
+  return res?.data || null
+}
+
+export async function allocateValidatorSurplus(payload) {
+  const res = await api('/api/validator/history/surplus', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function fetchValidatorDashboardBundle(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/validator/dashboard${qs}`)
+  return res?.data || null
+}
+
+
+
+
+
 
 
 

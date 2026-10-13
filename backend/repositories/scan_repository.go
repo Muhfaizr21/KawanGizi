@@ -5,6 +5,7 @@ import (
 	"backend/models"
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -29,8 +30,10 @@ func NewScanRepository() ScanRepository {
 }
 
 const scanColumns = `id, box_id, qr_token, batch_id, image_ref, ai_class, ai_confidence,
-	visual_score, holding_temp_c, release_temp_c, verdict, reason, actor_id, created_at, rating, feedback,
-	menu_name, menu_class, menu_display, menu_confidence`
+	visual_score, holding_temp_c, release_temp_c, verdict, reason, actor_id, created_at,
+	COALESCE(rating, 0), COALESCE(feedback, ''),
+	COALESCE(menu_name, ''), COALESCE(menu_class, ''), COALESCE(menu_display, ''), COALESCE(menu_confidence, 0)`
+
 
 func (r *pgScanRepository) scanLog(row pgx.Row) (*models.ScanLog, error) {
 	s := &models.ScanLog{}
@@ -75,8 +78,15 @@ func (r *pgScanRepository) ListRecentScans(ctx context.Context, actorID string, 
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	rows, err := database.Pool().Query(ctx,
-		"SELECT "+scanColumns+" FROM scan_logs WHERE actor_id = $1 ORDER BY created_at DESC LIMIT $2", actorID, limit)
+	var rows pgx.Rows
+	var err error
+	if actorID == "" || strings.HasPrefix(actorID, "usr-superadmin") {
+		rows, err = database.Pool().Query(ctx,
+			"SELECT "+scanColumns+" FROM scan_logs ORDER BY created_at DESC LIMIT $1", limit)
+	} else {
+		rows, err = database.Pool().Query(ctx,
+			"SELECT "+scanColumns+" FROM scan_logs WHERE actor_id = $1 ORDER BY created_at DESC LIMIT $2", actorID, limit)
+	}
 	if err != nil {
 		return nil, err
 	}

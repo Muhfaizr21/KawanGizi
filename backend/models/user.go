@@ -95,6 +95,7 @@ var rolePermissions = map[string][]string{
 		PermCalendarRead, PermReportsDownload, PermFeedbackTriage,
 		PermAiOverride, PermPaymentClearance, PermKillswitch,
 		PermHandoverBast, PermIncidentSubmit, PermKitchenOps, PermUsersCreate,
+		PermScanSubmit,
 	},
 	RoleSppg: {
 		PermDashboardRead, PermSppgRead, PermSppgManage, PermDeliveriesRead,

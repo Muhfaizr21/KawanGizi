@@ -384,6 +384,8 @@ CREATE INDEX IF NOT EXISTS idx_validator_profiles_npsn ON validator_profiles(nps
 -- CREATE TABLE di atas hanya berlaku untuk database baru; ADD COLUMN IF NOT EXISTS
 -- menambal database yang sudah termigrasi sebelumnya.
 ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS duration_ms INT;
+ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS school_npsn VARCHAR(32) DEFAULT '';
+ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS sppg_id VARCHAR(64) DEFAULT '';
 ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS menu_name TEXT NOT NULL DEFAULT '';
 ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS menu_class TEXT NOT NULL DEFAULT '';
 ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS menu_display TEXT NOT NULL DEFAULT '';
@@ -930,6 +932,44 @@ CREATE TABLE IF NOT EXISTS sppg_compliance_audits (
 	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sppg_compliance_audits_sppg ON sppg_compliance_audits(sppg_id);
+
+CREATE TABLE IF NOT EXISTS sppg_kitchen_pipeline_states (
+	sppg_id VARCHAR(64) NOT NULL REFERENCES sppg_kitchens(id) ON DELETE CASCADE,
+	date DATE NOT NULL DEFAULT CURRENT_DATE,
+	current_stage_id VARCHAR(32) NOT NULL DEFAULT 'stage-2',
+	stage1_status VARCHAR(32) NOT NULL DEFAULT 'completed',
+	stage1_progress INT NOT NULL DEFAULT 100,
+	stage2_status VARCHAR(32) NOT NULL DEFAULT 'active',
+	stage2_progress INT NOT NULL DEFAULT 100,
+	stage3_status VARCHAR(32) NOT NULL DEFAULT 'upcoming',
+	stage3_progress INT NOT NULL DEFAULT 0,
+	stage4_status VARCHAR(32) NOT NULL DEFAULT 'upcoming',
+	stage4_progress INT NOT NULL DEFAULT 0,
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	PRIMARY KEY (sppg_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_sppg_kitchen_pipeline_sppg ON sppg_kitchen_pipeline_states(sppg_id);
+
+CREATE TABLE IF NOT EXISTS validator_class_reconciliation (
+	id VARCHAR(64) PRIMARY KEY,
+	school_npsn VARCHAR(32) NOT NULL,
+	date DATE NOT NULL DEFAULT CURRENT_DATE,
+	class_name VARCHAR(64) NOT NULL,
+	quota INT NOT NULL DEFAULT 0,
+	present INT NOT NULL DEFAULT 0,
+	sick INT NOT NULL DEFAULT 0,
+	permit INT NOT NULL DEFAULT 0,
+	handed INT NOT NULL DEFAULT 0,
+	leftover INT NOT NULL DEFAULT 0,
+	surplus_option VARCHAR(64) NOT NULL DEFAULT '',
+	allocated_by VARCHAR(150) NOT NULL DEFAULT '',
+	allocated_at TIMESTAMPTZ,
+	notes TEXT NOT NULL DEFAULT '',
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	CONSTRAINT unq_school_date_class UNIQUE(school_npsn, date, class_name)
+);
+CREATE INDEX IF NOT EXISTS idx_validator_reconciliation_school_date ON validator_class_reconciliation(school_npsn, date);
 `
 
 // MigrateExtended menjalankan migrasi untuk seluruh tabel ekosistem KawanGizi MBG.

@@ -128,7 +128,7 @@ function OperationalChartCard({
   )
 }
 
-export function SppgOperationalAnalytics() {
+export function SppgOperationalAnalytics({ data }) {
   const [activeTab, setActiveTab] = useState('all')
   const [sessionFilter, setSessionFilter] = useState('today_am')
   const [toastMessage, setToastMessage] = useState(null)
@@ -154,8 +154,16 @@ export function SppgOperationalAnalytics() {
     { id: 'menu_a', label: 'Siklus Menu A' },
   ]
 
-  const totalStaff = SPPG_TEAM_ALLOCATION_DATA.reduce((sum, d) => sum + d.count, 0)
-  const totalAllocatedPortions = SPPG_SCHOOL_DISTRIBUTION_DATA.reduce(
+  const flowTimeline = data?.flowTimeline?.length ? data.flowTimeline : SPPG_FLOW_TIMELINE_DATA
+  const nutritionAccuracy = data?.nutritionAccuracy?.length ? data.nutritionAccuracy : SPPG_NUTRITION_ACCURACY_DATA
+  const schoolDistribution = data?.schoolDistribution?.length ? data.schoolDistribution : SPPG_SCHOOL_DISTRIBUTION_DATA
+  const teamAllocation = data?.teamAllocation?.length ? data.teamAllocation : SPPG_TEAM_ALLOCATION_DATA
+  const qualityControl = data?.qualityControl?.length ? data.qualityControl : SPPG_QUALITY_CONTROL_DATA
+  const slaRadar = data?.slaRadar?.length ? data.slaRadar : SPPG_SLA_RADAR_DATA
+  const ccpSummary = data?.ccpSummary || SPPG_CCP_SUMMARY
+
+  const totalStaff = teamAllocation.reduce((sum, d) => sum + d.count, 0)
+  const totalAllocatedPortions = schoolDistribution.reduce(
     (sum, d) => sum + d.quota,
     0
   )
@@ -215,7 +223,7 @@ export function SppgOperationalAnalytics() {
             <div className="h-52 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={SPPG_FLOW_TIMELINE_DATA}
+                  data={flowTimeline}
                   margin={{ top: 10, right: 10, left: -22, bottom: 0 }}
                 >
                   <defs>
@@ -317,7 +325,7 @@ export function SppgOperationalAnalytics() {
             <div className="h-52 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={SPPG_NUTRITION_ACCURACY_DATA}
+                  data={nutritionAccuracy}
                   margin={{ top: 10, right: 10, left: -22, bottom: 0 }}
                   barGap={4}
                 >
@@ -391,7 +399,7 @@ export function SppgOperationalAnalytics() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   layout="vertical"
-                  data={SPPG_SCHOOL_DISTRIBUTION_DATA}
+                  data={schoolDistribution}
                   margin={{ top: 5, right: 15, left: 10, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
@@ -447,7 +455,7 @@ export function SppgOperationalAnalytics() {
             badgeColor="amber"
             legend={
               <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[10px] text-slate-500 border-t border-slate-50 pt-2">
-                {SPPG_TEAM_ALLOCATION_DATA.map((tm) => (
+                {teamAllocation.map((tm) => (
                   <div key={tm.name} className="flex items-center justify-between">
                     <span className="flex items-center gap-1 text-slate-600 truncate">
                       <span className="h-2 w-2 rounded-xs shrink-0" style={{ backgroundColor: tm.color }} />
@@ -472,7 +480,7 @@ export function SppgOperationalAnalytics() {
                     content={<OperationalTooltip unit=" Staf" />}
                   />
                   <Pie
-                    data={SPPG_TEAM_ALLOCATION_DATA}
+                    data={teamAllocation}
                     innerRadius="58%"
                     outerRadius="82%"
                     paddingAngle={3}
@@ -480,7 +488,7 @@ export function SppgOperationalAnalytics() {
                     stroke="#ffffff"
                     strokeWidth={2}
                   >
-                    {SPPG_TEAM_ALLOCATION_DATA.map((entry) => (
+                    {teamAllocation.map((entry) => (
                       <Cell key={`cell-${entry.name}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -505,7 +513,7 @@ export function SppgOperationalAnalytics() {
           <OperationalChartCard
             title="Audit Titik Kendali Kritis (HACCP CCP)"
             subtitle="Kepatuhan parameter termal & mikrobiologis di dapur"
-            badgeText={`${SPPG_CCP_SUMMARY.passing}/${SPPG_CCP_SUMMARY.total} lolos ambang`}
+            badgeText={`${ccpSummary.passing}/${ccpSummary.total} lolos ambang`}
             badgeColor="emerald"
             legend={
               <div className="mt-2.5 flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-50 pt-2">
@@ -530,7 +538,7 @@ export function SppgOperationalAnalytics() {
             <div className="h-52 w-full pt-1">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={SPPG_QUALITY_CONTROL_DATA}
+                  data={qualityControl}
                   margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
@@ -610,7 +618,7 @@ export function SppgOperationalAnalytics() {
                   cx="50%"
                   cy="50%"
                   outerRadius="72%"
-                  data={SPPG_SLA_RADAR_DATA}
+                  data={slaRadar}
                 >
                   <PolarGrid stroke="#E2E8F0" />
                   <PolarAngleAxis

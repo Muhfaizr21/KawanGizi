@@ -38,6 +38,8 @@ type RouterDependencies struct {
 	SppgIncidentCtrl   *controllers.SppgIncidentController
 	SppgBillingCtrl    *controllers.SppgBillingController
 	SppgComplianceCtrl *controllers.SppgComplianceController
+	SppgDashboardCtrl  *controllers.SppgDashboardController
+	ValidatorScanCtrl  *controllers.ValidatorScanController
 	AuthMW             func(http.Handler) http.Handler
 	CORSOrigins    []string
 	AppEnv         string
@@ -206,6 +208,14 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 		mux.Handle("POST /api/sppg/compliance/audits", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgComplianceCtrl.RequestAudit)))
 	}
 
+	// SPPG Cockpit Dashboard Operasional Terpadu (Single Pane of Glass)
+	if deps.SppgDashboardCtrl != nil {
+		mux.Handle("GET /api/sppg/dashboard/bundle", middlewares.RequireAuth(http.HandlerFunc(deps.SppgDashboardCtrl.GetBundle)))
+		mux.Handle("POST /api/sppg/dashboard/transition", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgDashboardCtrl.TransitionStage)))
+		mux.Handle("POST /api/sppg/dashboard/emergency", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgDashboardCtrl.TriggerEmergency)))
+		mux.Handle("POST /api/sppg/dashboard/emergency/resolve", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgDashboardCtrl.ResolveEmergency)))
+	}
+
 	// Validator resource routes.
 	// Baca: validators.read (superadmin, satgas, validator).
 	// Tulis: validators.manage — superadmin saja, sesuai SUPERADMIN.md Bab 2.
@@ -216,6 +226,20 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 		mux.Handle("POST /api/validators/{id}/device/reset", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.ResetDevice)))
 		mux.Handle("POST /api/validators/{id}/warnings", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.IssueWarning)))
 		mux.Handle("PUT /api/validators/{id}/backup", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.AssignBackup)))
+	}
+
+	// Ruang Pemindaian, Serah Terima (BAST), & Eskalasi Insiden Validator (Sinkronisasi Lintas Role)
+	if deps.ValidatorScanCtrl != nil {
+		mux.Handle("GET /api/validator/scan/context", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetContext)))
+		mux.Handle("POST /api/validator/scan/confirm", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ValidatorScanCtrl.ConfirmDecision)))
+		mux.Handle("GET /api/validator/handover/bundle", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetHandoverBundle)))
+		mux.Handle("POST /api/validator/handover/submit-bast", middlewares.RequirePermission(models.PermHandoverBast)(http.HandlerFunc(deps.ValidatorScanCtrl.SubmitBast)))
+		mux.Handle("POST /api/validator/handover/reset", middlewares.RequirePermission(models.PermHandoverBast)(http.HandlerFunc(deps.ValidatorScanCtrl.ResetHandover)))
+		mux.Handle("GET /api/validator/incidents", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetIncidents)))
+		mux.Handle("POST /api/validator/incidents", middlewares.RequirePermission(models.PermIncidentSubmit)(http.HandlerFunc(deps.ValidatorScanCtrl.CreateIncident)))
+		mux.Handle("GET /api/validator/history/bundle", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetHistory)))
+		mux.Handle("POST /api/validator/history/surplus", middlewares.RequirePermission(models.PermAttendanceRead)(http.HandlerFunc(deps.ValidatorScanCtrl.AllocateSurplus)))
+		mux.Handle("GET /api/validator/dashboard", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetDashboard)))
 	}
 
 	// Telemetri Pengiriman Makanan & Hasil YOLOv8

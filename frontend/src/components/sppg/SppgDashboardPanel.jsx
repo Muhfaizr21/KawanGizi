@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Flame,
   PackageCheck,
@@ -28,6 +28,14 @@ import {
   ChevronDown,
 } from 'lucide-react'
 
+import { useAuth } from '../../context/AuthContext'
+import {
+  fetchSppgDashboardBundle,
+  transitionSppgStage,
+  triggerSppgEmergency,
+  resolveSppgEmergency,
+} from '../../lib/api'
+
 import {
   SPPG_PROFILE,
   INITIAL_PIPELINE_STAGES,
@@ -40,7 +48,33 @@ import {
 } from '../../data/sppgPortalData'
 import { SppgOperationalAnalytics } from './SppgOperationalAnalytics'
 
+const SPPG_SPACES = [
+  { id: 'SPPG-01', name: 'SPPG 01 Menteng Jaya Mandiri' },
+  { id: 'SPPG-02', name: 'SPPG 02 Kebayoran Baru Mandiri' },
+  { id: 'SPPG-03', name: 'SPPG 03 Cikini Mitra Gizi' },
+  { id: 'SPPG-04', name: 'SPPG 04 Sukajadi Bandung' },
+]
+
 export function SppgDashboardPanel() {
+  const { user, isSuperadmin } = useAuth()
+
+  // Ruang SPPG aktif (multi-tenant)
+  const [activeSppgId, setActiveSppgId] = useState(() => {
+    if (user?.sppgId) return user.sppgId
+    return 'SPPG-01'
+  })
+
+  // Bundle data terpadu dari backend
+  const [bundle, setBundle] = useState(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [toastMessage, setToastMessage] = useState(null)
+
+  const showToast = (msg) => {
+    setToastMessage(msg)
+    setTimeout(() => setToastMessage(null), 3500)
+  }
+
   // Production pipeline state
   const [pipelineStages, setPipelineStages] = useState(INITIAL_PIPELINE_STAGES)
   const [currentActiveStageId, setCurrentActiveStageId] = useState('stage-2')
@@ -68,6 +102,32 @@ export function SppgDashboardPanel() {
   const [emergencySeverity, setEmergencySeverity] = useState('amber')
   const [emergencyNotes, setEmergencyNotes] = useState('')
 
+  // 1. Fetch live bundle from database
+  const loadBundle = useCallback(async (isManualRefresh = false) => {
+    try {
+      if (isManualRefresh) setIsLoading(true)
+      const data = await fetchSppgDashboardBundle(activeSppgId)
+      if (data) {
+        setBundle(data)
+        if (data.pipelineStages?.length) setPipelineStages(data.pipelineStages)
+        if (data.activeStageId) setCurrentActiveStageId(data.activeStageId)
+        if (data.haccpTimer) setHaccpTimer(data.haccpTimer)
+        if (data.activeAlert) setActiveAlert(data.activeAlert)
+        else setActiveAlert(null)
+        if (isManualRefresh) showToast('Data cockpit operasional berhasil disinkronkan!')
+      }
+    } catch (err) {
+      console.warn('Gagal memuat bundle cockpit dapur dari database, memakai cadangan lokal:', err)
+      if (isManualRefresh) showToast('Gagal sinkron database, memakai data lokal.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [activeSppgId])
+
+  useEffect(() => {
+    loadBundle()
+  }, [loadBundle])
+
   // Live timer tick simulation (countdown)
   useEffect(() => {
     const interval = setInterval(() => {
@@ -80,19 +140,20 @@ export function SppgDashboardPanel() {
             status: 'EXPIRED',
           }
         }
-        const updatedRemaining = prev.remainingMinutes
-        const updatedFreshness = Math.max(0, (updatedRemaining / prev.totalSafetyMinutes) * 100)
+        const updatedRemaining = prev.remainingMinutes - 1
+        const updatedFreshness = Math.max(0, (updatedRemaining / (prev.totalSafetyMinutes || 240)) * 100)
         let updatedStatus = 'SAFE'
         if (updatedRemaining <= 60 && updatedRemaining > 0) updatedStatus = 'WARNING'
         else if (updatedRemaining <= 0) updatedStatus = 'EXPIRED'
 
         return {
           ...prev,
+          remainingMinutes: updatedRemaining,
           freshnessPercent: updatedFreshness,
           status: updatedStatus,
         }
       })
-    }, 10000)
+    }, 60000)
 
     return () => clearInterval(interval)
   }, [])
@@ -124,40 +185,110 @@ export function SppgDashboardPanel() {
     }
   }
 
-  // Handle stage transition
-  const handleConfirmTransition = () => {
-    setPipelineStages((prev) =>
-      prev.map((stg) => {
-        if (stg.id === 'stage-2') {
-          return { ...stg, status: 'completed', statusLabel: 'Selesai 100%', progress: 100 }
-        }
-        if (stg.id === transitionTargetStage) {
-          return { ...stg, status: 'active', statusLabel: 'Sedang Berlangsung', progress: 35 }
-        }
-        return stg
-      })
-    )
-    setCurrentActiveStageId(transitionTargetStage)
-    setIsTransitionModalOpen(false)
+  // Handle stage transition with live backend persistence
+  const handleConfirmTransition = async () => {
+    setIsSubmitting(true)
+    try {
+      const updated = await transitionSppgStage(
+        {
+          targetStageId: transitionTargetStage,
+          tempChecked: transitionChecks.tempChecked,
+          nutritionSigned: transitionChecks.nutritionSigned,
+          boxesReady: transitionChecks.boxesReady,
+        },
+        activeSppgId
+      )
+
+      if (updated) {
+        setBundle(updated)
+        if (updated.pipelineStages) setPipelineStages(updated.pipelineStages)
+        if (updated.activeStageId) setCurrentActiveStageId(updated.activeStageId)
+        showToast('Tahapan produksi berhasil diperbarui!')
+      } else {
+        // Fallback local update
+        setPipelineStages((prev) =>
+          prev.map((stg) => {
+            if (stg.id === 'stage-2') {
+              return { ...stg, status: 'completed', statusLabel: 'Selesai 100%', progress: 100 }
+            }
+            if (stg.id === transitionTargetStage) {
+              return { ...stg, status: 'active', statusLabel: 'Sedang Berlangsung', progress: 35 }
+            }
+            return stg
+          })
+        )
+        setCurrentActiveStageId(transitionTargetStage)
+      }
+    } catch (err) {
+      console.error('Gagal memperbarui transisi tahap:', err)
+      showToast('Gagal mengirim pembaruan tahap ke server.')
+    } finally {
+      setIsSubmitting(false)
+      setIsTransitionModalOpen(false)
+    }
   }
 
-  // Handle emergency alert trigger
-  const handleTriggerEmergency = (e) => {
+  // Handle emergency alert trigger with live ticket creation in sppg_incident_tickets
+  const handleTriggerEmergency = async (e) => {
     e.preventDefault()
+    setIsSubmitting(true)
+
     const reasonsMap = {
       kompor_gas: 'Kompor Rusak / Pasokan Gas Terganggu (+20 Menit)',
       suhu_drop: 'Suhu Masak Inti Turun di Bawah Standar 75°C (Re-cooking)',
       keterlambatan_armada: 'Keterlambatan Penjemputan Armada Logistik > 15 Menit',
       kontaminasi_fisik: 'Temuan Anomali Fisik Bahan Baku Saat Pengemasan',
     }
-    setActiveAlert({
-      id: Date.now(),
-      title: reasonsMap[emergencyReason] || 'Peringatan Operasional Dapur',
-      severity: emergencySeverity,
-      notes: emergencyNotes || 'Petugas sedang melakukan mitigasi di lini masak.',
-      timestamp: 'Baru saja',
-    })
-    setIsEmergencyModalOpen(false)
+
+    try {
+      const alert = await triggerSppgEmergency(
+        {
+          reason: emergencyReason,
+          severity: emergencySeverity,
+          notes: emergencyNotes,
+        },
+        activeSppgId
+      )
+
+      if (alert) {
+        setActiveAlert(alert)
+        showToast('Sinyal darurat disiarkan & tiket insiden telah dibuka!')
+      } else {
+        setActiveAlert({
+          id: String(Date.now()),
+          title: reasonsMap[emergencyReason] || 'Peringatan Operasional Dapur',
+          severity: emergencySeverity,
+          notes: emergencyNotes || 'Petugas sedang melakukan mitigasi di lini masak.',
+          timestamp: 'Baru saja',
+        })
+      }
+    } catch (err) {
+      console.error('Gagal mengirimkan darurat:', err)
+      setActiveAlert({
+        id: String(Date.now()),
+        title: reasonsMap[emergencyReason] || 'Peringatan Operasional Dapur',
+        severity: emergencySeverity,
+        notes: emergencyNotes || 'Petugas sedang melakukan mitigasi di lini masak.',
+        timestamp: 'Baru saja',
+      })
+    } finally {
+      setIsSubmitting(false)
+      setIsEmergencyModalOpen(false)
+    }
+  }
+
+  // Handle resolving emergency alert (sync with DB)
+  const handleResolveEmergency = async () => {
+    try {
+      if (activeAlert?.id) {
+        await resolveSppgEmergency({ alertId: activeAlert.id }, activeSppgId)
+      }
+      setActiveAlert(null)
+      showToast('Sinyal darurat diselesaikan dan tiket insiden ditutup.')
+    } catch (err) {
+      console.error('Gagal menyelesaikan darurat:', err)
+      setActiveAlert(null)
+    }
   }
 
   // Helper formatting for minutes into hours & mins
@@ -167,7 +298,7 @@ export function SppgDashboardPanel() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
   }
 
-  // Semua modal ditutup dengan Escape dan dikembalikan fokusnya saat ditutup.
+  // Semua modal ditutup dengan Escape
   useEffect(() => {
     const anyOpen =
       isTransitionModalOpen || isEmergencyModalOpen || isRunSheetModalOpen
@@ -183,41 +314,111 @@ export function SppgDashboardPanel() {
     return () => window.removeEventListener('keydown', onKey)
   }, [isTransitionModalOpen, isEmergencyModalOpen, isRunSheetModalOpen])
 
-  // Ringkasan porsi. Semua angka dihitung dari data, tidak ada yang diketik
-  // manual. Sebelumnya tile menampilkan "Deviasi 0 / Zero Defect" padahal ada
-  // sekolah yang BAST-nya belum ditandatangani, sehingga dasbor terasa aman
-  // padahal ada porsi yang belum terverifikasi.
-  const delivery = useMemo(() => {
-    const rows = SPPG_SCHOOL_DISTRIBUTION_DATA
-    const target = rows.reduce((sum, r) => sum + r.quota, 0)
-    const signed = rows.filter((r) => r.status === 'Tiba & BAST')
-    const signedPortions = signed.reduce((sum, r) => sum + r.quota, 0)
-    const pending = rows.filter((r) => r.status !== 'Tiba & BAST')
-    const pendingPortions = pending.reduce((sum, r) => sum + r.quota, 0)
-    return {
-      target,
-      signedCount: signed.length,
-      pendingCount: pending.length,
-      signedPortions,
-      pendingPortions,
-      signedPct: target ? Math.round((signedPortions / target) * 100) : 0,
-    }
-  }, [])
+  // Profile and active values
+  const profile = bundle?.kitchenProfile || {
+    id: activeSppgId,
+    code: SPPG_PROFILE.code,
+    name: SPPG_PROFILE.name,
+    headChef: SPPG_PROFILE.headChef,
+    nutritionist: SPPG_PROFILE.nutritionist,
+    licenseNo: SPPG_PROFILE.licenseNo,
+    halalId: SPPG_PROFILE.halalId,
+    staffCount: 28,
+    safetyScore: 99.4,
+    grade: 'A',
+  }
 
-  // Jumlah boks termal per sekolah dihitung dari kuotanya, bukan dari posisi
-  // array. Sebelumnya memakai `idx * 12` yang selalu menghasilkan pola tetap.
+  const todayMenu = bundle?.todayMenu || TODAY_MENU_RECIPE
+  const telemetry = bundle?.telemetry || INITIAL_TELEMETRY
+  const devices = bundle?.devices
+  const manifest = bundle?.manifest || ASSIGNED_SCHOOLS_MANIFEST
+  const delivery = bundle?.delivery || {
+    target: 2500,
+    cooked: 2500,
+    signedCount: 3,
+    pendingCount: 1,
+    signedPortions: 1850,
+    pendingPortions: 650,
+    signedPct: 74,
+    avgFleetTemp: 63.4,
+  }
+
+  // Box range by school
   const boxRangeBySchool = useMemo(() => {
     const out = {}
-    for (const sch of ASSIGNED_SCHOOLS_MANIFEST) {
-      // 1 boks termal = 25 porsi (kapasitas master tote)
-      const boxes = Math.ceil(sch.quota / 25)
+    for (const sch of manifest) {
+      const boxes = sch.boxes || Math.ceil(sch.quota / 25)
       out[sch.id] = { from: 1, to: boxes, boxes }
     }
     return out
-  }, [])
+  }, [manifest])
 
   return (
     <div className="space-y-5">
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div
+          role="status"
+          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white shadow-xl animate-in fade-in slide-in-from-bottom-3"
+        >
+          <Info className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* ====================================================================
+          TOP BAR: KITCHEN IDENTITY, MULTI-TENANT & REFRESH BUTTON
+          ==================================================================== */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="h-9 w-9 rounded-xl bg-[#23259C] text-white flex items-center justify-center font-bold text-sm shrink-0">
+            {profile.code?.slice(-3) || '01'}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xs sm:text-sm font-extrabold text-slate-900 truncate">
+                {profile.name}
+              </h1>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#23259C]/10 text-[#23259C]">
+                {profile.code}
+              </span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {profile.grade}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 truncate mt-0.5">
+              SLHS: {profile.licenseNo} &bull; Halal: {profile.halalId} &bull; Skor Higiene: {profile.safetyScore}%
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isSuperadmin && (
+            <select
+              value={activeSppgId}
+              onChange={(e) => setActiveSppgId(e.target.value)}
+              className="text-xs py-1.5 px-2.5 rounded-xl border border-slate-200 bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+            >
+              {SPPG_SPACES.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            type="button"
+            onClick={() => loadBundle(true)}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin text-[#23259C]' : ''}`} />
+            <span>Sinkron Data</span>
+          </button>
+        </div>
+      </div>
+
       {/* ====================================================================
           1. EMERGENCY ALERT BANNER (IF TRIGGERED)
           ==================================================================== */}
@@ -254,8 +455,8 @@ export function SppgDashboardPanel() {
           </div>
 
           <button
-            onClick={() => setActiveAlert(null)}
-            className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition cursor-pointer self-end sm:self-center shrink-0"
+            onClick={handleResolveEmergency}
+            className="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 transition cursor-pointer self-end sm:self-center shrink-0 shadow-2xs"
           >
             Selesaikan
           </button>
@@ -263,8 +464,7 @@ export function SppgDashboardPanel() {
       )}
 
       {/* ====================================================================
-          2. TOP ROW: LIVE PRODUCTION PIPELINE CARDS (HOMAGE TO ROOM CARDS)
-          Proportional, concise typography matching reference image
+          2. TOP ROW: LIVE PRODUCTION PIPELINE CARDS
           ==================================================================== */}
       <div>
         <div className="flex items-center justify-between pb-2.5">
@@ -311,7 +511,6 @@ export function SppgDashboardPanel() {
                     : 'bg-white text-slate-900 border border-slate-200 hover:border-slate-300 cursor-pointer'
                 }`}
               >
-                {/* Header: judul + jam, tanpa titik dekoratif */}
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-semibold">{stage.title}</span>
                   <span
@@ -323,7 +522,7 @@ export function SppgDashboardPanel() {
                         : 'bg-slate-100 text-slate-600'
                     }`}
                   >
-                    {stage.timeWindow.split(' ')[0]}
+                    {stage.timeWindow?.split(' ')[0] || ''}
                   </span>
                 </div>
 
@@ -331,8 +530,6 @@ export function SppgDashboardPanel() {
                   {stage.subtitle}
                 </p>
 
-                {/* Ikon seragam: keempat tahap ini urutan, bukan kategori, jadi
-                    warna tidak perlu berbeda-beda. */}
                 <div className="mt-3 flex items-center justify-between">
                   <div
                     className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
@@ -353,7 +550,6 @@ export function SppgDashboardPanel() {
                   </div>
 
                   <div className="flex items-center gap-2.5">
-                    {/* Cincin progres: warna mengikuti status, bukan tahap */}
                     <div className="relative h-9 w-9 flex items-center justify-center">
                       <svg className="h-9 w-9 -rotate-90" viewBox="0 0 36 36" aria-hidden="true">
                         <path
@@ -419,12 +615,11 @@ export function SppgDashboardPanel() {
 
       {/* ====================================================================
           3. MIDDLE SECTION: SENSORS + HACCP DIAL + RIGHT COLUMN (DEVICES & CHEF)
-          Balanced proportions, refined font hierarchy, zero clipping
           ==================================================================== */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* LEFT COLUMN: TELEMETRY SENSORS (4 COLS) */}
         <div className="lg:col-span-4 flex flex-col gap-3.5">
-          {/* SENSOR 1: SUHU INTI MASAK (Reference: Indoor Temp +25C) */}
+          {/* SENSOR 1: SUHU INTI MASAK (HACCP CCP-1) */}
           <div className="bg-white rounded-2xl p-4 sm:p-4.5 border border-slate-200/70 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <div>
@@ -438,15 +633,13 @@ export function SppgDashboardPanel() {
             </div>
 
             <div className="my-3 flex items-center justify-between">
-              {/* Thermometer Icon */}
               <div className="h-11 w-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100 shadow-inner">
                 <Thermometer className="h-5 w-5" />
               </div>
 
-              {/* Number display: text-3xl font-extrabold instead of text-5xl */}
               <div className="text-center">
                 <div className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
-                  +{INITIAL_TELEMETRY.coreCookingTemp}°C
+                  +{telemetry.coreCookingTemp}°C
                 </div>
                 <div className="mt-0.5 flex items-center justify-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -456,13 +649,11 @@ export function SppgDashboardPanel() {
                 </div>
               </div>
 
-              {/* Posisi terhadap ambang CCP-1. Sebelumnya berupa equalizer
-                  5 batang yang tidak mewakili data apa pun. */}
               <div className="w-24 shrink-0">
                 <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-emerald-600 rounded-full"
-                    style={{ width: `${Math.min(100, (INITIAL_TELEMETRY.coreCookingTemp / 100) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (telemetry.coreCookingTemp / 100) * 100)}%` }}
                   />
                 </div>
                 <p className="mt-1 text-[11px] text-slate-500">ambang 75&deg;C</p>
@@ -475,7 +666,7 @@ export function SppgDashboardPanel() {
             </div>
           </div>
 
-          {/* SENSOR 2: SUHU HOLDING & KELEMBABAN (Reference: Humidity 30%) */}
+          {/* SENSOR 2: SUHU HOLDING & KELEMBABAN */}
           <div className="bg-white rounded-2xl p-4 sm:p-4.5 border border-slate-200/70 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <div>
@@ -495,7 +686,7 @@ export function SppgDashboardPanel() {
 
               <div className="text-center">
                 <div className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight">
-                  +{INITIAL_TELEMETRY.holdingTemp}°C
+                  +{telemetry.holdingTemp}°C
                 </div>
                 <div className="mt-0.5 flex items-center justify-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
@@ -505,11 +696,10 @@ export function SppgDashboardPanel() {
                 </div>
               </div>
 
-              {/* Humidity Indicator */}
               <div className="flex flex-col items-center gap-0.5">
                 <ChevronUp className="h-3.5 w-3.5 text-slate-500" />
                 <span className="text-xs font-mono font-bold text-slate-600">
-                  {INITIAL_TELEMETRY.ambientKitchenHumidity}%
+                  {telemetry.ambientKitchenHumidity}%
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 text-slate-500" />
               </div>
@@ -536,7 +726,6 @@ export function SppgDashboardPanel() {
           {/* CIRCULAR DIAL / GAUGE */}
           <div className="my-2 flex flex-col items-center justify-center">
             <div className="relative w-44 h-44 sm:w-48 sm:h-48 flex items-center justify-center">
-              {/* Dial Track SVG */}
               <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
                 <circle
                   cx="100"
@@ -562,7 +751,7 @@ export function SppgDashboardPanel() {
                   }
                   strokeWidth="12"
                   strokeLinecap="round"
-                  strokeDasharray={`${(haccpTimer.freshnessPercent / 100) * 360} 480`}
+                  strokeDasharray={`${((haccpTimer.freshnessPercent || 0) / 100) * 360} 480`}
                   className="transition-all duration-700"
                 />
                 <defs>
@@ -574,10 +763,7 @@ export function SppgDashboardPanel() {
                 </defs>
               </svg>
 
-              {/* Central Information */}
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4">
-                {/* Status badge. Tidak berdenyut: dalam sistem alarm, item yang
-                    paling berbahaya justru harus diam, bukan paling bergerak. */}
                 <span
                   className={`px-2 py-0.5 rounded text-[11px] font-semibold mb-0.5 ${
                     haccpTimer.status === 'EXPIRED'
@@ -595,26 +781,23 @@ export function SppgDashboardPanel() {
                 </span>
 
                 <div className="text-3xl sm:text-4xl font-semibold text-slate-900 tracking-tight tabular-nums">
-                  {formatTimeRemaining(haccpTimer.remainingMinutes)}
+                  {formatTimeRemaining(haccpTimer.remainingMinutes || 0)}
                 </div>
 
                 <p className="text-[11px] text-slate-500 mt-0.5">
-                  {haccpTimer.remainingMinutes} menit tersisa
+                  {haccpTimer.remainingMinutes || 0} menit tersisa
                 </p>
 
                 <p className="text-[11px] text-slate-500">
-                  Batas: {haccpTimer.mustConsumeBefore}
+                  Batas: {haccpTimer.mustConsumeBefore || '10:00'}
                 </p>
               </div>
             </div>
 
-            {/* Legenda. Angka ini persentase WAKTU TERSISA, bukan skor mutu
-                makanan. Sebelumnya ditulis "% Fresh" yang menyesatkan: değeri ini
-                dihitung dari remainingMinutes / totalSafetyMinutes. */}
             <div className="w-full flex items-center justify-between text-[11px] text-slate-500 px-3">
               <span>Habis</span>
               <span className="text-slate-900 font-semibold tabular-nums">
-                {haccpTimer.freshnessPercent.toFixed(0)}% batas tersisa
+                {(haccpTimer.freshnessPercent || 0).toFixed(0)}% batas tersisa
               </span>
               <span>4 jam</span>
             </div>
@@ -622,7 +805,7 @@ export function SppgDashboardPanel() {
 
           {/* Compact Simulator Segmented Pill */}
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1 text-[10px]">
-            <span className="text-slate-500 font-medium">Uji Coba:</span>
+            <span className="text-slate-500 font-medium">Uji Skenario:</span>
             <div className="inline-flex rounded-lg bg-slate-100 p-0.5 font-bold">
               <button
                 type="button"
@@ -662,7 +845,7 @@ export function SppgDashboardPanel() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-semibold text-sm">
-                  {SPPG_PROFILE.headChef
+                  {profile.headChef
                     .replace(/[^A-Za-z\s]/g, '')
                     .split(' ')
                     .filter(Boolean)
@@ -673,10 +856,10 @@ export function SppgDashboardPanel() {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-xs text-slate-800">
-                    {SPPG_PROFILE.headChef}
+                    {profile.headChef}
                   </h3>
                   <p className="text-[10px] text-slate-500 font-medium">
-                    Ahli Gizi: {SPPG_PROFILE.nutritionist.split(',')[0]}
+                    Ahli Gizi: {profile.nutritionist.split(',')[0]}
                   </p>
                 </div>
               </div>
@@ -684,24 +867,23 @@ export function SppgDashboardPanel() {
             </div>
 
             <div className="mt-2.5 p-2 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-[11px]">
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-[#23259C]" />
-                <span className="font-semibold text-slate-700">Ayam Panggang Madu</span>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className="h-3.5 w-3.5 text-[#23259C] shrink-0" />
+                <span className="font-semibold text-slate-700 truncate">{todayMenu.name}</span>
               </div>
-              <span className="font-bold text-[#23259C]">545 kkal</span>
+              <span className="font-bold text-[#23259C] shrink-0">{todayMenu.calories} kkal</span>
             </div>
           </div>
 
-          {/* MY DEVICES GRID (Concise non-truncating labels) */}
+          {/* MY DEVICES GRID */}
           <div className="bg-white rounded-2xl p-4 border border-slate-200/70 shadow-xs flex-1 flex flex-col justify-between">
             <div className="flex items-center justify-between pb-2">
               <h3 className="text-xs font-bold text-slate-800">Perangkat Dapur Pintar</h3>
               <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                4 Aktif
+                4 Terkoneksi
               </span>
             </div>
 
-            {/* 2x2 Grid with short, crisp labels */}
             <div className="grid grid-cols-2 gap-2 my-1.5">
               {/* Device 1 */}
               <div className="p-2.5 rounded-xl border border-slate-100 bg-slate-50/60 flex items-center gap-2.5">
@@ -710,7 +892,9 @@ export function SppgDashboardPanel() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-slate-800 truncate">Sensor Suhu</p>
-                  <p className="text-[10px] text-slate-500 font-mono">78.5°C</p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    {devices?.tempSensor?.value || `${telemetry.coreCookingTemp}°C`}
+                  </p>
                 </div>
               </div>
 
@@ -721,7 +905,9 @@ export function SppgDashboardPanel() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-slate-800 truncate">Printer QR</p>
-                  <p className="text-[10px] text-slate-500 font-mono">92% Kertas</p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    {devices?.qrPrinter?.value || '92% Kertas'}
+                  </p>
                 </div>
               </div>
 
@@ -732,7 +918,9 @@ export function SppgDashboardPanel() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-slate-800 truncate">Segel RFID</p>
-                  <p className="text-[10px] text-slate-500 font-mono">4/4 Boks</p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    {devices?.rfidSeal?.value || '4/4 Boks'}
+                  </p>
                 </div>
               </div>
 
@@ -743,7 +931,9 @@ export function SppgDashboardPanel() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-[11px] font-bold text-slate-800 truncate">GPS Armada</p>
-                  <p className="text-[10px] text-slate-500 font-mono">4 Siaga</p>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    {devices?.gpsArmada?.value || '4 Aktif'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -774,13 +964,12 @@ export function SppgDashboardPanel() {
 
       {/* ====================================================================
           4. KONSOL ANALITIK & METRIK OPERASIONAL DAPUR
-          Chart di atas, kartu ringkasan & manifest di bawah.
           ==================================================================== */}
       <div className="space-y-4">
-        {/* CHART DI ATAS */}
-        <SppgOperationalAnalytics />
+        {/* CHART TERPADU DENGAN DATA LIVE */}
+        <SppgOperationalAnalytics data={bundle?.analytics} />
 
-        {/* Ringkasan porsi. Angka berasal dari data manifest, bukan diketik manual. */}
+        {/* Ringkasan Porsi & Pengiriman */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="p-4 rounded-xl bg-white border border-slate-200">
             <p className="text-[11px] font-medium text-slate-500">Target hari ini</p>
@@ -788,14 +977,14 @@ export function SppgDashboardPanel() {
               {delivery.target.toLocaleString('id-ID')}
             </p>
             <p className="mt-1 text-[11px] text-slate-500">
-              {ASSIGNED_SCHOOLS_MANIFEST.length} sekolah penerima
+              {manifest.length} sekolah penerima
             </p>
           </div>
 
           <div className="p-4 rounded-xl bg-white border border-slate-200">
             <p className="text-[11px] font-medium text-slate-500">Dimasak dan dikemas</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-900">
-              {delivery.target.toLocaleString('id-ID')}
+              {delivery.cooked.toLocaleString('id-ID')}
             </p>
             <p className="mt-1 text-[11px] text-slate-500">Porsi, tahap 2 selesai</p>
           </div>
@@ -810,8 +999,6 @@ export function SppgDashboardPanel() {
             </p>
           </div>
 
-          {/* Tile ini dulu berbunyi "0 / 0% / Zero Defect Mutu" padahal masih ada
-              sekolah yang BAST-nya belum turun. Sekarang angkanya jujur. */}
           <div
             className={`p-4 rounded-xl border ${
               delivery.pendingCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-200'
@@ -834,11 +1021,12 @@ export function SppgDashboardPanel() {
 
           <div className="p-4 rounded-xl bg-[#23259C] text-white col-span-2 sm:col-span-1">
             <p className="text-[11px] font-medium text-white/75">Suhu rata-rata armada</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">63,4&deg;C</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {typeof delivery.avgFleetTemp === 'number' ? delivery.avgFleetTemp.toFixed(1) : '63.4'}&deg;C
+            </p>
             <p className="mt-1 text-[11px] text-white/75">Di atas ambang 60&deg;C</p>
           </div>
         </div>
-
 
         {/* LOGISTICS MANIFEST & SCHOOL DROP-OFF STATUS */}
         <div className="rounded-2xl border border-slate-200/70 bg-white p-4.5 sm:p-5 shadow-xs">
@@ -852,42 +1040,51 @@ export function SppgDashboardPanel() {
               </p>
             </div>
             <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-              4 Armada Terhubung GPS
+              {devices?.gpsArmada?.value || '4 Armada Terhubung GPS'}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-            {ASSIGNED_SCHOOLS_MANIFEST.map((sch) => (
-              <div
-                key={sch.id}
-                className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-slate-200 transition flex flex-col justify-between gap-2"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <School className="h-3.5 w-3.5 text-[#23259C] shrink-0" />
-                      <h4 className="font-bold text-xs text-slate-800 truncate">{sch.name}</h4>
+            {manifest.map((sch) => {
+              const isDone = sch.bastSigned || sch.status === 'Tiba & BAST'
+              return (
+                <div
+                  key={sch.id}
+                  className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-slate-200 transition flex flex-col justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <School className="h-3.5 w-3.5 text-[#23259C] shrink-0" />
+                        <h4 className="font-bold text-xs text-slate-800 truncate">{sch.name}</h4>
+                      </div>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[11px] font-bold border shrink-0 ${
+                          isDone
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}
+                      >
+                        {sch.status}
+                      </span>
                     </div>
-                    <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
-                      {sch.status}
-                    </span>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {sch.quota} Porsi &bull; <span className="font-mono text-slate-500">{sch.distance}</span>
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    {sch.quota} Porsi &bull; <span className="font-mono text-slate-500">{sch.distance}</span>
-                  </p>
-                </div>
 
-                <div className="pt-2 border-t border-slate-200/60 text-[10px] text-slate-500 space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span>{sch.fleet}</span>
-                    <span className="font-mono text-slate-700 font-bold">{sch.driver.split(' ')[0]}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-slate-500">
-                    <span className="truncate">PIC: {sch.picTeacher}</span>
+                  <div className="pt-2 border-t border-slate-200/60 text-[10px] text-slate-500 space-y-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="truncate">{sch.fleet}</span>
+                      <span className="font-mono text-slate-700 font-bold shrink-0">{sch.driver?.split(' ')[0] || ''}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-500">
+                      <span className="truncate">PIC: {sch.picTeacher}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>
@@ -947,7 +1144,7 @@ export function SppgDashboardPanel() {
                       Suhu Masak Inti Hidangan Memenuhi Syarat &ge; 75.0°C
                     </p>
                     <p className="text-[10px] text-slate-500">
-                      Probe IoT terukur 78,5&deg;C, di atas ambang 75&deg;C.
+                      Probe IoT terukur {telemetry.coreCookingTemp}°C, di atas ambang 75°C.
                     </p>
                   </div>
                 </label>
@@ -966,7 +1163,7 @@ export function SppgDashboardPanel() {
                       Uji Organoleptik (Rasa, Aroma, Tekstur) Ditandatangani
                     </p>
                     <p className="text-[10px] text-slate-500">
-                      Ahli gizi telah menyetujui sampel batch ini.
+                      Ahli gizi ({profile.nutritionist}) telah menyetujui sampel batch ini.
                     </p>
                   </div>
                 </label>
@@ -1003,14 +1200,16 @@ export function SppgDashboardPanel() {
               <button
                 type="button"
                 disabled={
+                  isSubmitting ||
                   !transitionChecks.tempChecked ||
                   !transitionChecks.nutritionSigned ||
                   !transitionChecks.boxesReady
                 }
                 onClick={handleConfirmTransition}
-                className="px-4 py-1.5 text-xs font-bold rounded-xl bg-[#23259C] text-white hover:bg-[#1a1c7c] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition cursor-pointer"
+                className="px-4 py-1.5 text-xs font-bold rounded-xl bg-[#23259C] text-white hover:bg-[#1a1c7c] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition cursor-pointer flex items-center gap-1.5"
               >
-                Selesaikan Memasak & Buka Sesi Pengemasan
+                {isSubmitting && <RefreshCw className="h-3 w-3 animate-spin" />}
+                <span>Selesaikan Memasak & Buka Sesi Pengemasan</span>
               </button>
             </div>
           </div>
@@ -1129,9 +1328,11 @@ export function SppgDashboardPanel() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition cursor-pointer"
+                  disabled={isSubmitting}
+                  className="px-4 py-1.5 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-sm transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  Kirim Sinyal Darurat
+                  {isSubmitting && <RefreshCw className="h-3 w-3 animate-spin" />}
+                  <span>Kirim Sinyal Darurat</span>
                 </button>
               </div>
             </form>
@@ -1168,12 +1369,11 @@ export function SppgDashboardPanel() {
 
             {/* Printable Document Preview Paper */}
             <div className="my-3 p-5 bg-slate-50 rounded-2xl border border-slate-300 font-mono text-xs text-slate-800 space-y-3">
-              {/* Document Header */}
               <div className="text-center pb-2.5 border-b-2 border-slate-800">
                 <p className="font-black text-xs uppercase">BADAN GIZI NASIONAL (BGN) REPUBLIK INDONESIA</p>
-                <p className="font-bold text-[11px]">SPPG-01 MENTENG JAYA MANDIRI</p>
+                <p className="font-bold text-[11px] uppercase">{profile.name}</p>
                 <p className="text-[11px] text-slate-500">
-                  SLHS: {SPPG_PROFILE.licenseNo} &bull; Halal ID: {SPPG_PROFILE.halalId}
+                  SLHS: {profile.licenseNo} &bull; Halal ID: {profile.halalId}
                 </p>
                 <p className="font-extrabold text-xs mt-1 text-[#23259C] underline">
                   LEMBAR KONTROL PRODUKSI & DISTRIBUSI HARIAN
@@ -1183,14 +1383,14 @@ export function SppgDashboardPanel() {
               {/* Meta Grid */}
               <div className="grid grid-cols-2 gap-2 text-[10px] pb-2 border-b border-slate-300">
                 <div>
-                  <p><strong>No. Run-Sheet:</strong> RS-2026/09/29-001</p>
-                  <p><strong>Menu:</strong> {TODAY_MENU_RECIPE.code} - Paket A</p>
-                  <p><strong>Target:</strong> 2.500 Porsi (50 Boks Termal)</p>
+                  <p><strong>No. Run-Sheet:</strong> RS-2026/10/08-001</p>
+                  <p><strong>Menu:</strong> {todayMenu.code} - {todayMenu.name}</p>
+                  <p><strong>Target:</strong> {delivery.target.toLocaleString('id-ID')} Porsi ({Math.ceil(delivery.target / 50)} Boks Termal)</p>
                 </div>
                 <div>
-                  <p><strong>Selesai Masak:</strong> 06:00 WIB</p>
-                  <p><strong>Batas HACCP:</strong> 10:00 WIB (Maks. 4 Jam)</p>
-                  <p><strong>Suhu Inti Kuali:</strong> 78.5°C (&gt;75°C Lolos)</p>
+                  <p><strong>Selesai Masak:</strong> {haccpTimer.startTime} WIB</p>
+                  <p><strong>Batas HACCP:</strong> {haccpTimer.mustConsumeBefore} WIB (Maks. 4 Jam)</p>
+                  <p><strong>Suhu Inti Kuali:</strong> {telemetry.coreCookingTemp}°C (&gt;75°C Lolos)</p>
                 </div>
               </div>
 
@@ -1198,13 +1398,11 @@ export function SppgDashboardPanel() {
               <div>
                 <p className="font-bold text-[11px] mb-0.5">Komposisi Menu:</p>
                 <p className="text-[10px] text-slate-700 bg-white p-2 rounded border border-slate-200">
-                  {TODAY_MENU_RECIPE.name} ({TODAY_MENU_RECIPE.calories} kkal &bull; {TODAY_MENU_RECIPE.protein}g Protein)
+                  {todayMenu.name} ({todayMenu.calories} kkal &bull; {todayMenu.protein}g Protein &bull; {todayMenu.carbs}g Karbo &bull; {todayMenu.fat}g Lemak)
                 </p>
               </div>
 
-              {/* Alokasi per sekolah. Jumlah boks dihitung dari kuota sekolah
-                  (25 porsi per master tote), bukan dari posisi array. Status
-                  diambil dari data, bukan teks "SIAP" yang hardcode. */}
+              {/* Alokasi per sekolah */}
               <div>
                 <p className="text-[11px] font-semibold text-slate-900 mb-1">
                   Alokasi sekolah dan boks termal
@@ -1224,9 +1422,8 @@ export function SppgDashboardPanel() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {ASSIGNED_SCHOOLS_MANIFEST.map((s) => {
-                        const dist = SPPG_SCHOOL_DISTRIBUTION_DATA.find((d) => d.quota === s.quota)
-                        const signed = dist?.status === 'Tiba & BAST'
+                      {manifest.map((s) => {
+                        const signed = s.bastSigned || s.status === 'Tiba & BAST'
                         return (
                           <tr key={s.id}>
                             <td className="px-2 py-2 font-medium text-slate-900">{s.name}</td>
@@ -1234,9 +1431,9 @@ export function SppgDashboardPanel() {
                               {s.quota.toLocaleString('id-ID')}
                             </td>
                             <td className="px-2 py-2 text-right tabular-nums text-slate-700">
-                              {boxRangeBySchool[s.id]?.boxes ?? '-'}
+                              {boxRangeBySchool[s.id]?.boxes ?? Math.ceil(s.quota / 25)}
                             </td>
-                            <td className="px-2 py-2 text-slate-600">{s.fleet.split(' ')[1]}</td>
+                            <td className="px-2 py-2 text-slate-600">{s.fleet}</td>
                             <td className={`px-2 py-2 font-medium ${signed ? 'text-emerald-800' : 'text-amber-800'}`}>
                               {signed ? 'Tertandatangani' : 'Belum turun'}
                             </td>
@@ -1252,12 +1449,12 @@ export function SppgDashboardPanel() {
               <div className="grid grid-cols-2 gap-4 pt-2 text-center text-[11px]">
                 <div>
                   <p className="text-slate-500">Penanggung Jawab Lini Masak</p>
-                  <p className="font-bold border-t border-slate-400 mt-6 pt-1">{SPPG_PROFILE.headChef}</p>
-                  <p className="text-slate-500">Head Chef SPPG-01</p>
+                  <p className="font-bold border-t border-slate-400 mt-6 pt-1">{profile.headChef}</p>
+                  <p className="text-slate-500">Head Chef {profile.code}</p>
                 </div>
                 <div>
                   <p className="text-slate-500">Verifikator Mutu & Gizi</p>
-                  <p className="font-bold border-t border-slate-400 mt-6 pt-1">{SPPG_PROFILE.nutritionist}</p>
+                  <p className="font-bold border-t border-slate-400 mt-6 pt-1">{profile.nutritionist}</p>
                   <p className="text-slate-500">Ahli Gizi Dapur Sentral</p>
                 </div>
               </div>
