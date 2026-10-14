@@ -20,6 +20,7 @@ type RouterDependencies struct {
 	PortalCtrl     *controllers.PortalController
 	ValidatorCtrl  *controllers.ValidatorController
 	SppgCtrl       *controllers.SppgController
+	SppgAccountCtrl *controllers.SppgAccountController
 	DeliveryCtrl   *controllers.DeliveryController
 	AttendanceCtrl *controllers.AttendanceController
 	SchoolCtrl     *controllers.SchoolController
@@ -68,6 +69,8 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 	mux.HandleFunc("POST /api/auth/refresh", deps.AuthCtrl.Refresh)
 	mux.HandleFunc("POST /api/auth/logout", deps.AuthCtrl.Logout)
 	mux.Handle("GET /api/auth/me", middlewares.RequireAuth(http.HandlerFunc(deps.AuthCtrl.Me)))
+	mux.Handle("PATCH /api/auth/password", middlewares.RequireAuth(http.HandlerFunc(deps.AuthCtrl.ChangePassword)))
+	mux.Handle("PATCH /api/auth/profile", middlewares.RequireAuth(http.HandlerFunc(deps.AuthCtrl.UpdateProfile)))
 
 	// Item resource routes (CRUD) — read: any authenticated user, write: restricted
 	mux.Handle("GET /api/items", middlewares.RequireAuth(http.HandlerFunc(deps.ItemCtrl.GetAll)))
@@ -98,6 +101,19 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 		mux.Handle("POST /api/sppg/{id}/reinstate", middlewares.RequireRole(models.RoleSuperadmin)(http.HandlerFunc(deps.SppgCtrl.Reinstate)))
 		mux.Handle("PUT /api/sppg/{id}/quota", middlewares.RequirePermission(models.PermSppgManage)(http.HandlerFunc(deps.SppgCtrl.UpdateQuota)))
 		mux.Handle("POST /api/sppg/{id}/recipe-audit", middlewares.RequirePermission(models.PermSppgManage)(http.HandlerFunc(deps.SppgCtrl.RecordRecipeAudit)))
+		// Self-service identitas dapur milik akun SPPG yang sedang login.
+		mux.Handle("GET /api/sppg/profile", middlewares.RequireRole(models.RoleSppg)(http.HandlerFunc(deps.SppgCtrl.GetProfile)))
+		mux.Handle("PATCH /api/sppg/profile", middlewares.RequireRole(models.RoleSppg)(http.HandlerFunc(deps.SppgCtrl.UpdateProfile)))
+	}
+
+	// Akun login dapur SPPG — hanya superadmin. Literal segment "accounts" lebih
+	// spesifik dari wildcard {id} sehingga tidak bentrok dengan GET /api/sppg/{id}.
+	if deps.SppgAccountCtrl != nil {
+		mux.Handle("GET /api/sppg/accounts", middlewares.RequireRole(models.RoleSuperadmin)(http.HandlerFunc(deps.SppgAccountCtrl.List)))
+		mux.Handle("POST /api/sppg/accounts", middlewares.RequireRole(models.RoleSuperadmin)(http.HandlerFunc(deps.SppgAccountCtrl.Create)))
+		mux.Handle("PATCH /api/sppg/accounts/{id}", middlewares.RequireRole(models.RoleSuperadmin)(http.HandlerFunc(deps.SppgAccountCtrl.Update)))
+		mux.Handle("PATCH /api/sppg/accounts/{id}/credentials", middlewares.RequireRole(models.RoleSuperadmin)(http.HandlerFunc(deps.SppgAccountCtrl.UpdateCredentials)))
+		mux.Handle("DELETE /api/sppg/accounts/{id}", middlewares.RequireRole(models.RoleSuperadmin)(http.HandlerFunc(deps.SppgAccountCtrl.Delete)))
 	}
 
 	// SPPG Recipes, Daily Operational States, Substitutions & Batch Traceability (Multi-Tenant)
@@ -222,6 +238,10 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 	if deps.ValidatorCtrl != nil {
 		mux.Handle("GET /api/validators", middlewares.RequirePermission(models.PermValidatorsRead)(http.HandlerFunc(deps.ValidatorCtrl.List)))
 		mux.Handle("GET /api/validators/{id}", middlewares.RequirePermission(models.PermValidatorsRead)(http.HandlerFunc(deps.ValidatorCtrl.Get)))
+		mux.Handle("POST /api/validators", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.Create)))
+		mux.Handle("PATCH /api/validators/{id}", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.Update)))
+		mux.Handle("DELETE /api/validators/{id}", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.Delete)))
+		mux.Handle("PATCH /api/validators/{id}/credentials", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.UpdateCredentials)))
 		mux.Handle("PATCH /api/validators/{id}/status", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.SetStatus)))
 		mux.Handle("POST /api/validators/{id}/device/reset", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.ResetDevice)))
 		mux.Handle("POST /api/validators/{id}/warnings", middlewares.RequirePermission(models.PermValidatorsManage)(http.HandlerFunc(deps.ValidatorCtrl.IssueWarning)))

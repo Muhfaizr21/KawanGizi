@@ -19,6 +19,8 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*models.User, error)
 	GetByID(ctx context.Context, id string) (*models.User, error)
 	Create(ctx context.Context, user *models.User) error
+	UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error
+	UpdateFullName(ctx context.Context, userID, fullName string) error
 	SaveRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error
 	FindRefreshToken(ctx context.Context, tokenHash string) (userID string, expiresAt time.Time, revoked bool, err error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
@@ -67,8 +69,32 @@ func (r *pgUserRepository) Create(ctx context.Context, user *models.User) error 
 	return err
 }
 
-func (r *pgUserRepository) SaveRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {
-	_, err := database.Pool().Exec(ctx, `
+// UpdatePasswordHash menimpa hash kata sandi milik akun.
+func (r *pgUserRepository) UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error {
+	_, err := database.Pool().Exec(ctx,
+		"UPDATE users SET password_hash = $2 WHERE id = $1", userID, passwordHash)
+	return err
+}
+
+// UpdateFullName menimpa nama tampilan akun. Untuk akun validator, nama pada
+// validator_profiles juga disinkronkan agar daftar di panel admin tetap konsisten.
+func (r *pgUserRepository) UpdateFullName(ctx context.Context, userID, fullName string) error {
+	var id string
+	err := database.Pool().QueryRow(ctx, `
+		WITH updated AS (
+			UPDATE users SET full_name = $2 WHERE id = $1 RETURNING id, role
+		), synced AS (
+			UPDATE validator_profiles SET name = $2
+			WHERE user_id = (SELECT id FROM updated WHERE role = 'validator')
+		)
+		SELECT id FROM updated`, userID, fullName).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (r *pgUserRepository) SaveRefreshToken(ctx context.Context, userID, tokenHash string, expiresAt time.Time) error {	_, err := database.Pool().Exec(ctx, `
 		INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at)
 		VALUES ($1, $2, $3, $4)`,
 		uuid.NewString(), userID, tokenHash, expiresAt)

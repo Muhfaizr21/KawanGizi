@@ -76,6 +76,7 @@ func main() {
 	portalRepo := repositories.NewPortalRepository()
 	validatorRepo := repositories.NewValidatorRepository()
 	sppgRepo := repositories.NewSppgRepository()
+	sppgAccountRepo := repositories.NewSppgAccountRepository()
 	deliveryRepo := repositories.NewDeliveryRepository()
 	attendanceRepo := repositories.NewAttendanceRepository(database.Pool())
 	schoolRepo := repositories.NewSchoolRepository(database.Pool())
@@ -110,6 +111,7 @@ func main() {
 	portalService := services.NewPortalService(portalRepo)
 	validatorService := services.NewValidatorService(validatorRepo)
 	sppgService := services.NewSppgService(sppgRepo)
+	sppgAccountService := services.NewSppgAccountService(sppgAccountRepo)
 	deliveryService := services.NewDeliveryService(deliveryRepo)
 	attendanceService := services.NewAttendanceService(attendanceRepo)
 	schoolService := services.NewSchoolService(schoolRepo)
@@ -141,6 +143,7 @@ func main() {
 	validatorCtrl := controllers.NewValidatorController(validatorService)
 	validatorScanCtrl := controllers.NewValidatorScanController(validatorScanService)
 	sppgCtrl := controllers.NewSppgController(sppgService)
+	sppgAccountCtrl := controllers.NewSppgAccountController(sppgAccountService)
 	deliveryCtrl := controllers.NewDeliveryController(deliveryService)
 	attendanceCtrl := controllers.NewAttendanceController(attendanceService)
 	schoolCtrl := controllers.NewSchoolController(schoolService)
@@ -171,6 +174,7 @@ func main() {
 		PortalCtrl:         portalCtrl,
 		ValidatorCtrl:      validatorCtrl,
 		SppgCtrl:           sppgCtrl,
+		SppgAccountCtrl:    sppgAccountCtrl,
 		DeliveryCtrl:       deliveryCtrl,
 		AttendanceCtrl:     attendanceCtrl,
 		SchoolCtrl:         schoolCtrl,

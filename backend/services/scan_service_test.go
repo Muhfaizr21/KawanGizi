@@ -177,3 +177,93 @@ func TestSubmitScanReportsUnavailableAI(t *testing.T) {
 		t.Fatalf("expected ErrAIUnavailable, got %v", err)
 	}
 }
+
+type nutritionStub struct {
+	calls     int
+	lastItems []ItemRequest
+	matches   []models.NutritionMatch
+	macros    *models.Macros
+	note      string
+}
+
+func (*nutritionStub) Search(context.Context, string, int) ([]models.NutritionItem, error) {
+	return nil, nil
+}
+
+func (n *nutritionStub) MatchItems(_ context.Context, items []ItemRequest) ([]models.NutritionMatch, *models.Macros, string, error) {
+	n.calls++
+	n.lastItems = items
+	return n.matches, n.macros, n.note, nil
+}
+
+func trayPredictionServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"menu_class_name": "", "menu_confidence": 0,
+			"freshness_class_name": "Fresh", "freshness_confidence": 0.93,
+			"freshness_class_probabilities": map[string]float64{"Fresh": 0.93, "Spoiled": 0.07},
+			"compartments": []map[string]any{
+				{"index": 0, "empty": false, "menu_class_name": "nasi_kuning", "menu_display_name": "Nasi Kuning", "menu_confidence": 0.9},
+				{"index": 1, "empty": true},
+				{"index": 2, "empty": false, "menu_class_name": "ayam_goreng", "menu_display_name": "Ayam Goreng", "menu_confidence": 0.8},
+			},
+			"latency_ms": 20,
+		})
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestSubmitScanFallsBackToDetectedNutritionPerCompartment(t *testing.T) {
+	nutrition := &nutritionStub{
+		matches: []models.NutritionMatch{{Name: "Nasi Kuning", MatchedTo: "Beras Giling masak (nasi)", WeightG: 100, Energy: 178}},
+		macros:  &models.Macros{Energy: 178, Protein: 2.1, Carbs: 40.6, Fat: 0.1},
+		note:    "gizi dihitung dari 2 bahan",
+	}
+	server := trayPredictionServer(t)
+
+	service := NewScanService(&scanRepoStub{}, server.URL, nutrition)
+	result, err := service.SubmitScan(context.Background(), ScanSubmission{ActorID: "v", Image: []byte("img"), FileName: "s.jpg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nutrition.calls != 1 {
+		t.Fatalf("expected one nutrition lookup, got %d", nutrition.calls)
+	}
+	if len(nutrition.lastItems) != 2 {
+		t.Fatalf("expected two detected items (empty compartment skipped), got %+v", nutrition.lastItems)
+	}
+	for _, item := range nutrition.lastItems {
+		if item.WeightG != 100 {
+			t.Fatalf("detected nutrition items must default to 100 g, got %+v", item)
+		}
+	}
+	if result.Macros == nil || result.Macros.Energy != 178 || len(result.Nutrition) != 1 {
+		t.Fatalf("fallback nutrition not attached: %+v", result)
+	}
+	if !strings.Contains(result.NutritionNote, "100 g") {
+		t.Fatalf("nutrition note must flag the 100 g assumption: %q", result.NutritionNote)
+	}
+}
+
+func TestSubmitScanPrefersBatchNutritionOverDetection(t *testing.T) {
+	nutrition := &nutritionStub{macros: &models.Macros{Energy: 999}}
+	server := trayPredictionServer(t)
+
+	service := NewScanService(&scanRepoStub{batch: &models.ScanBatchInfo{
+		BatchID: "BTH-01", MenuName: "Nasi Ayam Sayur",
+		Macros: &models.Macros{Energy: 520, Protein: 27, Carbs: 68, Fat: 16},
+	}}, server.URL, nutrition)
+	result, err := service.SubmitScan(context.Background(), ScanSubmission{ActorID: "v", Image: []byte("img"), FileName: "s.jpg", BatchID: "BTH-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nutrition.calls != 0 {
+		t.Fatalf("batch nutrition must win; detection fallback should not run (calls=%d)", nutrition.calls)
+	}
+	if result.Macros == nil || result.Macros.Energy != 520 {
+		t.Fatalf("expected batch macros to be preserved, got %+v", result.Macros)
+	}
+}

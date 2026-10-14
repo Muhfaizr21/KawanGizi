@@ -164,6 +164,7 @@ export function SppgPage() {
         onAction={runAction}
         canManage={canAct('update_quota')}
         canDiscipline={canAct('issue_warning')}
+        canManageAccounts={user?.role === 'superadmin'}
         showToast={notify}
       />
     </AdminLayout>

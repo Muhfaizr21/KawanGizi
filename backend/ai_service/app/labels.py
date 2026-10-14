@@ -54,6 +54,50 @@ MENU_LABEL_ID: dict[str, str] = {
     'test': 'uji coba',
     'train': 'data latih',
     'valid': 'data validasi',
+
+    # Kelas checkpoint buah.pt (26 sayur/buah) -> nama tampilan Indonesia.
+    # Kunci memakai bentuk ternormalisasi _key (spasi/tanda hubung -> garis bawah).
+    'avocado': 'alpukat',
+    'beans': 'kacang',
+    'beet': 'bit',
+    'bell_pepper': 'paprika',
+    'broccoli': 'brokoli',
+    'brus_capusta': 'kubis brussel',
+    'cabbage': 'kubis',
+    'carrot': 'wortel',
+    'cayliflower': 'kembang kol',
+    'celery': 'seledri',
+    'corn': 'jagung',
+    'cucumber': 'timun',
+    'eggplant': 'terong',
+    'fasol': 'kacang panjang',
+    'garlic': 'bawang putih',
+    'hot_pepper': 'cabai',
+    'onion': 'bawang bombai',
+    'peas': 'kacang polong',
+    'potato': 'kentang',
+    'pumpkin': 'labu',
+    'rediska': 'lobak',
+    'redka': 'lobak',
+    'salad': 'salad',
+    'squash_patisson': 'labu siam',
+    'tomato': 'tomat',
+    'vegetable_marrow': 'labu air',
+
+    # Kelas model lama minuman(susu).pt (merek susu); tidak lagi dipakai
+    # karena model penamaan kini makanan_minuman.pt (kelas 'susu').
+    'milk_life': 'Susu Milk Life',
+    'susu_frisian_flag': 'Susu Frisian Flag',
+    'susu_ultramilk': 'Susu Ultra Milk',
+
+    # Kelas minuman pada makanan_minuman.pt -> nama tampilan Indonesia.
+    'susu': 'Susu',
+
+    # Kelas makanan pokok pada makanan_minuman.pt -> nama tampilan Indonesia.
+    'mie_goreng': 'Mie Goreng',
+    'nasi_goreng': 'Nasi Goreng',
+    'nasi_kuning': 'Nasi Kuning',
+    'nasi_putih': 'Nasi Putih',
 }
 
 # Kelas kesegaran -> tampilan Indonesia.

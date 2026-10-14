@@ -100,6 +100,11 @@ type SppgWarningLetter struct {
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
+// UpdateSppgProfileRequest memperbarui identitas dapur milik akun SPPG sendiri.
+type UpdateSppgProfileRequest struct {
+	Name string `json:"name"`
+}
+
 // SppgAssignedSchool adalah sekolah yang dilayani sebuah dapur.
 type SppgAssignedSchool struct {
 	NPSN          string `json:"npsn"`

@@ -97,6 +97,42 @@ type SetValidatorStatusRequest struct {
 	Reason string `json:"reason"`
 }
 
+// CreateValidatorRequest adalah payload POST /api/validators (superadmin).
+// Membuat akun login (users) sekaligus profil roster (validator_profiles).
+type CreateValidatorRequest struct {
+	FullName      string `json:"fullName"`
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	NPSN          string `json:"npsn"`
+	SatgasID      string `json:"satgasId"`
+	NIP           string `json:"nip"`
+	Role          string `json:"role"`
+	Certification string `json:"certification"`
+	Device        string `json:"device"`
+	SPPGID        string `json:"sppgId"`
+}
+
+// UpdateValidatorRequest adalah payload PATCH /api/validators/{id} untuk
+// memperbarui identitas profil (bukan kredensial login).
+type UpdateValidatorRequest struct {
+	Name          string `json:"name"`
+	NPSN          string `json:"npsn"`
+	SatgasID      string `json:"satgasId"`
+	NIP           string `json:"nip"`
+	Role          string `json:"role"`
+	Certification string `json:"certification"`
+	Reason        string `json:"reason"`
+	SPPGID        string `json:"sppgId"`
+}
+
+// UpdateValidatorCredentialsRequest adalah payload PATCH
+// /api/validators/{id}/credentials. NewPassword boleh kosong (hanya ganti email).
+type UpdateValidatorCredentialsRequest struct {
+	Email       string `json:"email"`
+	NewPassword string `json:"newPassword"`
+	Reason      string `json:"reason"`
+}
+
 // ResetValidatorDeviceRequest memutus tautan kriptografis perangkat.
 type ResetValidatorDeviceRequest struct {
 	Reason string `json:"reason"`

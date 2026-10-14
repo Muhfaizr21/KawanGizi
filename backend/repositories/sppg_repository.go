@@ -19,6 +19,7 @@ const (
 	AuditSppgReinstate   = "sppg.reinstate"
 	AuditSppgQuota       = "sppg.quota"
 	AuditSppgRecipeAudit = "sppg.recipe.audit"
+	AuditSppgProfile     = "sppg.profile.update"
 )
 
 // SppgRepository adalah persistence untuk direktori dapur SPPG.
@@ -33,6 +34,7 @@ type SppgRepository interface {
 	Suspend(ctx context.Context, id, reason, alternativeID, actorID string) (*models.SPPGKitchen, error)
 	Reinstate(ctx context.Context, id, reason string, initialQuota int, actorID string) (*models.SPPGKitchen, error)
 	UpdateQuota(ctx context.Context, id string, quota int, reason, actorID string) (*models.SPPGKitchen, error)
+	UpdateName(ctx context.Context, id, name, actorID string) (*models.SPPGKitchen, error)
 	RecordRecipeAudit(ctx context.Context, id, tkpiStatus, auditor, notes string, deviation float64, actorID string) (*models.SPPGKitchen, error)
 }
 
@@ -375,6 +377,24 @@ func (r *pgSppgRepository) RecordRecipeAudit(ctx context.Context, id, tkpiStatus
 			actorID: actorID, action: AuditSppgRecipeAudit, target: id,
 			detail: auditDetail("tkpiStatus", tkpiStatus, notes),
 			args:   []any{id, tkpiStatus, deviation, auditor},
+		})
+	if err != nil {
+		return nil, err
+	}
+	return k, nil
+}
+
+// UpdateName memperbarui nama tampilan dapur (self-service akun SPPG).
+func (r *pgSppgRepository) UpdateName(ctx context.Context, id, name, actorID string) (*models.SPPGKitchen, error) {
+	k, err := r.run(ctx, `
+		UPDATE sppg_kitchens
+		SET name = $6, updated_at = NOW()
+		WHERE id = $7
+		RETURNING id`,
+		mutation{
+			actorID: actorID, action: AuditSppgProfile, target: id,
+			detail: auditDetail("name", name, ""),
+			args:   []any{name, id},
 		})
 	if err != nil {
 		return nil, err

@@ -6,14 +6,17 @@ import (
 	"context"
 	"errors"
 	"strings"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Sentinel errors untuk operasi validator. Controller memetakannya ke status
 // HTTP dengan errors.Is — bukan perbandingan string.
 var (
-	ErrValidatorNotFound = errors.New("validator tidak ditemukan")
-	ErrValidatorInvalid  = errors.New("permintaan tidak valid")
-	ErrValidatorNoBackup = errors.New("validator cadangan tidak memenuhi syarat")
+	ErrValidatorNotFound   = errors.New("validator tidak ditemukan")
+	ErrValidatorInvalid    = errors.New("permintaan tidak valid")
+	ErrValidatorNoBackup   = errors.New("validator cadangan tidak memenuhi syarat")
+	ErrValidatorEmailTaken = errors.New("email sudah terdaftar")
 )
 
 // ValidatorService menegakkan aturan bisnis atas roster validator lapangan:
@@ -26,6 +29,10 @@ type ValidatorService interface {
 	ResetDevice(ctx context.Context, actorID, id, reason string) (*models.ValidatorProfile, error)
 	IssueWarning(ctx context.Context, actorID, id, note string) (*models.ValidatorProfile, error)
 	AssignBackup(ctx context.Context, actorID, id, backupID, reason string) (*models.ValidatorProfile, error)
+	Create(ctx context.Context, actorID string, req models.CreateValidatorRequest) (*models.ValidatorProfile, error)
+	Update(ctx context.Context, actorID, id string, req models.UpdateValidatorRequest) (*models.ValidatorProfile, error)
+	UpdateCredentials(ctx context.Context, actorID, id string, req models.UpdateValidatorCredentialsRequest) (*models.ValidatorProfile, error)
+	Delete(ctx context.Context, actorID, id string) error
 }
 
 type validatorService struct {
@@ -119,6 +126,108 @@ func (s *validatorService) AssignBackup(ctx context.Context, actorID, id, backup
 	return v, mapValidatorErr(err)
 }
 
+// Create membuat akun login sekaligus profil roster validator. Email wajib unik
+// dan kata sandi di-hash sebelum disimpan.
+func (s *validatorService) Create(ctx context.Context, actorID string, req models.CreateValidatorRequest) (*models.ValidatorProfile, error) {
+	fullName := strings.TrimSpace(req.FullName)
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	npsn := strings.TrimSpace(req.NPSN)
+	role := strings.TrimSpace(req.Role)
+	if role == "" {
+		role = "Penanggung Jawab MBG Sekolah"
+	}
+
+	if len([]rune(fullName)) < minValidatorNameLen || !isValidEmail(email) ||
+		len(strings.TrimSpace(req.Password)) < minValidatorPasswordLen || npsn == "" {
+		return nil, ErrValidatorInvalid
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(strings.TrimSpace(req.Password)), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	v, err := s.repo.Create(ctx, repositories.CreateValidatorParams{
+		FullName:      fullName,
+		Email:         email,
+		PasswordHash:  string(hash),
+		NPSN:          npsn,
+		SatgasID:      strings.TrimSpace(req.SatgasID),
+		NIP:           strings.TrimSpace(req.NIP),
+		Role:          role,
+		Certification: strings.TrimSpace(req.Certification),
+		Device:        strings.TrimSpace(req.Device),
+		SPPGID:        strings.TrimSpace(req.SPPGID),
+	}, actorID)
+	return v, mapValidatorErr(err)
+}
+
+// Update memperbarui identitas profil validator (nama, NPSN, NIP, dll).
+func (s *validatorService) Update(ctx context.Context, actorID, id string, req models.UpdateValidatorRequest) (*models.ValidatorProfile, error) {
+	id = strings.TrimSpace(id)
+	name := strings.TrimSpace(req.Name)
+	npsn := strings.TrimSpace(req.NPSN)
+	if id == "" || len([]rune(name)) < minValidatorNameLen || npsn == "" {
+		return nil, ErrValidatorInvalid
+	}
+	role := strings.TrimSpace(req.Role)
+	if role == "" {
+		role = "Penanggung Jawab MBG Sekolah"
+	}
+
+	v, err := s.repo.Update(ctx, id, repositories.UpdateValidatorParams{
+		Name:          name,
+		NPSN:          npsn,
+		SatgasID:      strings.TrimSpace(req.SatgasID),
+		NIP:           strings.TrimSpace(req.NIP),
+		Role:          role,
+		Certification: strings.TrimSpace(req.Certification),
+		Reason:        strings.TrimSpace(req.Reason),
+		SPPGID:        strings.TrimSpace(req.SPPGID),
+	}, actorID)
+	return v, mapValidatorErr(err)
+}
+
+// UpdateCredentials mengganti email dan/atau kata sandi akun validator.
+// NewPassword kosong berarti kata sandi lama dipertahankan.
+func (s *validatorService) UpdateCredentials(ctx context.Context, actorID, id string, req models.UpdateValidatorCredentialsRequest) (*models.ValidatorProfile, error) {
+	id = strings.TrimSpace(id)
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	newPassword := strings.TrimSpace(req.NewPassword)
+	if id == "" || !isValidEmail(email) {
+		return nil, ErrValidatorInvalid
+	}
+
+	var hash string
+	if newPassword != "" {
+		if len(newPassword) < minValidatorPasswordLen {
+			return nil, ErrValidatorInvalid
+		}
+		h, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, err
+		}
+		hash = string(h)
+	}
+
+	v, err := s.repo.UpdateCredentials(ctx, id, email, hash, actorID, strings.TrimSpace(req.Reason))
+	return v, mapValidatorErr(err)
+}
+
+// Delete menghapus akun login dan profil roster validator.
+func (s *validatorService) Delete(ctx context.Context, actorID, id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ErrValidatorInvalid
+	}
+	return mapValidatorErr(s.repo.Delete(ctx, id, actorID))
+}
+
+const (
+	minValidatorNameLen     = 3
+	minValidatorPasswordLen = 8
+)
+
 // minWarningNoteLen prevents a warning that carries no auditable explanation.
 const minWarningNoteLen = 10
 
@@ -143,6 +252,10 @@ func mapValidatorErr(err error) error {
 		return nil
 	case errors.Is(err, repositories.ErrNotFound):
 		return ErrValidatorNotFound
+	case errors.Is(err, repositories.ErrEmailTaken):
+		return ErrValidatorEmailTaken
+	case errors.Is(err, repositories.ErrInvalidReference):
+		return ErrValidatorInvalid
 	default:
 		return err
 	}

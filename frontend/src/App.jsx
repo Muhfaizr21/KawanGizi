@@ -8,6 +8,7 @@ import { ScanPage } from './pages/ScanPage'
 import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { NotFoundPage } from './pages/NotFoundPage'
+import { ErrorPage } from './components/ErrorPage'
 import { AdminPage } from './pages/admin/AdminPage'
 import { ValidatorsPage } from './pages/admin/ValidatorsPage'
 import { SppgPage } from './pages/admin/SppgPage'
@@ -27,7 +28,6 @@ import { SppgLogisticsPage } from './pages/sppg/SppgLogisticsPage'
 import { SppgSchoolsPage } from './pages/sppg/SppgSchoolsPage'
 import { SppgHandoverPage } from './pages/sppg/SppgHandoverPage'
 import { SppgIncidentsPage } from './pages/sppg/SppgIncidentsPage'
-import { SppgBillingPage } from './pages/sppg/SppgBillingPage'
 import { SppgCompliancePage } from './pages/sppg/SppgCompliancePage'
 import { ValidatorDashboardPage } from './pages/validator/ValidatorDashboardPage'
 import { ValidatorHandoverPage } from './pages/validator/ValidatorHandoverPage'
@@ -35,6 +35,7 @@ import { ValidatorIncidentsPage } from './pages/validator/ValidatorIncidentsPage
 import { ValidatorHistoryPage } from './pages/validator/ValidatorHistoryPage'
 import { ValidatorFoodScanPage } from './pages/validator/ValidatorFoodScanPage'
 import { RequireRole } from './components/RequireRole'
+import { RedirectIfAuthed } from './components/RedirectIfAuthed'
 
 // Helper for programmatic navigation
 export function navigate(to) {
@@ -62,6 +63,15 @@ function getCleanPath() {
     path = path.slice(0, -1)
   }
   return path
+}
+
+function getErrorCode(path) {
+  const prefixed = path.match(/^\/error\/(\d{3})$/)
+  if (prefixed) return Number(prefixed[1])
+  const bare = path.match(/^\/(400|401|403|404|500|503)$/)
+  if (bare) return Number(bare[1])
+  if (path === '/error') return 500
+  return null
 }
 
 function usePath() {
@@ -113,7 +123,7 @@ function PublicPage({ path }) {
   if (path === '/tentang-kami' || path === '/tentang' || path === '/mulai') return <TentangKamiPage />
   if (path === '/scan')
     return (
-      <RequireRole roles={['validator', 'superadmin']}>
+      <RequireRole roles={['validator']}>
         <ScanPage />
       </RequireRole>
     )
@@ -123,6 +133,11 @@ function PublicPage({ path }) {
 
 export default function App() {
   const path = usePath()
+
+  const errorCode = getErrorCode(path)
+  if (errorCode) {
+    return <ErrorPage code={errorCode} path={path} />
+  }
 
   // Full-screen isolated admin dashboard (no public header/footer)
   // Superadmin portal.
@@ -159,10 +174,10 @@ export default function App() {
   }
 
   // Full-screen isolated SPPG kitchen cockpit (no public header/footer, completely decoupled from /admin/*)
-  // SPPG portal; superadmin can audit.
+  // SPPG portal — hanya role sppg.
   if (path.startsWith('/sppg')) {
     return (
-      <RequireRole roles={['sppg', 'superadmin']}>
+      <RequireRole roles={['sppg']}>
         {path === '/sppg/recipes' ? (
           <SppgRecipesPage />
         ) : path === '/sppg/batches' ? (
@@ -177,8 +192,6 @@ export default function App() {
           <SppgHandoverPage />
         ) : path === '/sppg/incidents' ? (
           <SppgIncidentsPage />
-        ) : path === '/sppg/billing' ? (
-          <SppgBillingPage />
         ) : path === '/sppg/compliance' ? (
           <SppgCompliancePage />
         ) : (
@@ -189,10 +202,10 @@ export default function App() {
   }
 
   // Full-screen isolated validator portal (guru & staf sekolah — validator lapangan)
-  // Guarded: validator (own portal), superadmin (preview only).
+  // Hanya role validator; role lain dialihkan ke dasbor miliknya.
   if (path === '/validator' || path.startsWith('/validator/')) {
     return (
-      <RequireRole roles={['validator', 'superadmin']}>
+      <RequireRole roles={['validator']}>
         {path === '/validator/scan' || path === '/validator/foodscan' ? (
           <ValidatorFoodScanPage />
         ) : path === '/validator/handover' ? (
@@ -210,7 +223,11 @@ export default function App() {
 
   // Full-screen isolated auth pages
   if (path === '/login' || path === '/signin' || path === '/auth/signin') {
-    return <LoginPage />
+    return (
+      <RedirectIfAuthed>
+        <LoginPage />
+      </RedirectIfAuthed>
+    )
   }
   if (
     path === '/register' ||
@@ -218,7 +235,11 @@ export default function App() {
     path === '/auth/signup' ||
     path === '/auth/register'
   ) {
-    return <RegisterPage />
+    return (
+      <RedirectIfAuthed>
+        <RegisterPage />
+      </RedirectIfAuthed>
+    )
   }
 
   // Full-screen 404 page (no header/footer) if route is invalid/unknown

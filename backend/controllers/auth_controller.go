@@ -195,6 +195,102 @@ func (c *AuthController) Me(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ChangePassword memperbarui kata sandi akun yang sedang login.
+//
+//	@Summary	Ubah kata sandi akun
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		payload	body	models.ChangePasswordRequest	true	"Kata sandi lama & baru"
+//	@Success	200	{object}	models.APIResponse
+//	@Failure	400	{object}	models.APIResponse
+//	@Failure	401	{object}	models.APIResponse
+//	@Router		/api/auth/password [patch]
+func (c *AuthController) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	userID := middlewares.UserID(r.Context())
+	if userID == "" {
+		utils.Error(w, http.StatusUnauthorized, "autentikasi diperlukan")
+		return
+	}
+
+	var req models.ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "payload tidak valid")
+		return
+	}
+
+	if err := c.authSvc.ChangePassword(r.Context(), userID, req.CurrentPassword, req.NewPassword); err != nil {
+		switch err {
+		case services.ErrInvalidCredentials:
+			utils.Error(w, http.StatusUnauthorized, "kata sandi saat ini salah")
+		case services.ErrValidation:
+			utils.Error(w, http.StatusBadRequest, "kata sandi baru minimal 8 karakter dan berbeda dari yang lama")
+		case services.ErrInvalidToken:
+			utils.Error(w, http.StatusUnauthorized, "sesi tidak valid, silakan login ulang")
+		default:
+			utils.Error(w, http.StatusInternalServerError, "gagal memperbarui kata sandi")
+		}
+		return
+	}
+
+	_ = database.RecordAuditLog(
+		r.Context(), userID, "auth.password.changed", "",
+		fmt.Sprintf("ip=%s", middlewares.ClientIP(r)),
+	)
+
+	utils.Success(w, http.StatusOK, "Kata sandi berhasil diperbarui", nil)
+}
+
+// UpdateProfile memperbarui nama tampilan akun yang sedang login.
+//
+//	@Summary	Ubah nama profil akun
+//	@Tags		auth
+//	@Accept		json
+//	@Produce	json
+//	@Param		payload	body	models.UpdateProfileRequest	true	"Nama lengkap baru"
+//	@Success	200	{object}	models.AuthResponse
+//	@Failure	400	{object}	models.APIResponse
+//	@Failure	401	{object}	models.APIResponse
+//	@Router		/api/auth/profile [patch]
+func (c *AuthController) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	userID := middlewares.UserID(r.Context())
+	if userID == "" {
+		utils.Error(w, http.StatusUnauthorized, "autentikasi diperlukan")
+		return
+	}
+
+	var req models.UpdateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "payload tidak valid")
+		return
+	}
+
+	user, err := c.authSvc.UpdateProfile(r.Context(), userID, req.FullName)
+	if err != nil {
+		switch err {
+		case services.ErrValidation:
+			utils.Error(w, http.StatusBadRequest, "nama minimal 3 karakter dan maksimal 120 karakter")
+		case services.ErrInvalidToken:
+			utils.Error(w, http.StatusUnauthorized, "sesi tidak valid, silakan login ulang")
+		case services.ErrRoleInactive:
+			utils.Error(w, http.StatusForbidden, err.Error())
+		default:
+			utils.Error(w, http.StatusInternalServerError, "gagal memperbarui profil")
+		}
+		return
+	}
+
+	_ = database.RecordAuditLog(
+		r.Context(), userID, "auth.profile.updated", "",
+		fmt.Sprintf("ip=%s", middlewares.ClientIP(r)),
+	)
+
+	utils.Success(w, http.StatusOK, "Profil berhasil diperbarui", models.AuthResponse{
+		User:        user,
+		Permissions: models.PermissionsFor(user.Role),
+	})
+}
+
 func (c *AuthController) setRefreshCookie(w http.ResponseWriter, r *http.Request, value string, expires time.Time) {
 	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" || os.Getenv("APP_ENV") == "production"
 	http.SetCookie(w, &http.Cookie{

@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Nama aksi yang dicatat pada audit_logs. Setiap aksi superadmin terhadap
@@ -18,7 +20,44 @@ const (
 	AuditValidatorDeviceReset    = "validator.device.reset"
 	AuditValidatorWarn           = "validator.warning"
 	AuditValidatorBackupAssigned = "validator.backup.assign"
+	AuditValidatorCreated        = "validator.create"
+	AuditValidatorUpdated        = "validator.update"
+	AuditValidatorCredentials    = "validator.credentials.update"
+	AuditValidatorDeleted        = "validator.delete"
 )
+
+// ErrEmailTaken menandai email yang sudah dipakai akun lain.
+var ErrEmailTaken = errors.New("email sudah terdaftar")
+
+// ErrInvalidReference menandai referensi (mis. NPSN) yang tidak dikenal.
+var ErrInvalidReference = errors.New("referensi tidak valid")
+
+// CreateValidatorParams adalah data mentah untuk membuat akun + profil validator.
+// PasswordHash sudah di-hash di lapisan service.
+type CreateValidatorParams struct {
+	FullName      string
+	Email         string
+	PasswordHash  string
+	NPSN          string
+	SatgasID      string
+	NIP           string
+	Role          string
+	Certification string
+	Device        string
+	SPPGID        string
+}
+
+// UpdateValidatorParams adalah identitas profil validator yang boleh diubah.
+type UpdateValidatorParams struct {
+	Name          string
+	NPSN          string
+	SatgasID      string
+	NIP           string
+	Role          string
+	Certification string
+	Reason        string
+	SPPGID        string
+}
 
 // deviceUnbound adalah nilai device_id setelah tautan perangkat diputus.
 const deviceUnbound = "unbound"
@@ -36,6 +75,10 @@ type ValidatorRepository interface {
 	ResetDevice(ctx context.Context, id, actorID, reason string) (*models.ValidatorProfile, error)
 	IssueWarning(ctx context.Context, id, actorID, note string) (*models.ValidatorProfile, error)
 	AssignBackup(ctx context.Context, id, backupID, actorID, reason string) (*models.ValidatorProfile, error)
+	Create(ctx context.Context, p CreateValidatorParams, actorID string) (*models.ValidatorProfile, error)
+	Update(ctx context.Context, id string, p UpdateValidatorParams, actorID string) (*models.ValidatorProfile, error)
+	UpdateCredentials(ctx context.Context, id, email, passwordHash, actorID, reason string) (*models.ValidatorProfile, error)
+	Delete(ctx context.Context, id, actorID string) error
 }
 
 type pgValidatorRepository struct{}
@@ -309,6 +352,182 @@ func (r *pgValidatorRepository) AssignBackup(ctx context.Context, id, backupID, 
 	return profile.(*models.ValidatorProfile), nil
 }
 
+// Create membuat akun login (users) sekaligus profil roster (validator_profiles)
+// dalam satu transaksi, lalu mencatat audit. Email wajib unik.
+func (r *pgValidatorRepository) Create(ctx context.Context, p CreateValidatorParams, actorID string) (*models.ValidatorProfile, error) {
+	tx, err := database.Pool().Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	userID := "usr-" + uuid.NewString()
+	profileID := "VAL-" + uuid.NewString()
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO users (id, full_name, email, password_hash, role, npsn, school_name, sppg_id, status)
+		VALUES ($1, $2, $3, $4, 'validator', $5,
+			COALESCE((SELECT name FROM schools WHERE npsn = $5), ''),
+			COALESCE(NULLIF($6, ''), (SELECT sppg_id FROM schools WHERE npsn = $5), ''), 'active')`,
+		userID, p.FullName, p.Email, p.PasswordHash, p.NPSN, p.SPPGID); err != nil {
+		return nil, mapWriteError(err)
+	}
+
+	deviceName := p.Device
+	if deviceName == "" {
+		deviceName = "Belum Terikat"
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO validator_profiles
+			(id, user_id, satgas_id, name, nip, npsn, role, device, device_id, certification, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active')`,
+		profileID, userID, p.SatgasID, p.FullName, p.NIP, p.NPSN, p.Role, deviceName, deviceUnbound, p.Certification); err != nil {
+		return nil, mapWriteError(err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_id, action, target, detail, at)
+		VALUES ($1, $2, $3, $4, $5, NOW())`,
+		"AUDIT-"+uuid.NewString()[:8], actorID, AuditValidatorCreated, profileID,
+		auditDetail("email", p.Email, "akun validator dibuat")); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.Get(ctx, profileID)
+}
+
+// Update memperbarui identitas profil validator dan menyinkronkan nama, NPSN,
+// serta nama sekolah pada akun login yang tertaut.
+func (r *pgValidatorRepository) Update(ctx context.Context, id string, p UpdateValidatorParams, actorID string) (*models.ValidatorProfile, error) {
+	tx, err := database.Pool().Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var userID string
+	err = tx.QueryRow(ctx, `
+		UPDATE validator_profiles
+		SET name = $2, nip = $3, npsn = $4, satgas_id = $5, role = $6, certification = $7
+		WHERE id = $1
+		RETURNING COALESCE(user_id, '')`,
+		id, p.Name, p.NIP, p.NPSN, p.SatgasID, p.Role, p.Certification).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, mapWriteError(err)
+	}
+
+	if userID != "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE users
+			SET full_name = $2, npsn = $3,
+			    school_name = COALESCE((SELECT name FROM schools WHERE npsn = $3), ''),
+			    sppg_id = COALESCE(NULLIF($4, ''), (SELECT sppg_id FROM schools WHERE npsn = $3), sppg_id)
+			WHERE id = $1`, userID, p.Name, p.NPSN, p.SPPGID); err != nil {
+			return nil, mapWriteError(err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_id, action, target, detail, at)
+		VALUES ($1, $2, $3, $4, $5, NOW())`,
+		"AUDIT-"+uuid.NewString()[:8], actorID, AuditValidatorUpdated, id,
+		auditDetail("name", p.Name, p.Reason)); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.Get(ctx, id)
+}
+
+// UpdateCredentials mengganti email dan/atau kata sandi akun login. PasswordHash
+// kosong berarti kata sandi lama dipertahankan.
+func (r *pgValidatorRepository) UpdateCredentials(ctx context.Context, id, email, passwordHash, actorID, reason string) (*models.ValidatorProfile, error) {
+	tx, err := database.Pool().Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var userID string
+	err = tx.QueryRow(ctx, `SELECT COALESCE(user_id, '') FROM validator_profiles WHERE id = $1`, id).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if userID == "" {
+		return nil, ErrInvalidReference
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE users
+		SET email = $2,
+		    password_hash = CASE WHEN $3 = '' THEN password_hash ELSE $3 END
+		WHERE id = $1`, userID, email, passwordHash); err != nil {
+		return nil, mapWriteError(err)
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_id, action, target, detail, at)
+		VALUES ($1, $2, $3, $4, $5, NOW())`,
+		"AUDIT-"+uuid.NewString()[:8], actorID, AuditValidatorCredentials, id,
+		auditDetail("email", email, reason)); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.Get(ctx, id)
+}
+
+// Delete menghapus akun login validator; profil roster ikut terhapus lewat
+// ON DELETE CASCADE. Jejak audit tetap dicatat.
+func (r *pgValidatorRepository) Delete(ctx context.Context, id, actorID string) error {
+	tx, err := database.Pool().Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var name, userID string
+	err = tx.QueryRow(ctx, `SELECT name, COALESCE(user_id, '') FROM validator_profiles WHERE id = $1`, id).Scan(&name, &userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_id, action, target, detail, at)
+		VALUES ($1, $2, $3, $4, $5, NOW())`,
+		"AUDIT-"+uuid.NewString()[:8], actorID, AuditValidatorDeleted, id,
+		auditDetail("name", name, "akun validator dihapus")); err != nil {
+		return err
+	}
+
+	if userID != "" {
+		if _, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID); err != nil {
+			return mapWriteError(err)
+		}
+	} else if _, err := tx.Exec(ctx, `DELETE FROM validator_profiles WHERE id = $1`, id); err != nil {
+		return mapWriteError(err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 // run adalah pembungkus bertipe untuk runAudited milik slice validator.
 func (r *pgValidatorRepository) run(ctx context.Context, template string, m mutation) (any, error) {
 	return runAudited(ctx, template, m, func(ctx context.Context, id string) (any, error) {
@@ -320,4 +539,19 @@ func (r *pgValidatorRepository) run(ctx context.Context, template string, m muta
 func normalizeProfile(v *models.ValidatorProfile) {
 	v.AvgDurationSec = math.Round(v.AvgDurationSec*100) / 100
 	v.DeviceBound = v.DeviceID != "" && v.DeviceID != deviceUnbound
+}
+
+// mapWriteError menerjemahkan pelanggaran constraint PostgreSQL menjadi error
+// domain agar lapisan atas tidak perlu tahu kode SQLSTATE.
+func mapWriteError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505": // unique_violation
+			return ErrEmailTaken
+		case "23503": // foreign_key_violation
+			return ErrInvalidReference
+		}
+	}
+	return err
 }

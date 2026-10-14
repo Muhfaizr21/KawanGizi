@@ -38,10 +38,10 @@ const PRINCIPLES = [
 const ETHICS = [
   {
     t: 'Data tidak dipoles biar terlihat bagus',
-    d: 'Kalau sebuah porsi gagal deteksi, statusnya merah di layar dan masuk daftar tinjauan. Sistem tidak menahan findings demi membuat dasbor terlihat bersih.',
+    d: 'Kalau sebuah porsi gagal deteksi, statusnya merah di layar dan masuk daftar tinjauan. Sistem tidak menahan temuan demi membuat dasbor terlihat bersih.',
   },
   {
-    t: 'Harus dipakai orang yangBusy jam empat pagi',
+    t: 'Harus dipakai orang yang sibuk jam empat pagi',
     d: 'Alurnya sependek mungkin: pindai, baca hasil, lanjutkan. Tidak ada istilah teknis yang harus dihafal, tidak ada langkah yang bisa dilewati karena tidak paham.',
   },
   {
@@ -51,8 +51,8 @@ const ETHICS = [
 ]
 
 const TRACE_STEPS = [
-  { t: 'Dapur menimbang bahan', d: 'Gramur bahan tercatat saat produksi. Gizi dan batch terbentuk di titik ini.' },
-  { t: 'Makanan dikirim ke sekolah', d: 'Jam masak mengikuti batch. wherever pun masak, jam tetap tercatat.' },
+  { t: 'Dapur menimbang bahan', d: 'Gramatur bahan tercatat saat produksi. Gizi dan batch terbentuk di titik ini.' },
+  { t: 'Makanan dikirim ke sekolah', d: 'Jam masak mengikuti batch. Di mana pun masak, jam tetap tercatat.' },
   { t: 'Validator menyorot porsi', d: 'Kamera menangkap porsi. YOLOv8 menilai kelayakan fisik.' },
   { t: 'Keputusan di layar', d: 'Layak: dilanjutkan. Tidak layak: ditahan, dicatat, masuk dasbor Super Admin.' },
   { t: 'Dapur asal bisa ditunjuk', d: 'Dari satu temuan di satu sekolah, Super Admin bisa melihat batch asal yang sama masih berjalan di sekolah lain.' },
@@ -91,7 +91,7 @@ export function TentangKamiPage() {
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-relaxed text-gray-600">
             KawanGizi menghubungkan dapur SPPG, sekolah, dan satuan tugas pengawas gizi lewat satu
-            alur: pindai porsi, putuskan layak atau tidak, catat hasilnya. Built on computer
+            alur: pindai porsi, putuskan layak atau tidak, catat hasilnya. Berbasis computer
             vision, bukan catatan kertas yang tidak nyambung antar lokasi.
           </p>
           <dl className="mt-10 grid grid-cols-2 gap-6 border-t border-gray-200 pt-6 sm:grid-cols-4">
@@ -113,7 +113,7 @@ export function TentangKamiPage() {
       <section className="mx-auto max-w-5xl px-6 py-16 md:py-24">
         <p className="font-mono text-xs font-semibold uppercase tracking-widest text-emerald-800">Masalahnya</p>
         <h2 className="mt-3 max-w-xl text-3xl sm:text-4xl font-extrabold tracking-tight">
-          Ce lalu tidak tercatat, dan tidak ada yang bisaMLA cek.
+          Tidak tercatat, dan tidak ada yang bisa dicek.
         </h2>
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-gray-600">
           Program Makan Bergizi Gratis menyentuh ratusan ribu porsi setiap hari. Pada skala itu,

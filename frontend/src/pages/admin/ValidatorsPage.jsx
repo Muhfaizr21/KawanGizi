@@ -3,8 +3,10 @@ import { AdminLayout } from '../../components/layout/AdminLayout'
 import { useAuth } from '../../context/AuthContext'
 import { guardAdminAction } from '../../lib/adminActions'
 import { ValidatorPanel } from '../../components/dashboard/ValidatorPanel'
+import { ValidatorFormModal } from '../../components/dashboard/ValidatorFormModal'
 import {
   assignBackupValidator,
+  deleteValidator,
   fetchValidators,
   resetValidatorDevice,
   setValidatorStatus,
@@ -48,10 +50,17 @@ export function ValidatorsPage() {
   const [loadError, setLoadError] = useState(null)
   const [toast, setToast] = useState(null)
   const [toastTone, setToastTone] = useState('info')
+  // undefined = modal tertutup; null = mode tambah; objek = mode edit.
+  const [formValidator, setFormValidator] = useState(undefined)
 
   const notify = useCallback((message, tone = 'info') => {
     setToast(message)
     setToastTone(tone)
+  }, [])
+
+  const reload = useCallback(async () => {
+    const data = await fetchValidators()
+    setValidators(Array.isArray(data) ? data : [])
   }, [])
 
   useEffect(() => {
@@ -124,6 +133,65 @@ export function ValidatorsPage() {
     [user]
   )
 
+  const canManage = checkPermission('activate').allowed
+
+  const handleCreate = useCallback(() => {
+    if (!canManage) {
+      notify('Role Anda hanya memiliki izin baca untuk roster validator.', 'error')
+      return
+    }
+    setFormValidator(null)
+  }, [canManage, notify])
+
+  const handleEdit = useCallback(
+    (validator) => {
+      if (!canManage) {
+        notify('Role Anda hanya memiliki izin baca untuk roster validator.', 'error')
+        return
+      }
+      setFormValidator(validator)
+    },
+    [canManage, notify]
+  )
+
+  const handleSaved = useCallback(
+    async (created) => {
+      if (created) {
+        setValidators((prev) => [created, ...prev])
+        notify(`[SUKSES] Akun validator ${created.name} berhasil dibuat.`, 'success')
+        return
+      }
+      try {
+        await reload()
+        notify('[SUKSES] Perubahan akun validator tersimpan dan tercatat pada audit log.', 'success')
+      } catch (err) {
+        notify(err.message || 'Gagal memuat ulang roster.', 'error')
+      }
+    },
+    [notify, reload]
+  )
+
+  const handleDelete = useCallback(
+    async (validator) => {
+      const guard = guardAdminAction(user, 'Validators', 'delete', validator, ['validators.manage'])
+      if (!guard.allowed) {
+        notify(guard.message, 'error')
+        return { ok: false, message: guard.message }
+      }
+      try {
+        await deleteValidator(validator.id)
+        setValidators((prev) => prev.filter((v) => v.id !== validator.id))
+        notify(`[SUKSES] Akun validator ${validator.name} dihapus.`, 'success')
+        return { ok: true }
+      } catch (err) {
+        const message = err.message || 'Gagal menghapus akun validator.'
+        notify(`[GAGAL] ${validator.name}: ${message}`, 'error')
+        return { ok: false, message }
+      }
+    },
+    [user, notify]
+  )
+
   return (
     <AdminLayout activeMenu="validator" title="Profil Validator" badge="POSTGRESQL LIVE" showSearch={false}>
       {toast && (
@@ -156,7 +224,18 @@ export function ValidatorsPage() {
         onAction={runAction}
         canManage={checkPermission('activate').allowed}
         showToast={notify}
+        onCreate={handleCreate}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
       />
+
+      {formValidator !== undefined && (
+        <ValidatorFormModal
+          validator={formValidator}
+          onClose={() => setFormValidator(undefined)}
+          onSaved={handleSaved}
+        />
+      )}
     </AdminLayout>
   )
 }

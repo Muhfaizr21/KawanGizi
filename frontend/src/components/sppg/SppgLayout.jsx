@@ -8,10 +8,8 @@ import {
   School,
   ClipboardCheck,
   AlertTriangle,
-  Receipt,
   ShieldCheck,
   Menu,
-  X,
   Search,
   Bell,
   LogOut,
@@ -23,6 +21,8 @@ import {
 
 import { navigate } from '../../App'
 import { SPPG_PROFILE } from '../../data/sppgPortalData'
+import { useAuth } from '../../context/AuthContext'
+import { SppgAccountModal } from './SppgAccountModal'
 
 export const SPPG_SIDEBAR_MENU = [
   { id: 'dashboard', label: 'Dashboard Dapur', icon: LayoutDashboard, href: '/sppg' },
@@ -33,7 +33,6 @@ export const SPPG_SIDEBAR_MENU = [
   { id: 'schools', label: 'Sekolah Binaan', icon: School, href: '/sppg/schools' },
   { id: 'handover', label: 'Serah Terima BAST', icon: ClipboardCheck, href: '/sppg/handover' },
   { id: 'incidents', label: 'Insiden & Aduan', icon: AlertTriangle, href: '/sppg/incidents' },
-  { id: 'billing', label: 'Klaim & Tagihan', icon: Receipt, href: '/sppg/billing' },
   { id: 'compliance', label: 'Sertifikasi Sanitasi', icon: ShieldCheck, href: '/sppg/compliance' },
 ]
 
@@ -50,7 +49,14 @@ export function SppgLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
   const [isNotifOpen, setIsNotifOpen] = useState(false)
+  const [isAccountOpen, setIsAccountOpen] = useState(false)
   const notifRef = useRef(null)
+  const { user, logout } = useAuth()
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login')
+  }
 
 
   const showToast = (msg) => {
@@ -179,8 +185,6 @@ export function SppgLayout({
                           navigate('/sppg/handover')
                         } else if (item.href === '/sppg/incidents') {
                           navigate('/sppg/incidents')
-                        } else if (item.href === '/sppg/billing') {
-                          navigate('/sppg/billing')
                         } else if (item.href === '/sppg/compliance') {
                           navigate('/sppg/compliance')
                         } else {
@@ -230,8 +234,6 @@ export function SppgLayout({
                         navigate('/sppg/handover')
                       } else if (item.href === '/sppg/incidents') {
                         navigate('/sppg/incidents')
-                      } else if (item.href === '/sppg/billing') {
-                        navigate('/sppg/billing')
                       } else if (item.href === '/sppg/compliance') {
                         navigate('/sppg/compliance')
                       } else {
@@ -262,7 +264,7 @@ export function SppgLayout({
             </button>
 
             <button
-              onClick={() => navigate('/')}
+              onClick={handleLogout}
               className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-rose-300 hover:text-rose-100 hover:bg-rose-500/20 rounded-xl transition cursor-pointer"
             >
               <LogOut className="h-4 w-4" />
@@ -362,16 +364,25 @@ export function SppgLayout({
               )}
             </div>
 
-            {/* Chef Avatar */}
-            <div className="flex items-center gap-2.5 pl-2 sm:border-l sm:border-slate-200">
+            {/* Chef / Account Avatar — klik untuk informasi akun */}
+            <button
+              type="button"
+              onClick={() => setIsAccountOpen(true)}
+              aria-label="Informasi akun dapur"
+              className="flex items-center gap-2.5 pl-2 sm:border-l sm:border-slate-200 rounded-xl hover:bg-slate-100/70 transition cursor-pointer"
+            >
               <div className="h-9 w-9 rounded-2xl bg-[#23259C] text-white flex items-center justify-center font-semibold text-xs shrink-0">
-                CB
+                {accountInitials(user?.fullName)}
               </div>
-              <div className="hidden sm:block text-left leading-tight">
-                <p className="text-xs font-extrabold text-slate-900">{SPPG_PROFILE.headChef}</p>
-                <p className="text-[11px] text-slate-500 font-medium">Head Chef &bull; SPPG-01</p>
+              <div className="hidden sm:block text-left leading-tight max-w-[180px]">
+                <p className="text-xs font-extrabold text-slate-900 truncate">
+                  {user?.fullName || SPPG_PROFILE.headChef}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium truncate">
+                  Akun SPPG &bull; {user?.sppgId || SPPG_PROFILE.code}
+                </p>
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
@@ -394,6 +405,20 @@ export function SppgLayout({
           </div>
         </footer>
       </div>
+
+      {isAccountOpen && (
+        <SppgAccountModal
+          onClose={() => setIsAccountOpen(false)}
+          onProfileUpdated={() => showToast('Nama dapur berhasil diperbarui.')}
+        />
+      )}
     </div>
   )
+}
+
+function accountInitials(name) {
+  const parts = String(name || 'SPPG').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return 'SP'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
 }

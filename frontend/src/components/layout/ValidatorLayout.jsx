@@ -26,6 +26,7 @@ import { navigate } from '../../App'
 import { useAuth } from '../../context/AuthContext'
 import { getSelectedSchool, setSelectedSchool } from '../../lib/validatorSchool'
 import { SchoolSwitcherModal } from '../validator/SchoolSwitcherModal'
+import { ValidatorAccountModal } from './ValidatorAccountModal'
 
 export const VALIDATOR_SIDEBAR_MENU = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, href: '/validator' },
@@ -96,6 +97,7 @@ export function ValidatorLayout({
   const { user, logout } = useAuth()
   const [activeSchool, setActiveSchool] = useState(() => getSelectedSchool(user))
   const [isSchoolModalOpen, setIsSchoolModalOpen] = useState(false)
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
 
   // Listen to global school changes from anywhere in the app
   useEffect(() => {
@@ -246,6 +248,10 @@ export function ValidatorLayout({
                       key={item.id}
                       onClick={() => {
                         setIsSidebarOpen(false)
+                        if (item.id === 'settings') {
+                          setIsAccountModalOpen(true)
+                          return
+                        }
                         navigate(item.href)
                       }}
                       className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-50/80 transition-all text-left cursor-pointer"
@@ -448,11 +454,12 @@ export function ValidatorLayout({
                 )}
               </div>
 
-              {/* User Avatar & Name Profile (Donezo Circle Avatar) */}
-              <div 
-                onClick={() => setIsSchoolModalOpen(true)}
-                className="flex items-center gap-2.5 pl-1 sm:pl-2 cursor-pointer group"
-                title="Klik untuk mengganti sekolah"
+              {/* Topbar User Avatar — opens account info modal */}
+              <button
+                type="button"
+                onClick={() => setIsAccountModalOpen(true)}
+                className="flex items-center gap-2.5 pl-1 sm:pl-2 cursor-pointer group rounded-full hover:bg-slate-50/80 transition-colors pr-1"
+                title="Buka informasi akun & kata sandi"
               >
                 <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-amber-200 via-emerald-200 to-teal-400 p-[2px] shadow-xs shrink-0 group-hover:scale-105 transition-transform">
                   <div className="h-full w-full rounded-full bg-white flex items-center justify-center text-slate-800 font-extrabold text-xs">
@@ -464,10 +471,10 @@ export function ValidatorLayout({
                     {user?.fullName || 'Ibu Siti Aminah, S.Pd.'}
                   </p>
                   <p className="text-[10px] text-slate-400 font-medium truncate max-w-[150px] group-hover:text-emerald-700 transition-colors">
-                    {activeSchool?.name || user?.schoolName || 'SDN 01 Menteng Pagi'} ▾
+                    Kelola akun & kata sandi
                   </p>
                 </div>
-              </div>
+              </button>
             </div>
           </header>
 
@@ -515,6 +522,11 @@ export function ValidatorLayout({
           setToastMessage(`Sekolah aktif diganti ke: ${school.name}`)
         }}
       />
+
+      {/* Account Info Modal (nama + kata sandi) */}
+      {isAccountModalOpen && (
+        <ValidatorAccountModal onClose={() => setIsAccountModalOpen(false)} />
+      )}
     </div>
   )
 }

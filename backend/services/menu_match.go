@@ -51,7 +51,7 @@ var componentAliases = map[string][]string{
 	"yogurt":         {"yogurt", "minuman"},
 	"air_mineral":    {"air mineral", "minuman"},
 
-	// --- Kelas checkpoint makanan_indo.pt (29 makanan Indonesia) ---
+	// --- Kelas checkpoint makanan_minuman.pt (34 makanan & minuman Indonesia) ---
 	"nasi_goreng":         {"nasi goreng", "nasi"},
 	"mie_goreng":          {"mie goreng", "mie"},
 	"bakso":               {"bakso"},
@@ -75,11 +75,49 @@ var componentAliases = map[string][]string{
 	"kiwi":                {"kiwi", "buah"},
 	"nanas":               {"nanas", "buah"},
 	"stroberi":            {"stroberi", "buah"},
+	"cabai":               {"cabai", "sayur"},
+	"tomat":               {"tomat", "sayur"},
 	"biskuit_choco_chips": {"biskuit", "kue"},
 	"donat":               {"donat", "kue"},
 	"kentang_goreng":      {"kentang", "kripik"},
 
-	// --- Kelas checkpoint bawaan (Food-101) ---
+	// --- Kelas checkpoint buah.pt (26 sayur/buah, kelas berbahasa Inggris) ---
+	"avocado":          {"alpukat", "buah"},
+	"beans":            {"kacang", "sayur"},
+	"beet":             {"bit", "sayur"},
+	"bell_pepper":      {"paprika", "sayur"},
+	"broccoli":         {"brokoli", "sayur"},
+	"brus_capusta":     {"kubis", "sayur"},
+	"cabbage":          {"kubis", "sayur"},
+	"carrot":           {"wortel", "sayur"},
+	"cayliflower":      {"kembang kol", "sayur"},
+	"celery":           {"seledri", "sayur"},
+	"corn":             {"jagung", "sayur"},
+	"cucumber":         {"timun", "sayur"},
+	"eggplant":         {"terong", "terung", "sayur"},
+	"fasol":            {"kacang panjang", "kacang", "sayur"},
+	"garlic":           {"bawang", "sayur"},
+	"hot_pepper":       {"cabai", "sayur"},
+	"onion":            {"bawang", "sayur"},
+	"peas":             {"kacang polong", "kacang", "sayur"},
+	"potato":           {"kentang", "sayur"},
+	"pumpkin":          {"labu", "sayur"},
+	"rediska":          {"lobak", "sayur"},
+	"redka":            {"lobak", "sayur"},
+	"salad":            {"salad", "sayur"},
+	"squash_patisson":  {"labu siam", "labu", "sayur"},
+	"tomato":           {"tomat", "sayur"},
+	"vegetable_marrow": {"labu air", "labu", "sayur"},
+
+	// --- Kelas checkpoint minuman(susu).pt (merek susu) ---
+	"milk_life":         {"susu"},
+	"susu_frisian_flag": {"susu"},
+	"susu_ultramilk":    {"susu"},
+
+	// --- Kelas minuman pada makanan_minuman.pt ---
+	"susu": {"susu", "minuman"},
+
+	// --- Kelas checkpoint bawaan (Food-101, sudah tidak dipakai) ---
 	"chicken_curry":      {"ayam"},
 	"chicken_wings":      {"ayam"},
 	"chicken_quesadilla": {"ayam"},
@@ -109,9 +147,12 @@ var (
 )
 
 // normalizeClass mengubah nama kelas checkpoint ke bentuk seragam kunci alias.
+// Spasi dan tanda hubung disamakan menjadi garis bawah agar kelas bernama
+// majemuk seperti "Nasi Putih" atau "Bell Pepper" cocok dengan kunci alias.
 func normalizeClass(className string) string {
 	name := strings.ToLower(strings.TrimSpace(className))
 	name = strings.ReplaceAll(name, "-", "_")
+	name = strings.ReplaceAll(name, " ", "_")
 	return name
 }
 

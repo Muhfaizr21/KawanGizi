@@ -29,6 +29,7 @@ type SppgService interface {
 	Suspend(ctx context.Context, actorID, id string, req models.SuspendKitchenRequest) (*models.SPPGKitchen, error)
 	Reinstate(ctx context.Context, actorID, id string, req models.ReinstateKitchenRequest) (*models.SPPGKitchen, error)
 	UpdateQuota(ctx context.Context, actorID, id string, req models.UpdateQuotaRequest) (*models.SPPGKitchen, error)
+	UpdateProfile(ctx context.Context, actorID, id string, req models.UpdateSppgProfileRequest) (*models.SPPGKitchen, error)
 	RecordRecipeAudit(ctx context.Context, actorID, id string, req models.RecordRecipeAuditRequest) (*models.SPPGKitchen, error)
 }
 
@@ -185,6 +186,22 @@ func (s *sppgService) UpdateQuota(ctx context.Context, actorID, id string, req m
 	}
 
 	updated, err := s.repo.UpdateQuota(ctx, k.ID, req.Quota, strings.TrimSpace(req.Reason), actorID)
+	return updated, mapSppgErr(err)
+}
+
+// UpdateProfile mengganti nama dapur milik akun SPPG sendiri (self-service).
+func (s *sppgService) UpdateProfile(ctx context.Context, actorID, id string, req models.UpdateSppgProfileRequest) (*models.SPPGKitchen, error) {
+	k, err := s.mustGet(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	name := strings.TrimSpace(req.Name)
+	if length := len([]rune(name)); length < 3 || length > 120 {
+		return nil, ErrSppgInvalid
+	}
+
+	updated, err := s.repo.UpdateName(ctx, k.ID, name, actorID)
 	return updated, mapSppgErr(err)
 }
 

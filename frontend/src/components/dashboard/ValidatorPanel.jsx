@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { AlertTriangle, CheckCircle2, X, ShieldCheck, Clock, Lock, Users, AlertOctagon, Smartphone, Download, Printer } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, X, ShieldCheck, Clock, Lock, Users, AlertOctagon, Smartphone, Download, Printer, UserPlus, UserCog, Trash2, Loader2 } from 'lucide-react'
 import { ValidatorCharts } from './ValidatorCharts'
 import { MIN_INSPECTION_SEC, toValidatorViews } from './validatorView'
 
@@ -22,6 +22,10 @@ export function ValidatorPanel({
   onAction,
   canManage = true,
   showToast,
+  // Pusat akun validator (superadmin): buka modal tambah/edit dan hapus akun.
+  onCreate,
+  onEdit,
+  onDelete,
 }) {
   // Roster adalah data turunan dari props, bukan state lokal: setiap aksi
   // menulis ke server lalu parent memperbarui props, jadi tidak perlu salinan
@@ -45,6 +49,8 @@ export function ValidatorPanel({
   const [confirmAction, setConfirmAction] = useState(null) // { type, validator, payload, title, desc, ... }
   const [warnNote, setWarnNote] = useState('')
   const [backupChoice, setBackupChoice] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null) // validator yang akan dihapus
+  const [pendingDelete, setPendingDelete] = useState(false)
 
   // Guru piket cadangan hanya bisa milik sekolah yang sama dan harus aktif.
   const eligibleBackups = useMemo(() => {
@@ -263,6 +269,16 @@ export function ValidatorPanel({
     setConfirmAction(null)
   }
 
+  // Hapus akun validator memerlukan konfirmasi kedua; dialog tetap terbuka
+  // bila server menolak agar pengguna melihat pesan dan bisa mencoba lagi.
+  const executeDelete = async () => {
+    if (!confirmDelete) return
+    setPendingDelete(true)
+    const res = await onDelete?.(confirmDelete)
+    setPendingDelete(false)
+    if (res?.ok !== false) setConfirmDelete(null)
+  }
+
   return (
     <div className="space-y-6">
       {/* ====================================================================
@@ -274,6 +290,16 @@ export function ValidatorPanel({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {canManage && onCreate && (
+            <button
+              onClick={onCreate}
+              className="px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition flex items-center gap-2 shadow-2xs cursor-pointer hover:shadow-xs focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>Tambah Validator</span>
+            </button>
+          )}
+
           <button
             onClick={exportCsv}
             disabled={filtered.length === 0}
@@ -993,6 +1019,37 @@ export function ValidatorPanel({
                                   <Users className="h-4 w-4 shrink-0" />
                                   <span>Tugaskan petugas cadangan</span>
                                 </button>
+                                {(onEdit || onDelete) && (
+                                  <div className="my-1 border-t border-slate-100" />
+                                )}
+
+                                {onEdit && (
+                                  <button
+                                    role="menuitem"
+                                    onClick={() => {
+                                      setOpenMenuId(null)
+                                      onEdit(v)
+                                    }}
+                                    className="w-full px-3 py-2 text-[11px] text-left text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-slate-600"
+                                  >
+                                    <UserCog className="h-4 w-4 shrink-0" />
+                                    <span>Edit akun &amp; kredensial</span>
+                                  </button>
+                                )}
+
+                                {onDelete && (
+                                  <button
+                                    role="menuitem"
+                                    onClick={() => {
+                                      setOpenMenuId(null)
+                                      setConfirmDelete(v)
+                                    }}
+                                    className="w-full px-3 py-2 text-[11px] text-left text-rose-700 hover:bg-rose-50 flex items-center gap-2 font-medium cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-rose-700"
+                                  >
+                                    <Trash2 className="h-4 w-4 shrink-0" />
+                                    <span>Hapus akun validator</span>
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}
@@ -1550,6 +1607,60 @@ export function ValidatorPanel({
                 className={`px-4 py-2 text-xs font-bold text-white rounded-xl transition shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${confirmAction.btnClass}`}
               >
                 {pendingAction ? 'Memproses…' : confirmAction.btnText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          7b. DIALOG KONFIRMASI HAPUS AKUN VALIDATOR (PUSAT AKUN)
+          ==================================================================== */}
+      {confirmDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Konfirmasi hapus akun validator"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
+          onClick={() => !pendingDelete && setConfirmDelete(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-100 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-extrabold text-slate-900">Hapus Akun Validator</h3>
+                <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                  Akun login dan profil roster akan dihapus permanen. Riwayat pindai tetap tersimpan pada
+                  log audit.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-[11px] text-slate-700">
+              <span className="font-semibold text-slate-800">{confirmDelete.name}</span>
+              {confirmDelete.satgasId ? ` (${confirmDelete.satgasId})` : ''} &bull; {confirmDelete.school}
+            </div>
+
+            <div className="pt-1 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                disabled={pendingDelete}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer disabled:opacity-50"
+              >
+                Batalkan
+              </button>
+              <button
+                onClick={executeDelete}
+                disabled={pendingDelete}
+                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition shadow-sm cursor-pointer disabled:opacity-60"
+              >
+                {pendingDelete ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {pendingDelete ? 'Menghapus…' : 'Hapus Permanen'}
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { Fragment, useState, useMemo, useEffect, useRef } from 'react'
 import {
   Search,
   Download,
@@ -15,10 +15,12 @@ import {
   Scale,
   ChevronDown,
   Info,
-  FileCheck
+  FileCheck,
+  UserRound
 } from 'lucide-react'
 import { SppgCharts } from './SppgCharts'
 import { Code, Figure, RowAction, StatusDot } from './tableKit'
+import { SppgAccountManagerModal } from './SppgAccountManagerModal'
 
 /**
  * ==============================================================================
@@ -34,6 +36,7 @@ export function SppgPanel({
   onAction,
   canManage,
   canDiscipline,
+  canManageAccounts = false,
   loading,
   showToast
 }) {
@@ -50,7 +53,9 @@ export function SppgPanel({
     setSelectedSppg((cur) => (cur ? sppgList.find((k) => k.id === cur.id) || null : cur))
   }, [sppgList])
   const [drawerTab, setDrawerTab] = useState('overview') // 'overview' | 'scorecard' | 'schools' | 'recipe' | 'logs'
-  const [openMenuId, setOpenMenuId] = useState(null)
+  // Menu aksi baris dirender melayang (position: fixed) agar tidak terpotong
+  // oleh overflow tabel; menyimpan koordinat anchor-nya.
+  const [openMenu, setOpenMenu] = useState(null) // { id, top, left }
 
   // Superadmin Action Modals
   const [warningModalData, setWarningModalData] = useState(null) // { sppg, warningType: 'SP-1' | 'SP-2' }
@@ -59,14 +64,17 @@ export function SppgPanel({
   const [recipeAuditModalData, setRecipeAuditModalData] = useState(null) // { sppg }
   const [quotaModalData, setQuotaModalData] = useState(null) // { sppg, newQuota, reason }
   const [schoolsModalData, setSchoolsModalData] = useState(null) // { sppg }
+  const [accountModalSppg, setAccountModalSppg] = useState(null) // dapur (view) yang akun loginnya dikelola
+  const [expandedId, setExpandedId] = useState(null) // baris SPPG yang daftar sekolahnya sedang dibuka
 
   const dropdownRef = useRef(null)
 
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
+      if (e.target.closest?.('[data-row-menu-toggle]')) return
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setOpenMenuId(null)
+        setOpenMenu(null)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -84,18 +92,37 @@ export function SppgPanel({
         setRecipeAuditModalData(null)
         setQuotaModalData(null)
         setSchoolsModalData(null)
-        setOpenMenuId(null)
+        setAccountModalSppg(null)
+        setOpenMenu(null)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Tutup dropdown melayang saat halaman digulir/di-resize agar tak nyangkut.
+  useEffect(() => {
+    if (!openMenu) return
+    const close = () => setOpenMenu(null)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [openMenu])
+
   // Distinct cities for filter dropdown
   const cities = useMemo(() => {
     const set = new Set(sppgList.map((s) => s.city).filter(Boolean))
     return Array.from(set)
   }, [sppgList])
+
+  // Dapur yang menu aksinya sedang terbuka (dipakai dropdown melayang).
+  const menuSppg = useMemo(
+    () => (openMenu ? sppgList.find((k) => k.id === openMenu.id) || null : null),
+    [openMenu, sppgList]
+  )
 
   // Advanced Filtering
   const filtered = useMemo(() => {
@@ -222,7 +249,7 @@ export function SppgPanel({
 
   // 1. ACTION: Penerbitan Surat Peringatan (SP-1 / SP-2)
   const handleOpenWarningModal = (sppg) => {
-    setOpenMenuId(null)
+    setOpenMenu(null)
     const letters = sppg.warningLetters || []
     const hasSp1 = letters.some((w) => w.type === 'SP-1')
     const hasSp2 = letters.some((w) => w.type === 'SP-2')
@@ -276,7 +303,7 @@ export function SppgPanel({
   }
 
   const handleOpenReinstateModal = (sppg) => {
-    setOpenMenuId(null)
+    setOpenMenu(null)
     setReinstateModalData({
       sppg,
       reason: 'Audit sanitasi ulang & perbaikan fasilitas telah diverifikasi oleh tim pengawas BGN.',
@@ -296,7 +323,7 @@ export function SppgPanel({
 
   // 2. ACTION: Penangguhan Izin Distribusi (Suspension)
   const handleOpenSuspensionModal = (sppg) => {
-    setOpenMenuId(null)
+    setOpenMenu(null)
     // Find viable alternative kitchens nearby
     const alternatives = sppgList.filter((k) => k.id !== sppg.id && k.status === 'active')
 
@@ -312,7 +339,7 @@ export function SppgPanel({
 
   // 3. ACTION: Audit Gramatur Resep (TKPI Inspection)
   const handleOpenRecipeAudit = (sppg) => {
-    setOpenMenuId(null)
+    setOpenMenu(null)
     setRecipeAuditModalData({
       sppg,
       tkpiStatus: sppg.recipeAudit.tkpiStatus || 'COMPLIANT',
@@ -336,7 +363,7 @@ export function SppgPanel({
 
   // 4. ACTION: Penetapan Kuota Produksi
   const handleOpenQuotaModal = (sppg) => {
-    setOpenMenuId(null)
+    setOpenMenu(null)
     setQuotaModalData({
       sppg,
       newQuota: sppg.capacity.activeQuota,
@@ -729,25 +756,25 @@ export function SppgPanel({
           ==================================================================== */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs min-w-[980px] table-fixed">
+          <table className="w-full text-left text-xs min-w-[1040px] table-fixed">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                <th className={`px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[29%]`}>
+                <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[26%]">
                   Dapur SPPG
                 </th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[18%]">
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[16%]">
                   Kapasitas terpakai
                 </th>
-                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[20%]">
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[18%]">
                   Rapor akreditasi
                 </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[16%]">
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[15%]">
                   Sertifikat
                 </th>
-                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[11%]">
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[13%]">
                   Status
                 </th>
-                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[6%]">
+                <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-500 w-[12%]">
                   <span className="sr-only">Aksi</span>
                 </th>
               </tr>
@@ -793,6 +820,7 @@ export function SppgPanel({
                   else if (sppg.certificates.haccp.grade.includes('Gagal')) haccpDisplay = 'Belum Lolos'
 
                   return (
+                    <Fragment key={sppg.id}>
                     <tr
                       onClick={() => setSelectedSppg(sppg)}
                       onKeyDown={(e) => {
@@ -810,6 +838,26 @@ export function SppgPanel({
                       {/* Col 1: Dapur SPPG & PIC */}
                       <td className={`px-5 ${paddingY}`}>
                         <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setExpandedId(expandedId === sppg.id ? null : sppg.id)
+                            }}
+                            aria-expanded={expandedId === sppg.id}
+                            aria-label={
+                              expandedId === sppg.id
+                                ? `Tutup daftar sekolah ${sppg.name}`
+                                : `Tampilkan daftar sekolah ${sppg.name}`
+                            }
+                            className="p-1 -ml-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          >
+                            {expandedId === sppg.id ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                          </button>
                           <div className="h-9 w-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-semibold text-xs shrink-0">
                             {initials}
                           </div>
@@ -846,11 +894,17 @@ export function SppgPanel({
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            setSchoolsModalData({ sppg })
+                            setExpandedId(expandedId === sppg.id ? null : sppg.id)
                           }}
-                          className="mt-1.5 text-[11px] font-medium text-blue-700 hover:underline cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 rounded"
+                          aria-expanded={expandedId === sppg.id}
+                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 hover:underline cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 rounded"
                         >
-                          {sppg.assignedSchools.length} sekolah Recipient
+                          {expandedId === sppg.id ? (
+                            <ChevronDown className="h-3 w-3" />
+                          ) : (
+                            <ChevronRight className="h-3 w-3" />
+                          )}
+                          {sppg.assignedSchools.length} sekolah binaan
                         </button>
                       </td>
 
@@ -895,77 +949,74 @@ export function SppgPanel({
                       <td className={`px-5 ${paddingY} text-right`} onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <RowAction onClick={() => setSelectedSppg(sppg)}>Detail</RowAction>
-                          <div className="relative">
-                            <button
-                              type="button"
-                              onClick={() => setOpenMenuId(openMenuId === sppg.id ? null : sppg.id)}
-                              aria-label={`Aksi lain untuk ${sppg.name}`}
-                              aria-expanded={openMenuId === sppg.id}
-                              className="p-2 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                            >
-                              <ChevronDown className="h-4 w-4" />
-                            </button>
-
-                            {openMenuId === sppg.id && (
-                              <div
-                                ref={dropdownRef}
-                                className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-30 text-xs"
-                              >
-                                <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-500 border-b border-slate-100">
-                                  Tindakan untuk {sppg.code}
-                                </div>
-                                <button
-                                  onClick={() => handleOpenWarningModal(sppg)}
-                                  className="w-full text-left px-3 py-2 flex items-center gap-2 text-amber-800 hover:bg-amber-50 font-medium transition cursor-pointer"
-                                >
-                                  <AlertTriangle className="h-3.5 w-3.5" />
-                                  <span>Terbitkan Surat Peringatan</span>
-                                </button>
-                                <button
-                                  onClick={() => handleOpenRecipeAudit(sppg)}
-                                  className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
-                                >
-                                  <Scale className="h-3.5 w-3.5 text-blue-800" />
-                                  <span>Audit Gramatur Resep (TKPI)</span>
-                                </button>
-                                <button
-                                  onClick={() => handleOpenQuotaModal(sppg)}
-                                  className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
-                                >
-                                  <Sliders className="h-3.5 w-3.5 text-blue-800" />
-                                  <span>Tetapkan Alokasi Kuota</span>
-                                </button>
-                                <button
-                                  onClick={() => setSchoolsModalData({ sppg })}
-                                  className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
-                                >
-                                  <Building2 className="h-3.5 w-3.5 text-blue-800" />
-                                  <span>Daftar Sekolah Suplai</span>
-                                </button>
-                                <div className="my-1 border-t border-slate-100" />
-                                {isSuspended ? (
-                                  <button
-                                    onClick={() => handleOpenReinstateModal(sppg)}
-                                    className="w-full text-left px-3 py-2 flex items-center gap-2 font-medium text-emerald-700 hover:bg-emerald-50 cursor-pointer transition"
-                                  >
-                                    <CheckCircle2 className="h-3.5 w-3.5" />
-                                    <span>Pulihkan Izin (Reaktivasi)</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleOpenSuspensionModal(sppg)}
-                                    className="w-full text-left px-3 py-2 flex items-center gap-2 font-medium text-rose-800 hover:bg-rose-50 cursor-pointer transition"
-                                  >
-                                    <Lock className="h-3.5 w-3.5" />
-                                    <span>Bekukan Izin Distribusi</span>
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            type="button"
+                            data-row-menu-toggle
+                            onClick={(e) => {
+                              if (openMenu?.id === sppg.id) {
+                                setOpenMenu(null)
+                                return
+                              }
+                              const rect = e.currentTarget.getBoundingClientRect()
+                              const width = 224
+                              const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+                              setOpenMenu({ id: sppg.id, top: rect.bottom + 4, left })
+                            }}
+                            aria-label={`Aksi lain untuk ${sppg.name}`}
+                            aria-expanded={openMenu?.id === sppg.id}
+                            className="p-2 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
+
+                    {expandedId === sppg.id && (
+                      <tr className="bg-slate-50/70">
+                        <td colSpan={6} className="px-5 pb-4 pt-0">
+                          <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                            <div className="flex items-center justify-between gap-2 mb-2.5">
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                Daftar Sekolah Binaan ({sppg.assignedSchools.length})
+                              </p>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                schools.sppg_id = {sppg.id}
+                              </span>
+                            </div>
+
+                            {sppg.assignedSchools.length === 0 ? (
+                              <p className="text-xs text-slate-500">
+                                Belum ada sekolah yang ditugaskan ke dapur ini.
+                              </p>
+                            ) : (
+                              <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                                {sppg.assignedSchools.map((sch) => (
+                                  <li
+                                    key={sch.id}
+                                    className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-semibold text-slate-800 truncate" title={sch.name}>
+                                        {sch.name}
+                                      </p>
+                                      <p className="text-[11px] text-slate-500 font-mono">
+                                        NPSN {sch.npsn}
+                                        {sch.city && sch.city !== '—' ? ` · ${sch.city}` : ''}
+                                      </p>
+                                    </div>
+                                    <span className="text-[11px] font-mono text-slate-600 shrink-0 whitespace-nowrap">
+                                      {sch.portions.toLocaleString('id-ID')} porsi
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })
               )}
@@ -1973,6 +2024,14 @@ export function SppgPanel({
                 >
                   Ubah Kuota
                 </button>
+                {canManageAccounts && (
+                  <button
+                    onClick={() => setAccountModalSppg(selectedSppg)}
+                    className="px-3 py-1.5 rounded-xl border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold text-xs transition cursor-pointer"
+                  >
+                    Kelola Akun
+                  </button>
+                )}
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -2078,6 +2137,94 @@ export function SppgPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ====================================================================
+          DROPDOWN AKSI BARIS (MELAYANG) — dirender fixed agar tak terpotong
+          oleh wadah tabel ber-overflow.
+          ==================================================================== */}
+      {menuSppg && openMenu && (
+        <div
+          ref={dropdownRef}
+          style={{ position: 'fixed', top: openMenu.top, left: openMenu.left }}
+          className="w-56 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-50 text-xs"
+        >
+          <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-500 border-b border-slate-100">
+            Tindakan untuk {menuSppg.code}
+          </div>
+          <button
+            onClick={() => handleOpenWarningModal(menuSppg)}
+            className="w-full text-left px-3 py-2 flex items-center gap-2 text-amber-800 hover:bg-amber-50 font-medium transition cursor-pointer"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            <span>Terbitkan Surat Peringatan</span>
+          </button>
+          <button
+            onClick={() => handleOpenRecipeAudit(menuSppg)}
+            className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
+          >
+            <Scale className="h-3.5 w-3.5 text-blue-800" />
+            <span>Audit Gramatur Resep (TKPI)</span>
+          </button>
+          <button
+            onClick={() => handleOpenQuotaModal(menuSppg)}
+            className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
+          >
+            <Sliders className="h-3.5 w-3.5 text-blue-800" />
+            <span>Tetapkan Alokasi Kuota</span>
+          </button>
+          <button
+            onClick={() => {
+              setSchoolsModalData({ sppg: menuSppg })
+              setOpenMenu(null)
+            }}
+            className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
+          >
+            <Building2 className="h-3.5 w-3.5 text-blue-800" />
+            <span>Daftar Sekolah Suplai</span>
+          </button>
+          {canManageAccounts && (
+            <button
+              onClick={() => {
+                setAccountModalSppg(menuSppg)
+                setOpenMenu(null)
+              }}
+              className="w-full text-left px-3 py-2 flex items-center gap-2 text-slate-700 hover:bg-slate-50 font-medium transition cursor-pointer"
+            >
+              <UserRound className="h-3.5 w-3.5 text-blue-800" />
+              <span>Kelola Akun Login</span>
+            </button>
+          )}
+          <div className="my-1 border-t border-slate-100" />
+          {menuSppg.status === 'suspended' ? (
+            <button
+              onClick={() => handleOpenReinstateModal(menuSppg)}
+              className="w-full text-left px-3 py-2 flex items-center gap-2 font-medium text-emerald-700 hover:bg-emerald-50 cursor-pointer transition"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>Pulihkan Izin (Reaktivasi)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => handleOpenSuspensionModal(menuSppg)}
+              className="w-full text-left px-3 py-2 flex items-center gap-2 font-medium text-rose-800 hover:bg-rose-50 cursor-pointer transition"
+            >
+              <Lock className="h-3.5 w-3.5" />
+              <span>Bekukan Izin Distribusi</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ====================================================================
+          MODAL: KELOLA AKUN LOGIN DAPUR SPPG (SUPERADMIN)
+          ==================================================================== */}
+      {accountModalSppg && (
+        <SppgAccountManagerModal
+          sppg={accountModalSppg}
+          onClose={() => setAccountModalSppg(null)}
+          showToast={showToast}
+        />
       )}
     </div>
   )

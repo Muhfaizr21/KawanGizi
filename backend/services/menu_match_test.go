@@ -57,6 +57,46 @@ func TestNormalizeComponentStripsWeightAndPunctuation(t *testing.T) {
 	}
 }
 
+func TestNormalizeClassUnifiesSpacesAndHyphens(t *testing.T) {
+	cases := map[string]string{
+		"Nasi Putih":      "nasi_putih",
+		"squash-patisson": "squash_patisson",
+		"Bell Pepper":     "bell_pepper",
+	}
+	for in, want := range cases {
+		if got := normalizeClass(in); got != want {
+			t.Fatalf("normalizeClass(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestMatchCompartmentSpelledOutMenuClassStillMatches(t *testing.T) {
+	// makanan_minuman.pt memakai nama kelas majemuk berspasi ("Nasi Putih").
+	comp := CompartmentPrediction{Cell: "A1", MenuClassName: "Nasi Putih", MenuConfidence: 0.9}
+	got := matchCompartment(comp, expectedFor("Nasi Putih Organik & Empal Daging Sapi Suwir"))
+	if got.Status != models.CompartmentStatusMatch || !strings.Contains(got.Component, "nasi putih") {
+		t.Fatalf("spaced class name must still match, got %+v", got)
+	}
+}
+
+func TestMatchCompartmentProduceClassCoversComponent(t *testing.T) {
+	// Kelas buah.pt berbahasa Inggris dipetakan ke komponen menu Indonesia.
+	comp := CompartmentPrediction{Cell: "A2", MenuClassName: "tomato", MenuConfidence: 0.9}
+	got := matchCompartment(comp, expectedFor("Nasi Putih & Tomat Segar"))
+	if got.Status != models.CompartmentStatusMatch || !strings.Contains(got.Component, "tomat") {
+		t.Fatalf("produce alias should cover tomato component, got %+v", got)
+	}
+}
+
+func TestMatchCompartmentDrinkBrandCoversMilkComponent(t *testing.T) {
+	// Kelas minuman(susu).pt adalah merek susu; semua mewakili komponen "susu".
+	comp := CompartmentPrediction{Cell: "A3", MenuClassName: "milk life", MenuConfidence: 0.9}
+	got := matchCompartment(comp, expectedFor("Nasi Putih & Susu UHT"))
+	if got.Status != models.CompartmentStatusMatch || !strings.Contains(got.Component, "susu") {
+		t.Fatalf("drink alias should cover susu component, got %+v", got)
+	}
+}
+
 func TestMatchCompartmentConfidentHitAgainstBatchMenu(t *testing.T) {
 	comp := CompartmentPrediction{Index: 1, Cell: "A2", MenuClassName: "empal_suwir", MenuConfidence: 0.82}
 	got := matchCompartment(comp, expectedFor("Nasi Ulen Empal Daging Suwir & Sayur Lodeh"))

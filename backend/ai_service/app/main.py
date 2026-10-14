@@ -8,13 +8,13 @@ backend/ai_service:
 Arsitektur dua-tahap (two-stage):
   1. objek_deteksi.pt (detection, 11 kategori umum: buah, lauk, sayur, ...)
      melokalisasi tiap objek makanan pada foto sehingga recall lebih tinggi.
-  2. makanan_indo.pt (detection, 29 kelas makanan Indonesia) menamai tiap
-     crop hasil tahap 1 dengan nama makanan dalam bahasa Indonesia.
+  2. makanan_minuman.pt (detection, 34 kelas makanan & minuman Indonesia)
+     menamai tiap crop hasil tahap 1 dengan nama dalam bahasa Indonesia.
 
 Kesegaran hidangan diprediksi model klasifikasi terpisah
 (cooked_food_freshness_best.pt). Bila detektor tidak menemukan makanan,
 dipakai pembagian grid nampan baku sebagai fallback; tiap sekat tetap
-dinamai memakai makanan_indo.pt.
+dinamai memakai makanan_minuman.pt.
 """
 
 from __future__ import annotations
@@ -32,15 +32,28 @@ from app import labels, tray
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.normpath(os.path.join(BASE_DIR, '..', '..', 'model_ai'))
-# Model penamaan: detektor 29 kelas makanan Indonesia (nama sudah bahasa Indonesia).
+# Model penamaan: detektor 34 kelas makanan & minuman Indonesia
+# (nama kelas sudah berbahasa Indonesia).
 MENU_MODEL_PATH = os.environ.get(
     'AI_MENU_MODEL_PATH',
-    os.path.join(MODEL_DIR, 'makanan_indo.pt'),
+    os.path.join(MODEL_DIR, 'makanan_minuman.pt'),
 )
 # Model lokalisasi: detektor kategori umum makanan.
 DETECTOR_MODEL_PATH = os.environ.get(
     'AI_DETECTOR_MODEL_PATH',
     os.path.join(MODEL_DIR, 'objek_deteksi.pt'),
+)
+# Model penamaan buah & sayur: detektor 26 kelas sayur/buah.
+PRODUCE_MODEL_PATH = os.environ.get(
+    'AI_PRODUCE_MODEL_PATH',
+    os.path.join(MODEL_DIR, 'buah.pt'),
+)
+# Model penyaring non-makanan: detektor COCO (YOLOv8n) untuk membuang objek
+# seperti orang dari hasil pemindaian. Opsional; bila berkas tidak ada,
+# penyaringan dilewati.
+PERSON_MODEL_PATH = os.environ.get(
+    'AI_PERSON_MODEL_PATH',
+    os.path.join(MODEL_DIR, 'orang.pt'),
 )
 FRESHNESS_MODEL_PATH = os.environ.get(
     'AI_FRESHNESS_MODEL_PATH',
@@ -63,37 +76,83 @@ INVALID_MENU_LABELS = {
     if label.strip()
 }
 MAX_COMPARTMENTS = int(os.environ.get('AI_MAX_COMPARTMENTS', '12'))
+# Kategori deteksi yang memakai model buah.pt untuk penamaan buah/sayur.
+PRODUCE_CATEGORIES = {
+    label.strip().lower()
+    for label in os.environ.get('AI_PRODUCE_CATEGORIES', 'buah,sayur').split(',')
+    if label.strip()
+}
+# Kategori deteksi yang memakai makanan_minuman.pt untuk penamaan minuman.
+DRINK_CATEGORIES = {
+    label.strip().lower()
+    for label in os.environ.get('AI_DRINK_CATEGORIES', 'minuman').split(',')
+    if label.strip()
+}
+# Kategori deteksi yang memakai makanan_minuman.pt untuk penamaan makanan pokok.
+STAPLE_CATEGORIES = {
+    label.strip().lower()
+    for label in os.environ.get('AI_STAPLE_CATEGORIES', 'makanan_pokok').split(',')
+    if label.strip()
+}
+# Kelas COCO "person" dan ambang keyakinan untuk penyaringan orang.
+PERSON_CLASS_ID = int(os.environ.get('AI_PERSON_CLASS_ID', '0'))
+PERSON_CONF = float(os.environ.get('AI_PERSON_CONF', '0.35'))
+# Bagian minimal kotak makanan yang tertutup kotak orang agar dibuang (0-1).
+PERSON_OVERLAP = float(os.environ.get('AI_PERSON_OVERLAP', '0.5'))
+# Perluasan kotak deteksi (fraksi tiap sisi) sebelum penamaan. Model penamaan
+# jauh lebih andal bila crop menyertakan sedikit konteks sekeliling objek.
+CROP_PAD = float(os.environ.get('AI_CROP_PAD', '0.3'))
 
 _menu_model: YOLO | None = None
 _detector_model: YOLO | None = None
+_produce_model: YOLO | None = None
+_person_model: YOLO | None = None
 _freshness_model: YOLO | None = None
 _menu_names: dict[int, str] = {}
 _detector_names: dict[int, str] = {}
+_produce_names: dict[int, str] = {}
 _freshness_names: dict[int, str] = {}
 _valid_menu_ids: list[int] = []
 
 
 def _load_model() -> None:
-    global _menu_model, _detector_model, _freshness_model
-    global _menu_names, _detector_names, _freshness_names, _valid_menu_ids
-    for path in (MENU_MODEL_PATH, DETECTOR_MODEL_PATH, FRESHNESS_MODEL_PATH):
+    global _menu_model, _detector_model, _produce_model, _person_model, _freshness_model
+    global _menu_names, _detector_names, _produce_names, _freshness_names, _valid_menu_ids
+    for path in (
+        MENU_MODEL_PATH,
+        DETECTOR_MODEL_PATH,
+        PRODUCE_MODEL_PATH,
+        FRESHNESS_MODEL_PATH,
+    ):
         if not os.path.exists(path):
             raise FileNotFoundError(f'Model tidak ditemukan: {path}')
 
     _menu_model = YOLO(MENU_MODEL_PATH)
     _detector_model = YOLO(DETECTOR_MODEL_PATH)
+    _produce_model = YOLO(PRODUCE_MODEL_PATH)
     _freshness_model = YOLO(FRESHNESS_MODEL_PATH)
     if _menu_model.task != 'detect':
-        raise RuntimeError('Model menu makanan_indo harus berupa checkpoint detection YOLO.')
+        raise RuntimeError('Model menu makanan_minuman harus berupa checkpoint detection YOLO.')
     if _detector_model.task != 'detect':
         raise RuntimeError('Model deteksi objek harus berupa checkpoint detection YOLO.')
+    if _produce_model.task != 'detect':
+        raise RuntimeError('Model buah/sayur harus berupa checkpoint detection YOLO.')
     if _freshness_model.task != 'classify':
         raise RuntimeError('Model kesegaran harus berupa checkpoint klasifikasi YOLO.')
     _menu_names = {int(k): str(v) for k, v in _menu_model.names.items()}
     _detector_names = {int(k): str(v) for k, v in _detector_model.names.items()}
+    _produce_names = {int(k): str(v) for k, v in _produce_model.names.items()}
     _freshness_names = {int(k): str(v) for k, v in _freshness_model.names.items()}
-    if not _menu_names or not _detector_names or not _freshness_names:
+    if not all((_menu_names, _detector_names, _produce_names, _freshness_names)):
         raise RuntimeError('Checkpoint tidak memiliki metadata kelas.')
+
+    if os.path.exists(PERSON_MODEL_PATH):
+        _person_model = YOLO(PERSON_MODEL_PATH)
+        if _person_model.task != 'detect':
+            raise RuntimeError('Model penyaring orang harus berupa checkpoint detection YOLO.')
+    else:
+        _person_model = None
+        print(f'! Model penyaring orang tidak ditemukan, dilewati: {PERSON_MODEL_PATH}')
 
     _valid_menu_ids = [
         class_id
@@ -105,6 +164,9 @@ def _load_model() -> None:
 
     print(f'Model menu dimuat: {MENU_MODEL_PATH} ({len(_menu_names)} kelas: {_menu_names})')
     print(f'Model deteksi dimuat: {DETECTOR_MODEL_PATH} ({len(_detector_names)} kelas: {_detector_names})')
+    print(f'Model buah/sayur dimuat: {PRODUCE_MODEL_PATH} ({len(_produce_names)} kelas: {_produce_names})')
+    if _person_model is not None:
+        print(f'Model penyaring orang dimuat: {PERSON_MODEL_PATH}')
     print(f'Model kesegaran dimuat: {FRESHNESS_MODEL_PATH} ({len(_freshness_names)} kelas: {_freshness_names})')
     print(f'Kelas menu valid dipakai untuk prediksi: {len(_valid_menu_ids)}')
 
@@ -120,7 +182,12 @@ app = FastAPI(title='MBG AI Service', version='1.0.0', lifespan=lifespan)
 
 @app.get('/health')
 def health() -> dict:
-    loaded = _menu_model is not None and _detector_model is not None and _freshness_model is not None
+    loaded = (
+        _menu_model is not None
+        and _detector_model is not None
+        and _produce_model is not None
+        and _freshness_model is not None
+    )
     return {
         'status': 'ok' if loaded else 'unavailable',
         'model_loaded': loaded,
@@ -129,6 +196,7 @@ def health() -> dict:
             'path': MENU_MODEL_PATH,
             'task': _menu_model.task if _menu_model is not None else None,
             'classes': list(_menu_names.values()),
+            'categories': sorted(DRINK_CATEGORIES | STAPLE_CATEGORIES),
         },
         'detector_model': {
             'loaded': _detector_model is not None,
@@ -137,7 +205,22 @@ def health() -> dict:
             'classes': list(_detector_names.values()),
             'non_food_categories': sorted(NON_FOOD_CATEGORIES),
         },
+        'produce_model': {
+            'loaded': _produce_model is not None,
+            'path': PRODUCE_MODEL_PATH,
+            'task': _produce_model.task if _produce_model is not None else None,
+            'classes': list(_produce_names.values()),
+            'categories': sorted(PRODUCE_CATEGORIES),
+        },
+        'person_model': {
+            'loaded': _person_model is not None,
+            'path': PERSON_MODEL_PATH,
+            'class_id': PERSON_CLASS_ID,
+            'confidence': PERSON_CONF,
+            'overlap': PERSON_OVERLAP,
+        },
         'freshness_model': {'loaded': _freshness_model is not None, 'classes': list(_freshness_names.values())},
+        'naming': {'crop_pad': CROP_PAD},
         'tray': {
             'rows': tray.DEFAULT_ROWS,
             'cols': tray.DEFAULT_COLS,
@@ -160,36 +243,162 @@ def _iter_boxes(result) -> list:
     return list(boxes) if boxes is not None else []
 
 
-def _rank_menu(boxes) -> list[tuple[int, float]]:
-    """Urutkan kelas makanan Indonesia valid dari confidence deteksi terbesar."""
+def _rank_detections(boxes, names: dict[int, str]) -> list[tuple[int, float]]:
+    """Urutkan kelas dari confidence deteksi terbesar (kelas di `names` saja)."""
     ranked: list[tuple[int, float]] = []
     if boxes is None:
         return ranked
     for index in range(len(boxes)):
         class_id = int(boxes.cls[index])
-        if class_id not in _valid_menu_ids:
+        if class_id not in names:
             continue
         ranked.append((class_id, float(boxes.conf[index])))
     ranked.sort(key=lambda item: item[1], reverse=True)
     return ranked
 
 
-def _name_food(image) -> list[tuple[int, float]]:
-    """Nama makanan Indonesia untuk satu gambar/crop memakai makanan_indo.pt."""
-    result = _menu_model.predict(
+def _append_candidates(
+    candidates: list[dict],
+    model,
+    names: dict[int, str],
+    image: np.ndarray,
+    valid_ids: list[int] | None = None,
+) -> None:
+    """Tambah kandidat kelas dari satu model detektor ke daftar kandidat."""
+    result = model.predict(
         image, imgsz=DET_IMGSZ, conf=DET_CONF, iou=DET_IOU, device='cpu', verbose=False
     )[0]
-    return _rank_menu(result.boxes)
+    for class_id, confidence in _rank_detections(result.boxes, names):
+        if valid_ids is not None and class_id not in valid_ids:
+            continue
+        name = names.get(class_id, '')
+        candidates.append(
+            {
+                'class_name': name,
+                'display': labels.menu_label(name),
+                'confidence': confidence,
+            }
+        )
 
 
-def _best_food_crop(img: np.ndarray) -> np.ndarray | None:
-    """Crop objek makanan dengan confidence deteksi tertinggi dari objek_deteksi.pt."""
+def _category_model(category: str):
+    """Model penamaan otoritatif untuk sebuah kategori deteksi (atau None)."""
+    if category in STAPLE_CATEGORIES or category in DRINK_CATEGORIES:
+        return _menu_model, _menu_names
+    if category in PRODUCE_CATEGORIES:
+        return _produce_model, _produce_names
+    return None
+
+
+def _infer_category(img: np.ndarray) -> str:
+    """Kategori objek_deteksi.pt paling meyakinkan pada satu gambar/crop.
+
+    Dipakai saat kategori belum diketahui (mis. isi satu sekat nampan pada
+    fallback grid) agar pemilihan model penamaan tetap tepat.
+    """
+    det = _detector_model.predict(
+        img, imgsz=DET_IMGSZ, conf=DET_CONF, iou=DET_IOU, device='cpu', verbose=False
+    )[0]
+    best = ''
+    best_conf = -1.0
+    for box in _iter_boxes(det):
+        category = _detector_names.get(int(box.cls[0]), '')
+        if category.strip().lower() in NON_FOOD_CATEGORIES:
+            continue
+        confidence = float(box.conf[0])
+        if confidence > best_conf:
+            best_conf = confidence
+            best = category
+    return best
+
+
+def _name_candidates(image: np.ndarray, category: str) -> list[dict]:
+    """Kandidat nama makanan Indonesia untuk satu gambar/crop.
+
+     Satu crop hanya dinilai oleh satu model otoritatif, sesuai kategori
+    objek_deteksi.pt, agar confidence antar model tidak saling mengganggu:
+    makanan_minuman.pt untuk makanan_pokok (nasi kuning/putih/goreng, mie goreng)
+    sekaligus minuman (susu), dan buah.pt untuk buah/sayur. Kategori lain
+    (lauk, kue, sop, sambal, dll.) dinamai makanan_minuman.pt. Kategori kosong
+    ditaksir lebih dulu dari citra.
+    """
+    cat = (category or '').strip().lower()
+    if not cat:
+        cat = _infer_category(image).strip().lower()
+
+    category_model = _category_model(cat)
+    if category_model is not None:
+        candidates: list[dict] = []
+        _append_candidates(candidates, category_model[0], category_model[1], image)
+        if candidates:
+            candidates.sort(key=lambda item: item['confidence'], reverse=True)
+            return candidates
+
+    candidates = []
+    _append_candidates(candidates, _menu_model, _menu_names, image, _valid_menu_ids)
+    candidates.sort(key=lambda item: item['confidence'], reverse=True)
+    return candidates
+
+
+def _person_boxes(img: np.ndarray) -> list[tuple[int, int, int, int]]:
+    """Kotak orang pada foto memakai detektor COCO (mis. orang.pt)."""
+    if _person_model is None:
+        return []
     height, width = img.shape[:2]
+    result = _person_model.predict(
+        img,
+        imgsz=DET_IMGSZ,
+        conf=PERSON_CONF,
+        iou=DET_IOU,
+        classes=[PERSON_CLASS_ID],
+        device='cpu',
+        verbose=False,
+    )[0]
+    boxes: list[tuple[int, int, int, int]] = []
+    for box in _iter_boxes(result):
+        boxes.append(_clamp_box(*(int(v) for v in box.xyxy[0].tolist()), height, width))
+    return boxes
+
+
+def _covered_by_person(
+    box: tuple[int, int, int, int],
+    persons: list[tuple[int, int, int, int]],
+    threshold: float = PERSON_OVERLAP,
+) -> bool:
+    """True bila kotak objek sebagian besar tertutup kotak orang.
+
+    Sebagian besar (bukan sekadar bersinggungan) agar makanan yang tampak di
+    dekat/ sekeliling orang tidak ikut dibuang.
+    """
+    if not persons:
+        return False
+    x1, y1, x2, y2 = box
+    area = max(0, x2 - x1) * max(0, y2 - y1)
+    if area <= 0:
+        return False
+    for px1, py1, px2, py2 in persons:
+        ix1, iy1 = max(x1, px1), max(y1, py1)
+        ix2, iy2 = min(x2, px2), min(y2, py2)
+        inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+        if inter / area >= threshold:
+            return True
+    return False
+
+
+def _best_food_crop(img: np.ndarray) -> tuple[np.ndarray | None, str]:
+    """Crop objek makanan dengan confidence deteksi tertinggi dari objek_deteksi.pt.
+
+    Objek non-makanan (mis. uang) dan objek yang sebagian besar tertutup orang
+    dilewati. Mengembalikan (crop, kategori); (None, '') bila tak ada objek makanan.
+    """
+    height, width = img.shape[:2]
+    persons = _person_boxes(img)
     det = _detector_model.predict(
         img, imgsz=DET_IMGSZ, conf=DET_CONF, iou=DET_IOU, device='cpu', verbose=False
     )[0]
     best_conf = -1.0
     best_crop: np.ndarray | None = None
+    best_category = ''
     for box in _iter_boxes(det):
         category = _detector_names.get(int(box.cls[0]), '')
         if category.strip().lower() in NON_FOOD_CATEGORIES:
@@ -198,26 +407,30 @@ def _best_food_crop(img: np.ndarray) -> np.ndarray | None:
         if confidence <= best_conf:
             continue
         x1, y1, x2, y2 = _clamp_box(*(int(v) for v in box.xyxy[0].tolist()), height, width)
-        crop = img[y1:y2, x1:x2]
+        if _covered_by_person((x1, y1, x2, y2), persons):
+            continue
+        px1, py1, px2, py2 = _pad_box(x1, y1, x2, y2, height, width)
+        crop = img[py1:py2, px1:px2]
         if crop.size == 0:
             continue
         best_conf = confidence
         best_crop = crop
-    return best_crop
+        best_category = category
+    return best_crop, best_category
 
 
 def _predict_menu(img: np.ndarray) -> tuple[int, str, float, dict[str, float]]:
     """Menu utama foto: lokalisasi objek lalu penamaan makanan Indonesia."""
-    crop = _best_food_crop(img)
-    ranked = _name_food(crop) if crop is not None else []
-    if not ranked:
-        ranked = _name_food(img)
-    if not ranked:
+    crop, category = _best_food_crop(img)
+    if crop is not None:
+        candidates = _name_candidates(crop, category)
+    else:
+        candidates = _name_candidates(img, '')
+    if not candidates:
         return -1, '', 0.0, {}
-    class_id, confidence = ranked[0]
-    class_name = _menu_names.get(class_id, '')
-    probabilities = {_menu_names[idx]: value for idx, value in ranked if idx in _menu_names}
-    return class_id, class_name, confidence, probabilities
+    top = candidates[0]
+    probabilities = {item['display']: item['confidence'] for item in candidates}
+    return -1, top['class_name'], top['confidence'], probabilities
 
 
 def _predict_freshness(img: np.ndarray) -> tuple[int, str, float, dict[str, float]]:
@@ -270,7 +483,7 @@ def _parse_grid(grid: str | None) -> tuple[int, int]:
 
 @app.post('/predict')
 async def predict(image: UploadFile = File(...)) -> dict:
-    if _menu_model is None or _detector_model is None or _freshness_model is None:
+    if _menu_model is None or _detector_model is None or _produce_model is None or _freshness_model is None:
         raise HTTPException(status_code=503, detail='model belum dimuat')
     return _whole_payload(_decode(await image.read()), time.perf_counter())
 
@@ -290,13 +503,14 @@ def _normalized_box(
 
 def _detect_food_compartments(img: np.ndarray) -> list[dict] | None:
     """Pendekatan dua-tahap: objek_deteksi.pt melokalisasi tiap objek makanan,
-    lalu tiap crop dinamai makanan_indo.pt. Kategori non-makanan (mis. uang)
+    lalu tiap crop dinamai makanan_minuman.pt. Kategori non-makanan (mis. uang)
     dilewati.
 
     Mengembalikan None bila tidak ada objek makanan terdeteksi sehingga caller
     dapat jatuh ke pembagian grid nampan.
     """
     height, width = img.shape[:2]
+    persons = _person_boxes(img)
     det = _detector_model.predict(
         img, imgsz=DET_IMGSZ, conf=DET_CONF, iou=DET_IOU, device='cpu', verbose=False
     )[0]
@@ -307,15 +521,19 @@ def _detect_food_compartments(img: np.ndarray) -> list[dict] | None:
         if category.strip().lower() in NON_FOOD_CATEGORIES:
             continue
         x1, y1, x2, y2 = _clamp_box(*(int(v) for v in box.xyxy[0].tolist()), height, width)
+        if _covered_by_person((x1, y1, x2, y2), persons):
+            continue
         crop = img[y1:y2, x1:x2]
         if crop.size == 0 or (x2 - x1) * (y2 - y1) <= 0:
             continue
+        px1, py1, px2, py2 = _pad_box(x1, y1, x2, y2, height, width)
         entries.append(
             {
                 'category': category,
                 'detection_confidence': float(box.conf[0]),
                 'box': (x1, y1, x2, y2),
                 'crop': crop,
+                'name_crop': img[py1:py2, px1:px2],
             }
         )
 
@@ -329,16 +547,12 @@ def _detect_food_compartments(img: np.ndarray) -> list[dict] | None:
     # Urutkan sekat kiri->kanan, atas->bawah agar penomoran stabil.
     entries.sort(key=lambda entry: (entry['box'][1], entry['box'][0]))
 
-    crops = [entry['crop'] for entry in entries]
-    results = _menu_model.predict(
-        crops, imgsz=DET_IMGSZ, conf=DET_CONF, iou=DET_IOU, device='cpu', verbose=False
-    )
-
     compartments: list[dict] = []
-    for index, (entry, result) in enumerate(zip(entries, results)):
-        ranked = _rank_menu(result.boxes)
-        top_id, top_conf = ranked[0] if ranked else (-1, 0.0)
-        class_name = _menu_names.get(top_id, '')
+    for index, entry in enumerate(entries):
+        candidates = _name_candidates(entry['name_crop'], entry['category'])
+        top = candidates[0] if candidates else None
+        class_name = top['class_name'] if top is not None else ''
+        top_conf = top['confidence'] if top is not None else 0.0
         x1, y1, x2, y2 = entry['box']
         bbox_norm, quad = _normalized_box(x1, y1, x2, y2, height, width)
         ratio, texture = tray.occupancy(entry['crop'])
@@ -355,12 +569,12 @@ def _detect_food_compartments(img: np.ndarray) -> list[dict] | None:
                 'texture': round(texture, 2),
                 'detected_category': entry['category'],
                 'detection_confidence': round(entry['detection_confidence'], 4),
-                'menu_class_id': top_id,
+                'menu_class_id': -1,
                 'menu_class_name': class_name,
                 'menu_display_name': labels.menu_label(class_name),
                 'menu_confidence': round(top_conf, 4),
                 'mixed': False,
-                'alternatives': {_menu_names[idx]: value for idx, value in ranked[:3]},
+                'alternatives': {item['display']: item['confidence'] for item in candidates[:3]},
             }
         )
     return compartments
@@ -368,7 +582,7 @@ def _detect_food_compartments(img: np.ndarray) -> list[dict] | None:
 
 def _grid_compartments(img: np.ndarray, cells: list[tray.Cell]) -> list[dict]:
     """Pembagian baku grid nampan; fallback bila detektor tidak menemukan
-    objek makanan. Tiap sekat tetap dinamai memakai makanan_indo.pt."""
+    objek makanan. Tiap sekat tetap dinamai memakai makanan_minuman.pt."""
     rect = tray.find_tray(img)
     warped, _tray_detected, matrix = tray.normalize_tray(img, rect)
 
@@ -381,15 +595,19 @@ def _grid_compartments(img: np.ndarray, cells: list[tray.Cell]) -> list[dict]:
 
     original_shape = img.shape
     warped_shape = warped.shape
-    results = _menu_model.predict(
-        crops, imgsz=DET_IMGSZ, conf=DET_CONF, iou=DET_IOU, device='cpu', verbose=False
-    )
+    height, width = img.shape[:2]
+    persons = _person_boxes(img)
     compartments = []
-    for index, (cell, crop, (ratio, texture), result) in enumerate(zip(cells, crops, occupancy, results)):
+    for index, (cell, crop, (ratio, texture)) in enumerate(zip(cells, crops, occupancy)):
         empty = tray.is_empty(ratio, texture)
         quad = tray.cell_quad_norm(cell, matrix, warped_shape, original_shape)
-        ranked = [] if empty else _rank_menu(result.boxes)
-        if not ranked:
+        xs = [point[0] * width for point in quad]
+        ys = [point[1] * height for point in quad]
+        cell_box = (int(min(xs)), int(min(ys)), int(max(xs)), int(max(ys)))
+        if not empty and _covered_by_person(cell_box, persons):
+            empty = True
+        candidates = [] if empty else _name_candidates(crop, '')
+        if not candidates:
             compartments.append(
                 {
                     'index': index,
@@ -411,8 +629,7 @@ def _grid_compartments(img: np.ndarray, cells: list[tray.Cell]) -> list[dict]:
             )
             continue
 
-        top_id, top_conf = ranked[0]
-        class_name = _menu_names.get(top_id, '')
+        top = candidates[0]
         compartments.append(
             {
                 'index': index,
@@ -424,12 +641,12 @@ def _grid_compartments(img: np.ndarray, cells: list[tray.Cell]) -> list[dict]:
                 'empty': False,
                 'food_ratio': round(ratio, 4),
                 'texture': round(texture, 2),
-                'menu_class_id': top_id,
-                'menu_class_name': class_name,
-                'menu_display_name': labels.menu_label(class_name),
-                'menu_confidence': round(top_conf, 4),
+                'menu_class_id': -1,
+                'menu_class_name': top['class_name'],
+                'menu_display_name': top['display'],
+                'menu_confidence': round(top['confidence'], 4),
                 'mixed': False,
-                'alternatives': {_menu_names[idx]: value for idx, value in ranked[:3]},
+                'alternatives': {item['display']: item['confidence'] for item in candidates[:3]},
             }
         )
     return compartments
@@ -443,11 +660,11 @@ async def predict_tray(
     """Prediksi seluruh foto sekaligus per sekat nampan.
 
     Objek makanan dilokalisasi objek_deteksi.pt lalu tiap crop dinamai
-    makanan_indo.pt; bila detektor tidak menemukan makanan, dipakai grid
+    makanan_minuman.pt; bila detektor tidak menemukan makanan, dipakai grid
     nampan baku sebagai fallback. Koordinat sekat dikembalikan dalam persentase
     terhadap foto asli agar stabil walau resolusi berbeda.
     """
-    if _menu_model is None or _detector_model is None or _freshness_model is None:
+    if _menu_model is None or _detector_model is None or _produce_model is None or _freshness_model is None:
         raise HTTPException(status_code=503, detail='model belum dimuat')
 
     started = time.perf_counter()
@@ -486,13 +703,20 @@ def _clamp_box(x1: int, y1: int, x2: int, y2: int, height: int, width: int) -> t
     return x1, y1, x2, y2
 
 
+def _pad_box(x1: int, y1: int, x2: int, y2: int, height: int, width: int) -> tuple[int, int, int, int]:
+    """Perluas kotak deteksi sebesar CROP_PAD tiap sisi agar crop berkonteks."""
+    dx = int(round((x2 - x1) * CROP_PAD))
+    dy = int(round((y2 - y1) * CROP_PAD))
+    return _clamp_box(x1 - dx, y1 - dy, x2 + dx, y2 + dy, height, width)
+
+
 @app.post('/predict-detect')
 async def predict_detect(image: UploadFile = File(...), conf: str | None = Form(None)) -> dict:
     """Pendekatan dua-tahap: objek_deteksi.pt melokalisasi bbox + kategori umum,
-    tiap crop dinamai makanan_indo.pt untuk nama makanan Indonesia. Kategori
+    tiap crop dinamai makanan_minuman.pt untuk nama makanan Indonesia. Kategori
     non-makanan (mis. uang) dilewati tahap penamaan.
     """
-    if _menu_model is None or _detector_model is None:
+    if _menu_model is None or _detector_model is None or _produce_model is None:
         raise HTTPException(status_code=503, detail='model belum dimuat')
 
     try:
@@ -504,6 +728,7 @@ async def predict_detect(image: UploadFile = File(...), conf: str | None = Form(
     started = time.perf_counter()
     img = _decode(await image.read())
     height, width = img.shape[:2]
+    persons = _person_boxes(img)
 
     det = _detector_model.predict(
         img, imgsz=DET_IMGSZ, conf=min_conf, iou=DET_IOU, device='cpu', verbose=False
@@ -513,41 +738,37 @@ async def predict_detect(image: UploadFile = File(...), conf: str | None = Form(
     for box in _iter_boxes(det):
         category = _detector_names.get(int(box.cls[0]), '')
         x1, y1, x2, y2 = _clamp_box(*(int(v) for v in box.xyxy[0].tolist()), height, width)
+        if _covered_by_person((x1, y1, x2, y2), persons):
+            continue
         crop = img[y1:y2, x1:x2]
         if crop.size == 0:
             continue
+        px1, py1, px2, py2 = _pad_box(x1, y1, x2, y2, height, width)
         boxes.append(
             {
                 'kategori_umum': category,
                 'confidence_deteksi': round(float(box.conf[0]), 4),
                 'box': [x1, y1, x2, y2],
                 'crop': crop,
+                'name_crop': img[py1:py2, px1:px2],
             }
         )
 
-    # Tahap 2: penamaan seluruh crop sekaligus (batch) agar latensi minimal.
-    name_index: list[int] = []
-    name_crops: list[np.ndarray] = []
+    # Tahap 2: penamaan tiap crop memakai satu model otoritatif sesuai kategori.
+    named: dict[int, tuple[int, str, float, dict[str, float]]] = {}
     for index, entry in enumerate(boxes):
         if entry['kategori_umum'].strip().lower() in NON_FOOD_CATEGORIES:
             continue
-        name_index.append(index)
-        name_crops.append(entry['crop'])
-
-    named: dict[int, tuple[int, str, float, dict[str, float]]] = {}
-    if name_crops:
-        results = _menu_model.predict(
-            name_crops, imgsz=DET_IMGSZ, conf=DET_CONF, iou=DET_IOU, device='cpu', verbose=False
+        candidates = _name_candidates(entry['name_crop'], entry['kategori_umum'])
+        if not candidates:
+            continue
+        top = candidates[0]
+        named[index] = (
+            -1,
+            top['class_name'],
+            top['confidence'],
+            {item['display']: item['confidence'] for item in candidates[:3]},
         )
-        for index, result in zip(name_index, results):
-            ranked = _rank_menu(result.boxes)
-            top_id, top_conf = ranked[0] if ranked else (-1, 0.0)
-            named[index] = (
-                top_id,
-                _menu_names.get(top_id, ''),
-                top_conf,
-                {_menu_names[idx]: value for idx, value in ranked[:3]},
-            )
 
     items = []
     for index, entry in enumerate(boxes):

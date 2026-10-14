@@ -65,15 +65,23 @@ const matchThreshold = 0.5
 // aliases memetakan nama item demo yang tidak ada persis di dataset
 // ke nama kanonik CSV agar nilai demo deterministik dan benar.
 var aliases = map[string][]string{
-	"nasi":              {"Nasi"},
-	"nasi kuning":       {"Nasi"},
-	"telur dadar suwir": {"Telur Ayam dadar"},
-	"timun":             {"Ketimun"},
-	"selada":            {"Selada"},
-	"ayam":              {"Ayam"},
-	"ayam goreng":       {"Ayam goreng paha"},
-	"pisang":            {"Pisang Ambon"},
-	"susu":              {"Susu Sapi"},
+	"nasi":                {"Nasi"},
+	"nasi putih":          {"Beras Giling masak (nasi)"},
+	"nasi kuning":         {"Beras Giling masak (nasi)"},
+	"telur dadar suwir":   {"Telur Ayam dadar"},
+	"telur rebus":         {"Telur Ayam"},
+	"telur goreng":        {"Telur Ayam"},
+	"timun":               {"Ketimun"},
+	"selada":              {"Selada"},
+	"salad":               {"Selada"},
+	"ayam":                {"Ayam"},
+	"ayam goreng":         {"Ayam goreng paha"},
+	"pisang":              {"Pisang Ambon"},
+	"susu":                {"Susu Sapi"},
+	"biskuit choco chips": {"Biskuit"},
+	"capcay":              {"Cap cai sayur"},
+	"terong balado":       {"Terong"},
+	"tumis kangkung":      {"Kangkung"},
 }
 
 var tokenPattern = regexp.MustCompile(`[a-z0-9]+`)

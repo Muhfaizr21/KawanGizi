@@ -221,6 +221,56 @@ func (s *AuthService) Me(ctx context.Context, userID string) (*models.User, erro
 	return user, nil
 }
 
+// ChangePassword memverifikasi kata sandi lama lalu menimpa dengan yang baru.
+func (s *AuthService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repositories.ErrNotFound) {
+			return ErrInvalidToken
+		}
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(currentPassword)) != nil {
+		return ErrInvalidCredentials
+	}
+
+	newPassword = strings.TrimSpace(newPassword)
+	if len(newPassword) < 8 || newPassword == currentPassword {
+		return ErrValidation
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.users.UpdatePasswordHash(ctx, user.ID, string(hash))
+}
+
+// UpdateProfile mengganti nama tampilan akun (self-service). Nama wajib 3–120 karakter.
+func (s *AuthService) UpdateProfile(ctx context.Context, userID, fullName string) (*models.User, error) {
+	fullName = strings.TrimSpace(fullName)
+	if length := len([]rune(fullName)); length < 3 || length > 120 {
+		return nil, ErrValidation
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repositories.ErrNotFound) {
+			return nil, ErrInvalidToken
+		}
+		return nil, err
+	}
+	if !models.ValidRole(user.Role) {
+		return nil, ErrRoleInactive
+	}
+
+	if err := s.users.UpdateFullName(ctx, user.ID, fullName); err != nil {
+		return nil, err
+	}
+	user.FullName = fullName
+	return user, nil
+}
+
 // ParseAccessToken validates a JWT access token and returns user claims (subject, role, sppgId, npsn).
 func (s *AuthService) ParseAccessToken(tokenString string) (userID string, role string, sppgID string, npsn string, err error) {
 	token, err := jwt.Parse(tokenString, func(t *jwt.Token) (any, error) {

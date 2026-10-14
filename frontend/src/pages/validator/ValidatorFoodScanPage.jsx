@@ -39,6 +39,7 @@ import {
 import { ImageCapturePanel } from '../../components/shared/ImageCapturePanel'
 import { getSelectedSchool, setSelectedSchool, MASTER_SCHOOLS } from '../../lib/validatorSchool'
 import { SchoolSwitcherModal } from '../../components/validator/SchoolSwitcherModal'
+import { buildDecisionLog } from '../../lib/foodBenefits'
 
 const MAX_IMAGE_BYTES = 8 << 20
 
@@ -229,7 +230,7 @@ export function ValidatorFoodScanPage() {
   const [identifierType, setIdentifierType] = useState('batch')
   const [batchOrQr, setBatchOrQr] = useState('')
   const [holdingTemp, setHoldingTemp] = useState('64.5')
-  const [releaseTemp, setReleaseTemp] = useState('72.0')
+  const [releaseTemp, setReleaseTemp] = useState('76.0')
   const [formError, setFormError] = useState('')
   const [actionError, setActionError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
@@ -383,7 +384,7 @@ export function ValidatorFoodScanPage() {
         batchId: isQr ? '' : identifier,
         qrToken: isQr ? identifier : '',
         holdingTempC: Number(holdingTemp) || 64.5,
-        releaseTempC: Number(releaseTemp) || 72.0,
+        releaseTempC: Number(releaseTemp) || 76.0,
       })
       setResult(response.data)
       refreshRecent()
@@ -415,18 +416,15 @@ export function ValidatorFoodScanPage() {
   // Accurate stat calculations
   const totalScanned = recent.length
   const passedCount = recent.filter((r) => r.verdict === 'layak').length
-  const quarantineCount = recent.filter((r) => r.verdict === 'tolak' || r.verdict === 'peringatan').length
+  const warningCount = recent.filter((r) => r.verdict === 'peringatan').length
+  const quarantineCount = recent.filter((r) => r.verdict === 'tolak').length
   const passRate = totalScanned > 0 ? Math.round((passedCount / totalScanned) * 100) : 100
 
   // Filtered recent list
   const filteredRecent = useMemo(() => {
     return recent.filter((row) => {
       const matchesFilter =
-        recentFilter === 'all'
-          ? true
-          : recentFilter === 'layak'
-          ? row.verdict === 'layak'
-          : row.verdict === 'tolak' || row.verdict === 'peringatan'
+        recentFilter === 'all' ? true : row.verdict === recentFilter
 
       const q = recentSearch.trim().toLowerCase()
       const matchesSearch =
@@ -437,6 +435,26 @@ export function ValidatorFoodScanPage() {
       return matchesFilter && matchesSearch
     })
   }, [recent, recentFilter, recentSearch])
+
+  const failedChecks = (result?.checks || []).filter((check) => check && !check.ok)
+  const decisionLog = useMemo(() => {
+    if (!result) return null
+    const detected = (result.compartments || [])
+      .filter((comp) => comp && !comp.empty && (comp.predictedDisplay || comp.predicted))
+      .map((comp) => ({ name: comp.predictedDisplay || comp.predicted, status: comp.status }))
+    if (!detected.length && result.nutrition?.length) {
+      result.nutrition.forEach((item) => detected.push({ name: item.name, status: '' }))
+    }
+    if (!detected.length) {
+      const fallback = result.menuDisplay || result.menuClass || result.menuName
+      if (fallback) detected.push({ name: fallback, status: '' })
+    }
+    return buildDecisionLog({
+      detected,
+      registeredMenu: result.batchInfo?.menuName || result.menuName || '',
+      verdict: result.verdict,
+    })
+  }, [result])
 
   return (
     <ValidatorLayout
@@ -776,7 +794,7 @@ export function ValidatorFoodScanPage() {
                       step="0.1"
                       value={releaseTemp}
                       onChange={(event) => setReleaseTemp(event.target.value)}
-                      placeholder="72.0"
+                      placeholder="76.0"
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-[#185338]"
                     />
                   </label>
@@ -877,6 +895,24 @@ export function ValidatorFoodScanPage() {
               </div>
             ) : (
               <>
+                {result.verdict !== 'layak' && (
+                  <div className={`rounded-2xl border p-3.5 ${result.verdict === 'tolak' ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${result.verdict === 'tolak' ? 'text-rose-600' : 'text-amber-600'}`} />
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600">
+                        {result.verdict === 'tolak' ? 'Alasan Karantina / Tidak Layak' : 'Alasan Perlu Verifikasi'}
+                      </p>
+                    </div>
+                    <ul className="mt-1.5 list-disc space-y-1 pl-5">
+                      {(failedChecks.length ? failedChecks : [{ label: 'Catatan sistem', note: result.note }]).map((check, index) => (
+                        <li key={`${check.label}-${index}`} className="text-[11px] leading-relaxed text-slate-700">
+                          <span className="font-bold">{check.label}</span> — {check.note}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Visual Sekat Bounding Box */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -949,6 +985,8 @@ export function ValidatorFoodScanPage() {
                     </div>
                   ))}
                 </div>
+
+                <DecisionLogCard log={decisionLog} />
               </>
             )}
           </div>
@@ -1011,6 +1049,17 @@ export function ValidatorFoodScanPage() {
               >
                 Lolos ({passedCount})
               </button>
+              {warningCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRecentFilter('peringatan')}
+                  className={`rounded-full px-2.5 py-1 transition cursor-pointer ${
+                    recentFilter === 'peringatan' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Perlu Verifikasi ({warningCount})
+                </button>
+              )}
               {quarantineCount > 0 && (
                 <button
                   type="button"
@@ -1277,12 +1326,40 @@ function Metadata({ label, value, icon }) {
   )
 }
 
+function DecisionLogCard({ log }) {
+  if (!log) return null
+  return (
+    <div className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/70 p-3.5">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Log Keputusan &amp; Kesimpulan Gizi</p>
+      <p className="text-[11px] leading-relaxed text-slate-700">{log.conclusion}</p>
+      <p className="text-[10px] font-semibold text-slate-500">{log.matchSummary}</p>
+      {log.items?.length > 0 && (
+        <ul className="space-y-1.5 pt-1">
+          {log.items.map((item) => (
+            <li key={item.name} className="rounded-xl border border-slate-100 bg-white p-2.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-extrabold text-slate-900">{item.name}</span>
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-slate-500">{item.category}</span>
+              </div>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-slate-500">{item.benefit}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function ScanDetailModal({ row, onClose, onDelete, deleting }) {
   const verdict = VERDICT_STYLE[row.verdict] || VERDICT_STYLE.peringatan
   const VerdictIcon = verdict.icon
   const imageSrc = uploadUrl(row.imageRef)
   const title = row.menuName || String(row.menuClass || '').replaceAll('_', ' ') || 'Menu Nampan MBG'
   const freshness = freshnessLabel(row.aiClass, row.aiConfidence || 0)
+  const detailLog = buildDecisionLog({
+    detected: [{ name: title }].filter((item) => item.name && item.name !== 'Menu Nampan MBG'),
+    verdict: row.verdict,
+  })
 
   return (
     <div
@@ -1361,6 +1438,8 @@ function ScanDetailModal({ row, onClose, onDelete, deleting }) {
               {row.reason}
             </p>
           )}
+
+          <DecisionLogCard log={detailLog} />
 
           <button
             type="button"

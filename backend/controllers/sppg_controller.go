@@ -208,6 +208,49 @@ func (c *SppgController) RecordRecipeAudit(w http.ResponseWriter, r *http.Reques
 	utils.Success(w, http.StatusOK, "Hasil audit resep tersimpan", k)
 }
 
+// GetProfile mengembalikan dapur milik akun SPPG yang sedang login.
+//
+//	@Summary		Profil dapur akun SPPG
+//	@Tags			sppg
+//	@Produce		json
+//	@Success		200	{object}	models.APIResponse{data=models.SPPGKitchen}
+//	@Failure		400	{object}	models.APIResponse
+//	@Router			/sppg/profile [get]
+func (c *SppgController) GetProfile(w http.ResponseWriter, r *http.Request) {
+	k, err := c.svc.Get(r.Context(), middlewares.SppgID(r.Context()))
+	if err != nil {
+		writeSppgError(w, err)
+		return
+	}
+	utils.Success(w, http.StatusOK, "Profil dapur berhasil dimuat", k)
+}
+
+// UpdateProfile mengganti nama dapur milik akun SPPG sendiri.
+//
+//	@Summary		Perbarui identitas dapur akun SPPG
+//	@Description	Self-service: dapur hanya boleh mengubah namanya sendiri.
+//	@Tags			sppg
+//	@Accept			json
+//	@Produce		json
+//	@Param			payload	body	models.UpdateSppgProfileRequest	true	"Nama dapur baru"
+//	@Success		200		{object}	models.APIResponse{data=models.SPPGKitchen}
+//	@Failure		400		{object}	models.APIResponse
+//	@Router			/sppg/profile [patch]
+func (c *SppgController) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	var req models.UpdateSppgProfileRequest
+	if err := decodeJSON(r, &req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "Payload tidak valid")
+		return
+	}
+
+	k, err := c.svc.UpdateProfile(r.Context(), middlewares.UserID(r.Context()), middlewares.SppgID(r.Context()), req)
+	if err != nil {
+		writeSppgError(w, err)
+		return
+	}
+	utils.Success(w, http.StatusOK, "Nama dapur berhasil diperbarui", k)
+}
+
 // writeSppgError memetakan error domain service ke status HTTP.
 func writeSppgError(w http.ResponseWriter, err error) {
 	switch {

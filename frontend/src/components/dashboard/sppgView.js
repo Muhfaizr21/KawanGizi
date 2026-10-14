@@ -98,9 +98,28 @@ export function toSppgView(kitchen) {
       testedAt: '28 September 2026',
     },
 
+    // Inventaris peralatan belum disimpan backend; tampilkan daftar netral
+    // peralatan masak standar dapur SPPG agar panel punya isi, bukan crash.
+    equipmentList:
+      Array.isArray(kitchen.equipmentList) && kitchen.equipmentList.length
+        ? kitchen.equipmentList
+        : [
+            'Kompor industri & wok cooker gas bertekanan',
+            'Chiller/freezer penyimpanan bahan baku',
+            'Holding cabinet & food warmer porsi matang',
+            'Meja persiapan stainless & rak bumbu',
+            'Sistem filtrasi air & sanitasi peralatan makan',
+          ],
+
+    statusNote: kitchen.suspendedReason
+      ? `IZIN DISTRIBUSI DITANGGUHKAN: ${kitchen.suspendedReason}`
+      : kitchen.status === 'warning'
+        ? 'Perhatian: skor kepatuhan berada di bawah ambang minimum 85%.'
+        : 'Kepatuhan operasional terpenuhi.',
+
     recentDispatchLogs: [
-      { time: '06:15 WIB', fleet: `${kitchen.fleetType?.split(' ')[0] || 'Armada Box'} 01`, route: `Rute Kluster ${kitchen.cluster || kitchen.city || 'Sentral'}`, temp: '64.2°C', status: 'Tiba Tepat Waktu' },
-      { time: '06:30 WIB', fleet: `${kitchen.fleetType?.split(' ')[0] || 'Armada Box'} 02`, route: 'Rute Sekolah Prioritas MBG', temp: '63.8°C', status: 'Tiba Tepat Waktu' },
+      { time: '06:15 WIB', armada: `${kitchen.fleetType?.split(' ')[0] || 'Armada Box'} 01`, route: `Rute Kluster ${kitchen.cluster || kitchen.city || 'Sentral'}`, temp: '64.2°C', status: 'Tiba Tepat Waktu' },
+      { time: '06:30 WIB', armada: `${kitchen.fleetType?.split(' ')[0] || 'Armada Box'} 02`, route: 'Rute Sekolah Prioritas MBG', temp: '63.8°C', status: 'Tiba Tepat Waktu' },
     ],
 
     assignedSchools: schools.map((s) => ({

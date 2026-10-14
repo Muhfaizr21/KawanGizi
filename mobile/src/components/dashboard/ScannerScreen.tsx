@@ -38,6 +38,7 @@ import { QualityVerdict } from '../../utils/quality';
 import { readMacros } from '../../utils/nutrition';
 import { scanRequest } from '../../lib/api';
 import { GradeBand } from '../../utils/nutrition';
+import { buildDecisionLog } from '../../utils/foodBenefits';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -190,6 +191,22 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({ onExit, onOpenProf
       : { energi: 0, protein: 0, karbohidrat: 0, lemak: 0, serat: 0 };
     return readMacros(SCAN_GRADE_BAND, estimated).filter((m) => m.key !== 'serat');
   }, [backendScan]);
+
+  const decisionLog = useMemo(() => {
+    if (!backendScan) return null;
+    const detected = (backendScan.nutrition ?? []).map((item) => ({ name: item.name, status: '' }));
+    if (!detected.length) {
+      const fallback = backendScan.menuDisplay || backendScan.menuClass || backendScan.menuName || backendScan.batchInfo?.menuName;
+      if (fallback) detected.push({ name: fallback, status: '' });
+    }
+    return buildDecisionLog({
+      detected,
+      registeredMenu: backendScan.batchInfo?.menuName || backendScan.menuName || '',
+      verdict: backendScan.verdict,
+    });
+  }, [backendScan]);
+
+  const failedChecks = (backendScan?.checks ?? []).filter((check) => !check.ok);
 
   const displayPhoto = capturedPhoto || '';
 
@@ -627,6 +644,28 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({ onExit, onOpenProf
                     )) : <Text style={styles.sectionCaption}>Data gizi belum tercatat pada batch yang dipindai.</Text>}
                 </View>
 
+                {/* Log Keputusan & Kesimpulan Gizi */}
+                {decisionLog && (
+                  <View style={{ backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderWidth: 1, borderRadius: 14, padding: 12, gap: 6 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#64748B', textTransform: 'uppercase', letterSpacing: 1 }}>
+                      Log Keputusan &amp; Kesimpulan Gizi
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#334155', lineHeight: 18 }}>{decisionLog.conclusion}</Text>
+                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>{decisionLog.matchSummary}</Text>
+                    {decisionLog.items.map((item) => (
+                      <View key={item.name} style={{ borderColor: '#F1F5F9', borderWidth: 1, borderRadius: 10, padding: 10, gap: 2 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>{item.name}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#475569', backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, overflow: 'hidden' }}>
+                            {item.category}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B', lineHeight: 16 }}>{item.benefit}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
                 {/* Contextual AI Consult Card */}
                 <TouchableOpacity
                   style={styles.aiConsultCard}
@@ -698,6 +737,20 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({ onExit, onOpenProf
                   </View>
                   <Text style={[styles.decisionLabel, { color: verdict.color }]}>{verdict.label}</Text>
                   <Text style={styles.decisionAction}>{verdict.action}</Text>
+                  {backendScan && (
+                    <View style={{ marginTop: 8, gap: 4 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: verdict.color }}>
+                        {backendScan.verdict === 'tolak' ? 'Alasan penahanan / tidak layak' : 'Alasan perlu verifikasi'}
+                      </Text>
+                      {failedChecks.length > 0 ? failedChecks.map((check, index) => (
+                        <Text key={`${check.label}-${index}`} style={{ fontSize: 11, color: '#475569', lineHeight: 16 }}>
+                          • {check.label}: {check.note}
+                        </Text>
+                      )) : (
+                        <Text style={{ fontSize: 11, color: '#475569', lineHeight: 16 }}>• {backendScan.note}</Text>
+                      )}
+                    </View>
+                  )}
         {backendScan && (
                     <Text style={styles.decisionAiMeta}>
                       {backendScan.id} · Menu: {backendScan.menuDisplay || backendScan.menuClass || 'belum dikenali'} ({Math.round((backendScan.menuConfidence ?? 0) * 100)}%) · Kesegaran: {backendScan.freshnessDisplay || backendScan.freshnessClass || backendScan.aiClass} ({Math.round((backendScan.freshnessConfidence ?? backendScan.aiConfidence) * 100)}%) · {backendScan.scannedAt}

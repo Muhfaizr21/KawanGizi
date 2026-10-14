@@ -27,7 +27,7 @@ def test_whole_payload_display_names_fall_back_for_unknown_class(monkeypatch):
     # Kelas hasil retrain di luar peta tampil apa adanya, bukan kosong.
     monkeypatch.setattr(
         main, '_predict_menu',
-        lambda img: (3, 'nasi_kuning', 0.71, {'nasi_kuning': 0.71}),
+        lambda img: (3, 'menu_sppg_baru', 0.71, {'menu_sppg_baru': 0.71}),
     )
     monkeypatch.setattr(
         main, '_predict_freshness',
@@ -36,5 +36,5 @@ def test_whole_payload_display_names_fall_back_for_unknown_class(monkeypatch):
 
     payload = main._whole_payload(None, main.time.perf_counter())
 
-    assert payload['menu_display_name'] == 'nasi_kuning'
+    assert payload['menu_display_name'] == 'menu_sppg_baru'
     assert payload['freshness_display_name'] == 'Basi'

@@ -62,8 +62,8 @@ type CompartmentPrediction struct {
 	MenuClassName string      `json:"menu_class_name"`
 	// MenuDisplayName adalah nama tampilan bahasa Indonesia dari layanan AI.
 	// Kosong pada layanan AI lawas; caller menjatuhkannya ke menuDisplayName.
-	MenuDisplayName string             `json:"menu_display_name"`
-	MenuConfidence  float64            `json:"menu_confidence"`
+	MenuDisplayName string  `json:"menu_display_name"`
+	MenuConfidence  float64 `json:"menu_confidence"`
 	// DetectedCategory adalah kategori umum dari model deteksi objek
 	// (mis. lauk, sayur, makanan_pokok). Kosong pada layanan AI lawas.
 	DetectedCategory    string             `json:"detected_category"`
@@ -536,6 +536,25 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 		result.NutritionNote = batchNutritionNote
 	}
 
+	// Fallback: bila gizi resep/komposisi manual tidak tersedia, perkirakan dari
+	// nama makanan yang dikenali AI per sekat (asumsi porsi 100 g, karena dataset
+	// gizi dinyatakan per 100 g). Bila sekat tidak ada, pakai nama menu utama.
+	if result.Macros == nil && len(result.Nutrition) == 0 && s.nutrition != nil {
+		nutritionItems := detectedNutritionItems(compartments, menuDisplay)
+		if len(nutritionItems) > 0 {
+			matches, macros, nutritionNote, matchErr := s.nutrition.MatchItems(ctx, nutritionItems)
+			if matchErr == nil {
+				if macros != nil {
+					result.Macros = macros
+					result.Nutrition = matches
+					result.NutritionNote = "Perkiraan dari nama makanan hasil deteksi (asumsi 100 g per item). " + nutritionNote
+				} else if nutritionNote != "" {
+					result.NutritionNote = nutritionNote
+				}
+			}
+		}
+	}
+
 	if in.Persist {
 		setCachedScan(dedupKey, result)
 	}
@@ -623,6 +642,41 @@ func displayMenuName(displayName, className string) string {
 		return name
 	}
 	return menuDisplayName(className)
+}
+
+// detectedNutritionItems menyusun daftar bahan untuk lookup gizi dari nama
+// makanan yang dikenali AI. Mengutamakan nama tampilan tiap sekat
+// (PredictedDisplay, bahasa Indonesia) lalu jatuh ke nama menu utama. Berat
+// default 100 g karena dataset gizi dinyatakan per 100 g.
+func detectedNutritionItems(compartments []models.CompartmentMatch, menuDisplay string) []ItemRequest {
+	items := make([]ItemRequest, 0, len(compartments)+1)
+	seen := make(map[string]bool)
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		items = append(items, ItemRequest{Name: name, WeightG: 100})
+	}
+	for _, comp := range compartments {
+		if comp.Empty {
+			continue
+		}
+		name := strings.TrimSpace(comp.PredictedDisplay)
+		if name == "" {
+			name = strings.TrimSpace(comp.Predicted)
+		}
+		add(name)
+	}
+	if len(items) == 0 {
+		add(menuDisplay)
+	}
+	return items
 }
 
 var ingredientWeightPattern = regexp.MustCompile(`(?i)(\d+(?:[.,]\d+)?)\s*(?:g|gram)`)

@@ -66,11 +66,20 @@ export function AuthProvider({ children }) {
   }, [])
 
   const logout = useCallback(async () => {
-    await logoutRequest()
+    await logoutRequest().catch(() => {})
     setUser(null)
     setPermissions([])
     localStorage.removeItem('mbg_user')
     localStorage.removeItem('mbg_permissions')
+  }, [])
+
+  const updateUser = useCallback((patch) => {
+    setUser((prev) => {
+      if (!prev) return prev
+      const next = { ...prev, ...patch }
+      localStorage.setItem('mbg_user', JSON.stringify(next))
+      return next
+    })
   }, [])
 
   const can = useCallback(
@@ -93,6 +102,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     can,
+    updateUser,
     isAuthenticated: !!user,
   }
 

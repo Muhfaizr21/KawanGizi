@@ -46,6 +46,17 @@ type RegisterRequest struct {
 	SppgID     string `json:"sppgId"`
 }
 
+// ChangePasswordRequest is the payload for PATCH /api/auth/password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+// UpdateProfileRequest is the payload for PATCH /api/auth/profile.
+type UpdateProfileRequest struct {
+	FullName string `json:"fullName"`
+}
+
 // AuthResponse is returned after login/refresh/me.
 type AuthResponse struct {
 	AccessToken string   `json:"accessToken,omitempty"`

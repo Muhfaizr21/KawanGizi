@@ -106,6 +106,24 @@ export async function logoutRequest() {
   }
 }
 
+/** Ganti kata sandi akun yang sedang login (verifikasi kata sandi lama). */
+export async function changePassword(currentPassword, newPassword) {
+  const body = await api('/api/auth/password', {
+    method: 'PATCH',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+  return body
+}
+
+/** Perbarui nama tampilan akun yang sedang login (self-service). */
+export async function updateProfile(fullName) {
+  const body = await api('/api/auth/profile', {
+    method: 'PATCH',
+    body: JSON.stringify({ fullName }),
+  })
+  return body?.data
+}
+
 /**
  * Kirim pemindaian boks (multipart): foto + token QR + sinyal suhu + daftar bahan menu.
  * `items` berformat "Nama:gram,Nama2:gram" — gateway menghitung makro dari dataset gizi.
@@ -236,6 +254,21 @@ export async function fetchSppgList() {
 
 export async function fetchSppg(id) {
   const res = await api(`/api/sppg/${id}`)
+  return res?.data || null
+}
+
+/** Profil dapur milik akun SPPG yang sedang login (self-service). */
+export async function fetchSppgProfile() {
+  const res = await api('/api/sppg/profile')
+  return res?.data || null
+}
+
+/** Ganti nama dapur milik akun SPPG yang sedang login. */
+export async function updateSppgProfile(name) {
+  const res = await api('/api/sppg/profile', {
+    method: 'PATCH',
+    body: JSON.stringify({ name }),
+  })
   return res?.data || null
 }
 
@@ -658,6 +691,78 @@ export async function assignBackupValidator(id, backupValidatorId, reason = '') 
     method: 'PUT',
     body: JSON.stringify({ backupValidatorId, reason }),
   })
+  return res?.data || null
+}
+
+/** Buat akun validator baru (akun login + profil roster). RBAC: validators.manage. */
+export async function createValidator(payload) {
+  const res = await api('/api/validators', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+/** Perbarui identitas profil validator (nama, NPSN, NIP, peran, sertifikasi). */
+export async function updateValidator(id, payload) {
+  const res = await api(`/api/validators/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+/** Ganti email dan/atau kata sandi login validator. newPassword kosong = tetap. */
+export async function updateValidatorCredentials(id, { email, newPassword = '', reason = '' }) {
+  const res = await api(`/api/validators/${id}/credentials`, {
+    method: 'PATCH',
+    body: JSON.stringify({ email, newPassword, reason }),
+  })
+  return res?.data || null
+}
+
+/** Hapus akun login & profil roster validator. */
+export async function deleteValidator(id) {
+  const res = await api(`/api/validators/${id}`, { method: 'DELETE' })
+  return res?.data || null
+}
+
+/** Daftar akun login dapur SPPG (superadmin). */
+export async function fetchSppgAccounts() {
+  const res = await api('/api/sppg/accounts')
+  return res?.data || []
+}
+
+/** Buat akun login dapur SPPG. Memerlukan sppgId dapur induk. */
+export async function createSppgAccount(payload) {
+  const res = await api('/api/sppg/accounts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+/** Perbarui identitas akun SPPG (nama, dapur induk, status). */
+export async function updateSppgAccount(id, payload) {
+  const res = await api(`/api/sppg/accounts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+/** Ganti email dan/atau kata sandi akun SPPG. newPassword kosong = tetap. */
+export async function updateSppgAccountCredentials(id, { email, newPassword = '', reason = '' }) {
+  const res = await api(`/api/sppg/accounts/${id}/credentials`, {
+    method: 'PATCH',
+    body: JSON.stringify({ email, newPassword, reason }),
+  })
+  return res?.data || null
+}
+
+/** Hapus akun login dapur SPPG. */
+export async function deleteSppgAccount(id) {
+  const res = await api(`/api/sppg/accounts/${id}`, { method: 'DELETE' })
   return res?.data || null
 }
 
@@ -1127,63 +1232,6 @@ export async function closeSppgIncidentTicket(id, payload, sppgId = '') {
   const res = await api(`/api/sppg/incidents/${encodeURIComponent(id)}/close${query}`, {
     method: 'POST',
     body: JSON.stringify(payload),
-  })
-  return res?.data || null
-}
-
-/**
- * =========================================================================
- * SPPG BILLING & INVOICE MANAGEMENT (SPPG.md Bab 9 - Strictly Database-Driven)
- * =========================================================================
- */
-
-export async function fetchSppgBillingBundle(sppgId = '') {
-  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
-  const res = await api(`/api/sppg/billing/bundle${query}`)
-  return res?.data || null
-}
-
-export async function fetchSppgBillingRows(sppgId = '') {
-  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
-  const res = await api(`/api/sppg/billing/rows${query}`)
-  return res?.data || []
-}
-
-export async function fetchSppgInvoices(sppgId = '') {
-  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
-  const res = await api(`/api/sppg/billing/invoices${query}`)
-  return res?.data || []
-}
-
-export async function fetchSppgInvoiceDetail(id, sppgId = '') {
-  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
-  const res = await api(`/api/sppg/billing/invoices/${encodeURIComponent(id)}${query}`)
-  return res?.data || null
-}
-
-export async function generateSppgInvoice(payload = {}, sppgId = '') {
-  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
-  const res = await api(`/api/sppg/billing/invoices/generate${query}`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-  return res?.data || null
-}
-
-export async function advanceSppgInvoiceStage(id, payload = {}, sppgId = '') {
-  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
-  const res = await api(`/api/sppg/billing/invoices/${encodeURIComponent(id)}/advance${query}`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
-  return res?.data || null
-}
-
-export async function attachSppgInvoiceNotes(id, files = [], sppgId = '') {
-  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
-  const res = await api(`/api/sppg/billing/invoices/${encodeURIComponent(id)}/notes${query}`, {
-    method: 'POST',
-    body: JSON.stringify({ files }),
   })
   return res?.data || null
 }
