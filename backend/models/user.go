@@ -60,10 +60,11 @@ type UpdateProfileRequest struct {
 
 // AuthResponse is returned after login/refresh/me.
 type AuthResponse struct {
-	AccessToken string   `json:"accessToken,omitempty"`
-	ExpiresIn   int64    `json:"expiresIn,omitempty"`
-	User        *User    `json:"user"`
-	Permissions []string `json:"permissions"`
+	AccessToken  string   `json:"accessToken,omitempty"`
+	RefreshToken string   `json:"refreshToken,omitempty"`
+	ExpiresIn    int64    `json:"expiresIn,omitempty"`
+	User         *User    `json:"user"`
+	Permissions  []string `json:"permissions"`
 }
 
 // Permission identifiers resolved server-side from the caller's role.

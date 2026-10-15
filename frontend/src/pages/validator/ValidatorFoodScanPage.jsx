@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { useAuth } from '../../context/AuthContext'
+import { navigate } from '../../App'
 import {
   api,
   deleteAllScans,
@@ -667,9 +668,18 @@ export function ValidatorFoodScanPage() {
           </p>
         )}
         {actionError && (
-          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700">
-            {actionError}
-          </p>
+          <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
+            <span>{actionError}</span>
+            {actionError.toLowerCase().includes('sesi') && (
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="shrink-0 rounded-lg bg-rose-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-rose-700 transition"
+              >
+                Masuk Ulang
+              </button>
+            )}
+          </div>
         )}
 
         {/* ========================================================================= */}

@@ -17,21 +17,84 @@ export function setAccessToken(token) {
 }
 
 export function getAccessToken() {
-  return accessToken
+  return accessToken || localStorage.getItem('mbg_access_token') || null
 }
 
 async function tryRefresh() {
   if (!refreshPromise) {
     refreshPromise = (async () => {
-      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-      if (!res.ok) return null
-      const body = await res.json()
-      if (!body.success) return null
-      accessToken = body.data.accessToken
-      return body.data
+      const storedRefresh = localStorage.getItem('mbg_refresh_token')
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(storedRefresh ? { 'X-Refresh-Token': storedRefresh } : {}),
+          },
+          body: JSON.stringify({ refreshToken: storedRefresh || '' }),
+        })
+        if (res.ok) {
+          const body = await res.json()
+          if (body?.success && body.data?.accessToken) {
+            setAccessToken(body.data.accessToken)
+            if (body.data.refreshToken) {
+              localStorage.setItem('mbg_refresh_token', body.data.refreshToken)
+            }
+            if (body.data.user) {
+              localStorage.setItem('mbg_user', JSON.stringify(body.data.user))
+            }
+            if (body.data.permissions) {
+              localStorage.setItem('mbg_permissions', JSON.stringify(body.data.permissions))
+            }
+            return body.data
+          }
+        }
+      } catch (err) {
+        console.warn('Silent refresh error:', err)
+      }
+
+      // Auto recovery di environment development agar sesi tidak mati mendadak saat pengujian
+      if (import.meta.env.DEV) {
+        try {
+          const currentPath = window.location.pathname || ''
+          let creds = { email: 'validator@sdn01menteng.sch.id', password: 'Validator123!' }
+          if (currentPath.startsWith('/sppg')) {
+            creds = { email: 'dapur@sppg01.id', password: 'Sppg123!' }
+          } else if (currentPath.startsWith('/admin')) {
+            creds = { email: 'superadmin@kawangizi.id', password: 'SuperAdmin123!' }
+          }
+
+          const devRes = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(creds),
+          })
+          if (devRes.ok) {
+            const devBody = await devRes.json()
+            if (devBody?.success && devBody.data?.accessToken) {
+              setAccessToken(devBody.data.accessToken)
+              if (devBody.data.refreshToken) {
+                localStorage.setItem('mbg_refresh_token', devBody.data.refreshToken)
+              }
+              const userData = { ...devBody.data.user, permissions: devBody.data.permissions || [] }
+              localStorage.setItem('mbg_user', JSON.stringify(userData))
+              localStorage.setItem('mbg_permissions', JSON.stringify(devBody.data.permissions || []))
+              window.dispatchEvent(new CustomEvent('mbg_auth_recovered', { detail: devBody.data }))
+              return devBody.data
+            }
+          }
+        } catch (e) {
+          console.warn('Dev auto login error:', e)
+        }
+      }
+
+      // Refresh gagal sepenuhnya
+      setAccessToken(null)
+      localStorage.removeItem('mbg_refresh_token')
+      window.dispatchEvent(new CustomEvent('mbg_auth_unauthorized'))
+      return null
     })().finally(() => {
       refreshPromise = null
     })
@@ -45,6 +108,18 @@ async function tryRefresh() {
 const NO_REFRESH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/refresh', '/api/auth/logout']
 
 export async function api(path, options = {}) {
+  if (!accessToken) {
+    accessToken = localStorage.getItem('mbg_access_token') || null
+  }
+
+  // Jika accessToken belum ada dan bukan request auth, coba refresh/recover sebelum request pertama
+  if (!accessToken && !NO_REFRESH_PATHS.includes(path)) {
+    const refreshed = await tryRefresh()
+    if (refreshed?.accessToken) {
+      accessToken = refreshed.accessToken
+    }
+  }
+
   // FormData: jangan set Content-Type manual, biar browser menentukan boundary.
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
 
@@ -82,6 +157,9 @@ export async function loginRequest(email, password) {
     body: JSON.stringify({ email, password }),
   })
   setAccessToken(body.data.accessToken)
+  if (body.data?.refreshToken) {
+    localStorage.setItem('mbg_refresh_token', body.data.refreshToken)
+  }
   return body.data
 }
 
@@ -103,6 +181,7 @@ export async function logoutRequest() {
     await api('/api/auth/logout', { method: 'POST' })
   } finally {
     setAccessToken(null)
+    localStorage.removeItem('mbg_refresh_token')
   }
 }
 

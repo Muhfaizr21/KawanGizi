@@ -45,13 +45,38 @@ export function AuthProvider({ children }) {
           setPermissions([])
           localStorage.removeItem('mbg_user')
           localStorage.removeItem('mbg_permissions')
+          localStorage.removeItem('mbg_access_token')
+          localStorage.removeItem('mbg_refresh_token')
         }
       } finally {
         if (!cancelled) setLoading(false)
       }
     })()
+
+    const handleRecovered = (e) => {
+      if (e.detail?.user) {
+        const userData = { ...e.detail.user, permissions: e.detail.permissions || [] }
+        setUser(userData)
+        setPermissions(e.detail.permissions || [])
+      }
+    }
+
+    const handleUnauthorized = () => {
+      setUser(null)
+      setPermissions([])
+      localStorage.removeItem('mbg_user')
+      localStorage.removeItem('mbg_permissions')
+      localStorage.removeItem('mbg_access_token')
+      localStorage.removeItem('mbg_refresh_token')
+    }
+
+    window.addEventListener('mbg_auth_recovered', handleRecovered)
+    window.addEventListener('mbg_auth_unauthorized', handleUnauthorized)
+
     return () => {
       cancelled = true
+      window.removeEventListener('mbg_auth_recovered', handleRecovered)
+      window.removeEventListener('mbg_auth_unauthorized', handleUnauthorized)
     }
   }, [])
 
@@ -71,6 +96,8 @@ export function AuthProvider({ children }) {
     setPermissions([])
     localStorage.removeItem('mbg_user')
     localStorage.removeItem('mbg_permissions')
+    localStorage.removeItem('mbg_access_token')
+    localStorage.removeItem('mbg_refresh_token')
   }, [])
 
   const updateUser = useCallback((patch) => {
