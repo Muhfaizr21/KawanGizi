@@ -7,12 +7,16 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"backend/models"
+	"backend/repositories"
 )
 
 type scanRepoStub struct {
 	batch *models.ScanBatchInfo
+	// duplicate simulates a scan log for the same photo that already exists.
+	duplicate *models.ScanLog
 }
 
 func (r *scanRepoStub) FindBatch(context.Context, string) (*models.ScanBatchInfo, error) {
@@ -20,6 +24,12 @@ func (r *scanRepoStub) FindBatch(context.Context, string) (*models.ScanBatchInfo
 }
 func (*scanRepoStub) InsertScan(context.Context, *models.ScanLog) error { return nil }
 func (*scanRepoStub) CountToday(context.Context) (int, error)           { return 0, nil }
+func (r *scanRepoStub) FindRecentScanByImage(context.Context, string, string, time.Duration) (*models.ScanLog, error) {
+	if r.duplicate == nil {
+		return nil, repositories.ErrNotFound
+	}
+	return r.duplicate, nil
+}
 func (*scanRepoStub) ListRecentScans(context.Context, string, int) ([]models.ScanLog, error) {
 	return nil, nil
 }
@@ -266,4 +276,58 @@ func TestSubmitScanPrefersBatchNutritionOverDetection(t *testing.T) {
 	if result.Macros == nil || result.Macros.Energy != 520 {
 		t.Fatalf("expected batch macros to be preserved, got %+v", result.Macros)
 	}
+}
+
+// Repo yang mencatat InsertScan supaya bisa dibuktikan tidak ada baris baru.
+type countingScanRepo struct {
+	scanRepoStub
+	inserts int
+}
+
+func (r *countingScanRepo) InsertScan(context.Context, *models.ScanLog) error {
+	r.inserts++
+	return nil
+}
+
+func TestSubmitScanDoesNotStoreSamePhotoTwice(t *testing.T) {
+	server := trayPredictionServer(t)
+
+	t.Run("foto baru disimpan sekali", func(t *testing.T) {
+		repo := &countingScanRepo{}
+		service := NewScanService(repo, server.URL, nil)
+		result, err := service.SubmitScan(context.Background(), ScanSubmission{
+			ActorID: "v", Image: []byte("foto-a"), FileName: "a.jpg", Mode: "kelayakan", Persist: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if repo.inserts != 1 {
+			t.Fatalf("harus tepat 1 baris tersimpan, dapat %d", repo.inserts)
+		}
+		if result.DuplicateImage {
+			t.Fatal("foto baru tidak boleh ditandai duplikat")
+		}
+	})
+
+	t.Run("foto kembar tidak menambah baris", func(t *testing.T) {
+		repo := &countingScanRepo{scanRepoStub: scanRepoStub{duplicate: &models.ScanLog{
+			ID: "SCN-LAMA", BoxID: "BOK-LAMA", ImageRef: "SCN-LAMA.webp",
+		}}}
+		service := NewScanService(repo, server.URL, nil)
+		result, err := service.SubmitScan(context.Background(), ScanSubmission{
+			ActorID: "v", Image: []byte("foto-kembar"), FileName: "b.jpg", Mode: "kelayakan", Persist: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if repo.inserts != 0 {
+			t.Fatalf("foto kembar tidak boleh menambah baris, dapat %d insert", repo.inserts)
+		}
+		if !result.DuplicateImage {
+			t.Fatal("hasil harus ditandai sebagai foto duplikat")
+		}
+		if result.ID != "SCN-LAMA" {
+			t.Fatalf("hasil harus memakai id scan lama, dapat %q", result.ID)
+		}
+	})
 }

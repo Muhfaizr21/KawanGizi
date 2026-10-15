@@ -390,6 +390,14 @@ ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS menu_name TEXT NOT NUL
 ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS menu_class TEXT NOT NULL DEFAULT '';
 ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS menu_display TEXT NOT NULL DEFAULT '';
 ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS menu_confidence DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS scan_mode VARCHAR(16) NOT NULL DEFAULT '';
+-- Hash isi foto dipakai untuk menolak submit ganda atas foto yang sama
+-- (klik ganda, retry jaringan, atau tombol pindai-ulang).
+ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS image_md5 VARCHAR(32) NOT NULL DEFAULT '';
+-- Laporan mode (kelayakan / nutrisi) disimpan apa adanya supaya halaman detail
+-- riwayat bisa menampilkannya tanpa menjalankan inferensi ulang.
+ALTER TABLE scan_logs            ADD COLUMN IF NOT EXISTS report JSONB NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_scan_logs_image_md5 ON scan_logs(actor_id, image_md5, created_at DESC);
 ALTER TABLE validator_profiles   ADD COLUMN IF NOT EXISTS backup_validator_id VARCHAR(64) REFERENCES validator_profiles(id) ON DELETE SET NULL;
 ALTER TABLE validator_profiles   ADD COLUMN IF NOT EXISTS warning_count INT NOT NULL DEFAULT 0;
 ALTER TABLE validator_profiles   ADD COLUMN IF NOT EXISTS last_warning_at TIMESTAMPTZ;

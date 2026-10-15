@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"backend/middlewares"
+	"backend/models"
 	"backend/services"
 	"backend/utils"
 	"encoding/json"
@@ -89,6 +90,17 @@ func (c *ScanController) Submit(w http.ResponseWriter, r *http.Request) {
 	rating, _ := strconv.Atoi(r.FormValue("rating"))
 	feedback := r.FormValue("feedback")
 
+	// Mode analisis yang dipilih pengguna. Absen berarti kelayakan, supaya klien
+	// lama (mobile, klien pihak ketiga) tetap mendapat laporan yang berguna.
+	mode := strings.ToLower(strings.TrimSpace(r.FormValue("mode")))
+	if mode == "" {
+		mode = models.ScanModeKelayakan
+	}
+	if !models.ValidScanMode(mode) {
+		utils.Error(w, http.StatusBadRequest, "mode harus 'kelayakan' atau 'nutrisi'")
+		return
+	}
+
 	result, err := c.scanSvc.SubmitScan(r.Context(), services.ScanSubmission{
 		ActorID:      middlewares.UserID(r.Context()),
 		Image:        image,
@@ -103,6 +115,7 @@ func (c *ScanController) Submit(w http.ResponseWriter, r *http.Request) {
 		Persist:      persist,
 		Rating:       rating,
 		Feedback:     feedback,
+		Mode:         mode,
 	})
 	if err != nil {
 		switch {

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"mime/multipart"
 	"net/http"
@@ -114,6 +115,10 @@ type ScanSubmission struct {
 	Persist  bool
 	Rating   int
 	Feedback string
+
+	// Mode analisis yang diminta pengguna ("kelayakan" atau "nutrisi"). Kosong
+	// diperlakukan sebagai kelayakan supaya klien lama tetap berfungsi.
+	Mode string
 }
 
 // ScanService defines business logic for the scan endpoint.
@@ -230,10 +235,38 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 		fileName = "capture.jpg"
 	}
 
-	// Cek deduplikasi: jika scan identik dikirim dalam 5 detik, jangan duplikasi database
-	dedupKey := fmt.Sprintf("%s:%x", actorID, md5.Sum(image))
+	// Normalisasi mode lebih dulu: menentukan bentuk laporan keluaran, jadi harus
+	// settle sebelum cache dedup dan sebelum pemanggilan AI.
+	mode := strings.ToLower(strings.TrimSpace(in.Mode))
+	if mode == "" {
+		mode = models.ScanModeKelayakan
+	}
+
+	// Hash isi foto. Dipakai untuk menolak submit ganda atas foto yang sama,
+	// baik lewat cache memori (double-klik cepat) maupun lewat database
+	// (retry jaringan, klik ulang tombol, atau backend yang sempat restart).
+	imageHash := fmt.Sprintf("%x", md5.Sum(image))
+
+	// Penjaga pertama: cache memori, menutup request identik yang datang
+	// dalam hitungan detik.
+	dedupKey := fmt.Sprintf("%s:%s:%s", actorID, mode, imageHash)
 	if cached := getCachedScan(dedupKey); cached != nil {
 		return cached, nil
+	}
+
+	// Penjaga kedua, bertahan lintas restart karena dicek di database. Kalau
+	// foto yang sama baru saja tersimpan, hasil pindai tetap dikembalikan ke
+	// pengguna, tapi baris riwayatnya tidak dibuat lagi supaya tidak kembar.
+	var duplicateOf *models.ScanLog
+	if in.Persist {
+		dup, err := s.repo.FindRecentScanByImage(ctx, actorID, imageHash, duplicateScanWindow)
+		if err != nil && !errors.Is(err, repositories.ErrNotFound) {
+			// Penjaga bonus: kalau pengecekan gagal, scan tetap diproses normal.
+			log.Printf("Peringatan: pengecekan duplikat scan gagal: %v", err)
+		}
+		if dup != nil {
+			duplicateOf = dup
+		}
 	}
 
 	pred, err := s.Predict(ctx, image, fileName)
@@ -436,8 +469,16 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 	now := time.Now().In(wib)
 	scanID := "TEMP-PREVIEW"
 	savedFileName := ""
+	// Foto yang sama sudah punya baris riwayat -> pakai kembali id & nama file
+	// lamanya, jangan buat duplikat.
+	alreadyStored := duplicateOf != nil
 
-	if in.Persist {
+	if in.Persist && alreadyStored {
+		scanID = duplicateOf.ID
+		savedFileName = duplicateOf.ImageRef
+	}
+
+	if in.Persist && !alreadyStored {
 		var err error
 		scanID, err = s.nextScanID(ctx)
 		if err != nil {
@@ -453,8 +494,16 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 		// Upload gambar adalah artefak runtime privat, bukan bagian source code.
 		// Abaikan foldernya agar foto pengguna tidak masuk ke perubahan Git.
 		_ = os.WriteFile(filepath.Join("uploads", ".gitignore"), []byte("*\n!.gitignore\n"), 0644)
+	}
 
-		entry := &models.ScanLog{
+	// Baris riwayat disiapkan di sini tapi baru ditulis setelah laporan mode
+	// tersusun di bawah, supaya blok kelayakan / nutrisi ikut tersimpan dan
+	// halaman detail bisa menampilkannya tanpa inferensi ulang.
+	// Foto kembar memakai id lama di atas: hasil pindai tetap sama persis tapi
+	// daftar riwayat tidak bertambah dua baris untuk satu foto.
+	var pendingLog *models.ScanLog
+	if in.Persist && !alreadyStored {
+		pendingLog = &models.ScanLog{
 			ID:             scanID,
 			BoxID:          boxID,
 			QRToken:        qrToken,
@@ -476,12 +525,10 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 			MenuClass:      menuClass,
 			MenuDisplay:    menuDisplay,
 			MenuConfidence: menuConfidence,
-		}
-		if err := s.repo.InsertScan(ctx, entry); err != nil {
-			return nil, fmt.Errorf("menyimpan scan log: %w", err)
+			ScanMode:       mode,
+			ImageMD5:       imageHash,
 		}
 	}
-
 	result := &models.ScanResult{
 		ID:                  scanID,
 		BoxID:               boxID,
@@ -507,6 +554,8 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 		AIClass:             freshClass,
 		AIConfidence:        freshConfidence,
 		AILatencyMS:         pred.LatencyMS,
+		ScanMode:            mode,
+		DuplicateImage:      alreadyStored,
 	}
 
 	// Makronutrien: utamakan total dari batch/resep; bila tidak ada, fallback
@@ -558,7 +607,216 @@ func (s *scanService) SubmitScan(ctx context.Context, in ScanSubmission) (*model
 	if in.Persist {
 		setCachedScan(dedupKey, result)
 	}
+
+	// Laporan mode dipilih ditempel setelah semua data turunan siap, supaya mode
+	// nutrisi memakai makronutrisi final dan mode kelayakan memakai skor
+	// kesegaran final.
+	switch mode {
+	case models.ScanModeNutrisi:
+		result.Nutrisi = buildNutrisiReport(result)
+	default:
+		result.Kelayakan = buildKelayakanReport(result)
+	}
+
+	if pendingLog != nil {
+		// Simpan hanya blok mode yang dipakai, supaya detail riwayat menampilkan
+		// output yang sama persis dengan yang dilihat pengguna saat pindai.
+		var report []byte
+		if result.Nutrisi != nil {
+			report, _ = json.Marshal(map[string]any{"mode": mode, "nutrisi": result.Nutrisi})
+		} else if result.Kelayakan != nil {
+			report, _ = json.Marshal(map[string]any{"mode": mode, "kelayakan": result.Kelayakan})
+		}
+		if len(report) > 0 {
+			pendingLog.Report = report
+		}
+		if err := s.repo.InsertScan(ctx, pendingLog); err != nil {
+			return nil, fmt.Errorf("menyimpan scan log: %w", err)
+		}
+	}
+
 	return result, nil
+}
+
+
+// buildKelayakanReport menyusun keluaran mode kelayakan dari klasifikasi
+// kesegaran dan konsistensi visual. Setiap indikator diturunkan dari angka yang
+// benar-benar dihitung model; hal yang tidak terukur (jamur, lendir) tidak dikarang.
+func buildKelayakanReport(r *models.ScanResult) *models.KelayakanReport {
+	nama := strings.TrimSpace(r.MenuDisplay)
+	if nama == "" && r.BatchInfo != nil {
+		nama = strings.TrimSpace(r.BatchInfo.MenuName)
+	}
+	if nama == "" {
+		nama = "Hidangan tidak teridentifikasi"
+	}
+
+	skor := math.Round(clampConfidence(r.Score) * 100)
+
+	status := models.KelWaspada
+	switch {
+	case isSpoiledClass(r.FreshnessClass):
+		status = models.KelTidakLayak
+	case isFreshClass(r.FreshnessClass) && r.FreshnessConfidence >= minFreshnessConfidence:
+		status = models.KelLayak
+	}
+
+	indikator := []string{}
+
+	if strings.TrimSpace(r.FreshnessClass) == "" {
+		indikator = append(indikator, "Foto tidak cukup jelas untuk dinilai kesegaran; klasifikasi freshness tidak menghasilkan label.")
+	} else {
+		indikator = append(indikator, fmt.Sprintf(
+			"Klasifikasi kesegaran: %s (keyakinan %.0f%%, skor %.0f/100).",
+			strings.TrimSpace(r.FreshnessDisplay), r.FreshnessConfidence*100, skor,
+		))
+	}
+
+	if len(r.Compartments) > 0 {
+		var match, review, mismatch, empty int
+		for _, c := range r.Compartments {
+			switch c.Status {
+			case models.CompartmentStatusMatch:
+				match++
+			case models.CompartmentStatusReview:
+				review++
+			case models.CompartmentStatusMismatch:
+				mismatch++
+			case models.CompartmentStatusEmpty:
+				empty++
+			}
+		}
+		indikator = append(indikator, fmt.Sprintf(
+			"Rincian %d sekat: %d cocok dengan menu, %d perlu ditinjau, %d tidak cocok, %d kosong.",
+			len(r.Compartments), match, review, mismatch, empty,
+		))
+	}
+
+	if strings.TrimSpace(r.MenuClass) == "" {
+		indikator = append(indikator, "Hidangan tidak dikenali model menu pada keyakinan memadai; kelayakan dinilai dari tanda visual dan suhu saja.")
+	} else {
+		indikator = append(indikator, fmt.Sprintf(
+			"Hidangan dikenali sebagai %s (keyakinan %.0f%%).",
+			strings.TrimSpace(r.MenuDisplay), r.MenuConfidence*100,
+		))
+	}
+
+	// Suhu adalah penyebab tidak layak yang paling sering terjadi di lapangan.
+	if r.HoldTemp > 0 {
+		if r.HoldTemp > 5 {
+			indikator = append(indikator, fmt.Sprintf("Suhu holding %.1f °C berada di atas ambang 5 °C.", r.HoldTemp))
+		} else {
+			indikator = append(indikator, fmt.Sprintf("Suhu holding %.1f °C aman (≤ 5 °C).", r.HoldTemp))
+		}
+	}
+
+	peringatan := ""
+	rekomendasi := ""
+	switch status {
+	case models.KelTidakLayak:
+		peringatan = "Terdeteksi tanda tidak layak. Sisa makanan tidak boleh disajikan kepada siswa dan harus dikarantina."
+		rekomendasi = "Terapkan karantina pada menu Karantina di halaman Dapur SPPG, lalu minta verifikasi ulang oleh kepala sekolah."
+	case models.KelWaspada:
+		peringatan = "Terdapat indikasi yang perlu diperiksa lebih lanjut sebelum makanan disajikan."
+		rekomendasi = "Periksa kembali aroma, tekstur, dan warna makanan secara langsung. Bila tetap meragukan, lakukan karantina."
+	default:
+		rekomendasi = "Makanan layak disajikan. Simpan pada suhu holding ≤ 5 °C dan gunakan pada hari yang sama."
+	}
+	if note := strings.TrimSpace(r.Note); note != "" {
+		rekomendasi += " Catatan sistem: " + strings.TrimRight(note, ".") + "."
+	}
+
+	return &models.KelayakanReport{
+		NamaHidrangan:      nama,
+		StatusKelayakan:    status,
+		SkorKesegaran:      skor,
+		IndikatorVisual:    indikator,
+		PeringatanKeamanan: peringatan,
+		Rekomendasi:        rekomendasi,
+	}
+}
+
+// buildNutrisiReport menyusun keluaran mode nutrisi. Angka makronutrisi berasal
+// dari dataset gizi per 100 g yang dicocokkan lewat nama bahan, bukan dari
+// estimasi visual, jadi dapat dipertanggungjawabkan ke data resep.
+func buildNutrisiReport(r *models.ScanResult) *models.NutrisiReport {
+	nama := strings.TrimSpace(r.MenuDisplay)
+	if nama == "" && r.BatchInfo != nil {
+		nama = strings.TrimSpace(r.BatchInfo.MenuName)
+	}
+	if nama == "" {
+		nama = "Hidangan tidak teridentifikasi"
+	}
+
+	bahan := make([]models.NutrisiBahan, 0, len(r.Nutrition))
+	var totalGram float64
+	for _, n := range r.Nutrition {
+		label := strings.TrimSpace(n.Name)
+		if label == "" {
+			continue
+		}
+		if n.WeightG > 0 {
+			totalGram += n.WeightG
+		}
+		bahan = append(bahan, models.NutrisiBahan{
+			Bahan:         label,
+			PorsiEstimasi: formatGram(n.WeightG),
+			WeightG:       n.WeightG,
+		})
+	}
+
+	makro := models.MakronutrisiReport{}
+	if r.Macros != nil {
+		makro = models.MakronutrisiReport{
+			KaloriTotal: round1(r.Macros.Energy),
+			Protein:     round1(r.Macros.Protein),
+			Karbohidrat: round1(r.Macros.Carbs),
+			Lemak:       round1(r.Macros.Fat),
+			Serat:       round1(r.Macros.Fiber),
+		}
+	}
+
+	// Ringkasan ditulis dari angka yang tersedia, bukan klaim marketing.
+	var ringkasan string
+	if r.Macros == nil && len(bahan) == 0 {
+		ringkasan = "Data gizi tidak tersedia untuk hidangan ini. Pastikan resep atau komposisi bahan tercatat pada batch agar makronutrisi dapat dihitung."
+	} else {
+		parts := []string{fmt.Sprintf(
+			"Perkiraan %d bahan dengan total %s menghasilkan sekitar %.0f kkal per porsi.",
+			len(bahan), formatGram(totalGram), makro.KaloriTotal,
+		)}
+		if makro.Protein >= 20 {
+			parts = append(parts, "Kandungan protein tinggi sehingga baik untuk pertumbuhan.")
+		} else if makro.Protein > 0 {
+			parts = append(parts, "Kandungan protein sedang, masih dapat dilengkapi lewat lauk hewani.")
+		}
+		if makro.Serat > 0 {
+			parts = append(parts, fmt.Sprintf("Serat %.1f g membantu menjaga kenyangan sampai jam makan berikutnya.", makro.Serat))
+		}
+		if makro.Lemak > 25 {
+			parts = append(parts, "Lemak cukup tinggi, sebaiknya kurangi porsi lemak dan tambah sayuran.")
+		}
+		ringkasan = strings.Join(parts, " ")
+	}
+	if strings.TrimSpace(r.NutritionNote) != "" {
+		ringkasan += " " + strings.TrimSpace(r.NutritionNote)
+	}
+
+	return &models.NutrisiReport{
+		NamaHidrangan:       nama,
+		EstimasiBeratPorsi: formatGram(totalGram),
+		RincianBahan:       bahan,
+		Makronutrisi:       makro,
+		RingkasanGizi:      ringkasan,
+	}
+}
+
+// formatGram presents a weight estimate in the "~250 gram" shape the spec asks for.
+func formatGram(weight float64) string {
+	if weight <= 0 {
+		return "tidak tersedia"
+	}
+	return fmt.Sprintf("~%d gram", int(math.Round(weight)))
 }
 
 // ListRecent returns the newest scan logs for the validator history view.
@@ -820,6 +1078,12 @@ type scanDedupEntry struct {
 	result    *models.ScanResult
 	createdAt time.Time
 }
+
+// duplicateScanWindow adalah rentang waktu foto yang sama dianggap duplikat.
+// Cukup lebar untuk menutup klik ganda, retry jaringan, dan render ulang
+//-dropdown, tetapi tetap sempit supaya validator boleh memindai ulang foto
+// yang sama setelah memang melakukan pemeriksaan ulang sendiri.
+const duplicateScanWindow = 2 * time.Minute
 
 var (
 	dedupMu    sync.Mutex

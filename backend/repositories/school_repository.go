@@ -398,7 +398,7 @@ func (r *postgresSchoolRepository) CountLinkedValidatorAccounts(ctx context.Cont
 //
 // attendances, deliveries, feedbacks, dan validator_profiles sudah punya FK ke
 // schools sehingga ikut terhapus (SET NULL untuk feedbacks). Tabel lain hanya
-// menyimpan NPSN/school_id sebagai kolom denormalisasi tanpa FK, jadi needs
+// menyimpan NPSN/school_id sebagai kolom denormalisasi tanpa FK, jadi harus
 // dibersihkan eksplisit supaya tidak ada sisa data sekolah yang sudah dihapus.
 func (r *postgresSchoolRepository) Delete(ctx context.Context, npsn string, actor models.User) error {
 	tx, err := r.pool.Begin(ctx)

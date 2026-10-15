@@ -46,6 +46,7 @@ export function ConfirmDialog({
   const theme = TONE_THEME[tone] || TONE_THEME.danger
   const Icon = theme.icon
   const confirmRef = useRef(null)
+  const cancelRef = useRef(null)
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -61,8 +62,11 @@ export function ConfirmDialog({
     }
   }, [isOpen, loading, onCancel])
 
+  // Fokus diarahkan ke tombol Batal, bukan tombol hapus. Kalau fokus mendarat
+  // di tombol destruktif, satu penekanan Enter oleh pengguna yang tidak sengaja
+  // sudah cukup untuk menghapus data.
   useEffect(() => {
-    if (isOpen) confirmRef.current?.focus()
+    if (isOpen) cancelRef.current?.focus()
   }, [isOpen])
 
   if (!isOpen) return null
@@ -128,6 +132,7 @@ export function ConfirmDialog({
         {/* Footer */}
         <div className="flex items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50/50 px-6 py-4">
           <button
+            ref={cancelRef}
             type="button"
             onClick={onCancel}
             disabled={loading}

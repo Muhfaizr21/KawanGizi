@@ -1,13 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, useImperativeHandle, forwardRef } from "react"
 import {
-  Camera,
-  Upload,
   X,
   RefreshCw,
   CheckCircle2,
   AlertTriangle,
-  Sparkles,
-  Smartphone,
   ScanLine,
   HelpCircle,
 } from "lucide-react"
@@ -41,18 +37,22 @@ export async function convertToWebP(sourceFile, quality = 0.85) {
   })
 }
 
-export function ImageCapturePanel({
-  onCapture,
-  onScanStart,
-  disabled = false,
-  label = "",
-  hint,
-  title = "Pemindai Visual Kelayakan & Makronutrien AI",
-  description = "Arahkan kamera ke porsi hidangan untuk skrining visual kebusukan instan serta kalkulasi otomatis karbohidrat, protein, & lemak porsi anak.",
-  badges = ["✨ YOLOv8 Edge AI", "⚡ Latensi ~45ms"],
-  scanButtonText = "Mulai Pindai Makanan Bergizi",
-  onHelpClick,
-}) {
+export const ImageCapturePanel = forwardRef(function ImageCapturePanel(
+  {
+    onCapture,
+    onScanStart,
+    onScanRequest,
+    disabled = false,
+    label = "",
+    hint,
+    title = "Pemindai Visual Kelayakan & Makronutrien AI",
+    description = "Arahkan kamera ke porsi hidangan untuk skrining visual kebusukan instan serta kalkulasi otomatis karbohidrat, protein, & lemak porsi anak.",
+    badges = ["✨ YOLOv8 Edge AI", "⚡ Latensi ~45ms"],
+    scanButtonText = "Mulai Pindai Makanan Bergizi",
+    onHelpClick,
+  },
+  ref
+) {
   const [mode, setMode] = useState("idle")
   const [preview, setPreview] = useState(null)
   const [cameraError, setCameraError] = useState(null)
@@ -186,6 +186,26 @@ export function ImageCapturePanel({
     setMode("idle")
     onCapture?.(null, null)
   }
+
+  // Meminta sumber gambar. When the caller supplies onScanRequest it owns the
+  // first step (memilih mode analisis lalu sumber gambar), so the picker only
+  // opens after those choices are done. Without it the old one-tap capture flow
+  // is kept.
+  const requestScan = useCallback(() => {
+    if (disabled) return
+    if (onScanRequest) {
+      onScanRequest()
+      return
+    }
+    cameraRef.current?.click()
+  }, [disabled, onScanRequest])
+
+  // Pemanggil (halaman induk) membuka pilihan sumber gambar setelah mode
+  // dipilih, sehingga perlu cara memicu kedua sumber tanpa menyalin input.
+  useImperativeHandle(ref, () => ({
+    openFilePicker: () => uploadRef.current?.click(),
+    openCamera: () => startCamera(facing),
+  }))
 
   return (
     <div className="space-y-3">
@@ -325,7 +345,7 @@ export function ImageCapturePanel({
             {/* White Prominent Button with Dark Text */}
             <button
               type="button"
-              onClick={() => cameraRef.current?.click()}
+              onClick={requestScan}
               disabled={disabled}
               className="flex-1 flex items-center justify-center gap-2.5 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-900 font-extrabold text-xs sm:text-sm transition-all shadow-md cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-emerald-300"
             >
@@ -344,34 +364,13 @@ export function ImageCapturePanel({
             </button>
           </div>
 
-          {/* Secondary Quick Action: Upload Gambar dari File & Hint */}
-          <div className="relative z-10 flex items-center justify-between gap-2 pt-2.5 border-t border-emerald-800/40 text-[11px] text-emerald-200/80">
+          {/* Hint bar — pilihan upload / kamera dipindah ke modal setelah mode dipilih */}
+          <div className="relative z-10 flex items-center gap-2 pt-2.5 border-t border-emerald-800/40 text-[11px] text-emerald-200/80">
             <span className="truncate">
               {isDragging
                 ? "Lepaskan file nampan untuk memulai inspeksi..."
-                : (hint || "PWA Mode Siaga: Sentuh tombol putih untuk membuka kamera")}
+                : (hint || "Tekan tombol putih di atas, lalu pilih mode analisis dan sumber gambar.")}
             </span>
-            <button
-              type="button"
-              onClick={() => uploadRef.current?.click()}
-              disabled={disabled}
-              className="text-[11px] font-bold text-amber-300 hover:text-amber-200 underline cursor-pointer shrink-0 flex items-center gap-1.5"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              <span>Upload Gambar</span>
-            </button>
-          </div>
-
-          {/* Desktop WebRTC Fallback Link */}
-          <div className="relative z-10 text-center pt-2 mt-2 border-t border-emerald-800/40 hidden md:block">
-            <button
-              type="button"
-              onClick={() => startCamera()}
-              disabled={disabled}
-              className="text-[10px] font-medium text-emerald-300/80 hover:text-white underline transition cursor-pointer"
-            >
-              Gunakan kamera video webcam live (desktop)
-            </button>
           </div>
 
           {/* Hidden HTML Inputs for PWA Functionality */}
@@ -408,7 +407,9 @@ export function ImageCapturePanel({
       )}
     </div>
   )
-}
+})
+
+ImageCapturePanel.displayName = "ImageCapturePanel"
 
 export default ImageCapturePanel
 

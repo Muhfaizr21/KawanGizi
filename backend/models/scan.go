@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Verdict categories returned by scan checks; passing inputs remain pending staff review.
 const (
@@ -21,31 +24,101 @@ const (
 	CompartmentStatusEmpty = "empty"
 )
 
+// Mode analisis yang dipilih pengguna saat memulai pemindaian. Keduanya memakai
+// satu kali inferensi YOLOv8 + freshness classifier, hanya laporan keluaran yang
+// dibedakan supaya validator tidak perlu mengulang pindai untuk pertanyaan berbeda.
+const (
+	// ScanModeKelayakan fokus pada kesegaran dan tanda pembusukan.
+	ScanModeKelayakan = "kelayakan"
+	// ScanModeNutrisi fokus pada estimasi porsi dan makronutrisi.
+	ScanModeNutrisi = "nutrisi"
+)
+
+// Status kelayakan yang dilaporkan pada mode kelayakan.
+const (
+	KelLayak      = "Layak Konsumsi"
+	KelWaspada    = "Waspada"
+	KelTidakLayak = "Tidak Layak Konsumsi"
+)
+
+// ValidScanMode reports whether the given mode is a supported analysis mode.
+func ValidScanMode(mode string) bool {
+	return mode == ScanModeKelayakan || mode == ScanModeNutrisi
+}
+
+// KelayakanReport adalah keluaran mode kelayakan: hanya fokus pada keamanan
+// konsumsi, bukan rincian gizi.
+// KelayakanReport adalah keluaran mode kelayakan: fokus pada keamanan
+// konsumsi, bukan rincian gizi.
+type KelayakanReport struct {
+	NamaHidrangan      string   `json:"nama_hidfangan"`
+	StatusKelayakan    string   `json:"status_kelayakan"`
+	SkorKesegaran      float64  `json:"skor_kesegaran"`
+	IndikatorVisual    []string `json:"indikator_visual"`
+	PeringatanKeamanan string   `json:"peringatan_keamanan,omitempty"`
+	Rekomendasi        string   `json:"rekomendasi"`
+}
+
+// NutrisiBahan adalah satu baris bahan pada rincian porsi.
+type NutrisiBahan struct {
+	Bahan         string  `json:"bahan"`
+	PorsiEstimasi string  `json:"porsi_estimasi"`
+	WeightG       float64 `json:"weight_gram"`
+}
+
+// MakronutrisiReport adalah blok makronutrisi pada mode nutrisi.
+type MakronutrisiReport struct {
+	KaloriTotal float64 `json:"kalori_total"`
+	Protein     float64 `json:"protein"`
+	Karbohidrat float64 `json:"karbohidrat"`
+	Lemak       float64 `json:"lemak"`
+	Serat       float64 `json:"serat"`
+}
+
+// NutrisiReport adalah keluaran mode nutrisi: estimasi porsi dan makronutrisi
+// yang dihitung dari dataset gizi, bukan ditebak dari gambar.
+type NutrisiReport struct {
+	NamaHidrangan      string             `json:"nama_hidfangan"`
+	EstimasiBeratPorsi string             `json:"estimasi_berat_porsi"`
+	RincianBahan       []NutrisiBahan     `json:"rincian_bahan"`
+	Makronutrisi       MakronutrisiReport `json:"makronutrisi"`
+	RingkasanGizi      string             `json:"ringkasan_gizi"`
+}
+
 // ScanLog is a persisted row in scan_logs (audit trail pemindaian boks).
 type ScanLog struct {
-	ID           string    `json:"id"`
-	BoxID        string    `json:"boxId"`
-	QRToken      string    `json:"qrToken"`
-	BatchID      string    `json:"batchId"`
-	ImageRef     string    `json:"imageRef"`
-	AIClass      string    `json:"aiClass"`
-	AIConfidence float64   `json:"aiConfidence"`
-	VisualScore  float64   `json:"visualScore"`
-	HoldingTempC *float64  `json:"holdingTempC,omitempty"`
-	ReleaseTempC *float64  `json:"releaseTempC,omitempty"`
+	ID           string   `json:"id"`
+	BoxID        string   `json:"boxId"`
+	QRToken      string   `json:"qrToken"`
+	BatchID      string   `json:"batchId"`
+	ImageRef     string   `json:"imageRef"`
+	AIClass      string   `json:"aiClass"`
+	AIConfidence float64  `json:"aiConfidence"`
+	VisualScore  float64  `json:"visualScore"`
+	HoldingTempC *float64 `json:"holdingTempC,omitempty"`
+	ReleaseTempC *float64 `json:"releaseTempC,omitempty"`
 	// DurationMS adalah durasi inspeksi visual klien (ms). Nil bila tidak dikirim.
-	DurationMS   *int      `json:"durationMs,omitempty"`
-	Verdict      string    `json:"verdict"`
-	Reason       string    `json:"reason"`
-	ActorID      string    `json:"actorId"`
-	CreatedAt    time.Time `json:"createdAt"`
-	Rating       int       `json:"rating,omitempty"`
-	Feedback     string    `json:"feedback,omitempty"`
-	MenuName     string    `json:"menuName,omitempty"`
-	MenuClass    string    `json:"menuClass,omitempty"`
-	MenuDisplay  string    `json:"menuDisplay,omitempty"`
+	DurationMS  *int      `json:"durationMs,omitempty"`
+	Verdict     string    `json:"verdict"`
+	Reason      string    `json:"reason"`
+	ActorID     string    `json:"actorId"`
+	CreatedAt   time.Time `json:"createdAt"`
+	Rating      int       `json:"rating,omitempty"`
+	Feedback    string    `json:"feedback,omitempty"`
+	MenuName    string    `json:"menuName,omitempty"`
+	MenuClass   string    `json:"menuClass,omitempty"`
+	MenuDisplay string    `json:"menuDisplay,omitempty"`
 	// MenuConfidence adalah keyakinan model menu (0-1) pada foto.
 	MenuConfidence float64 `json:"menuConfidence,omitempty"`
+	// ScanMode remembers the analysis mode the user picked for this scan.
+	ScanMode string `json:"scanMode,omitempty"`
+	// ImageMD5 is the content hash of the uploaded photo, used to reject a
+	// duplicate submission of the very same picture.
+	ImageMD5 string `json:"imageMd5,omitempty"`
+	// Report menyimpan keluaran mode yang dipakai saat pindai (blok kelayakan
+	// atau nutrisi) supaya halaman detail bisa menampilkannya kembali tanpa
+	// menjalankan inferensi ulang.
+	Report json.RawMessage `json:"report,omitempty"`
 }
 
 // ScanCheck is one row on the decision card checklist.
@@ -133,4 +206,14 @@ type ScanResult struct {
 	AIClass             string             `json:"aiClass"`
 	AIConfidence        float64            `json:"aiConfidence"`
 	AILatencyMS         float64            `json:"aiLatencyMs,omitempty"`
+	// ScanMode is the analysis mode chosen by the validator (kelayanan / nutrisi).
+	ScanMode string `json:"scanMode"`
+	// DuplicateImage true bila foto ini sama dengan pindai yang baru saja
+	// disimpan, sehingga tidak dibuat baris riwayat baru.
+	DuplicateImage bool `json:"duplicateImage,omitempty"`
+	// Kelayakan diisi hanya saat mode kelayakan; Nutrisi diisi hanya saat mode
+	// nutrisi. Field lawannya dibiarkan nil supaya respons tiap mode hanya
+	// membawa output yang relevan.
+	Kelayakan *KelayakanReport `json:"kelayakan,omitempty"`
+	Nutrisi   *NutrisiReport   `json:"nutrisi,omitempty"`
 }
