@@ -238,7 +238,7 @@ export function AdminLayout({
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#F4F7FC] text-slate-800 font-sans antialiased flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-[#F4F7FC] text-slate-800 font-sans antialiased flex flex-col lg:flex-row lg:items-start">
       {/* Toast Notification Container */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 text-white px-4 py-3 text-xs shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5">
@@ -251,7 +251,7 @@ export function AdminLayout({
           SIDEBAR NAVIGATION
           ==================================================================== */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-30 lg:translate-x-0 lg:transform-none shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-[70] w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:self-start lg:z-30 lg:translate-x-0 lg:transform-none shrink-0 ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } shadow-sm overflow-hidden`}
       >
@@ -332,7 +332,7 @@ export function AdminLayout({
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-30 lg:hidden"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[60] lg:hidden"
         />
       )}
 
@@ -648,9 +648,9 @@ export function AdminLayout({
         {/* BOTTOM FOOTER (ENTERPRISE GOVERNMENT TIER) */}
         <footer className="bg-white border-t border-slate-200/80 px-6 py-4 flex flex-col md:flex-row items-center justify-between text-[11px] text-slate-500 gap-2">
           <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
-            <span className="font-extrabold text-slate-700 tracking-tight">BADAN GIZI NASIONAL (BGN) REPUBLIK INDONESIA</span>
+            <span className="font-extrabold text-slate-700 tracking-tight">&copy; 2026 KawanGizi</span>
             <span className="hidden sm:inline text-slate-300">&bull;</span>
-            <span className="text-slate-500">Sistem Pengawasan Terpadu Program Makan Bergizi Gratis (MBG RI)</span>
+            <span className="text-slate-500">Sistem Skrining Kelayakan Pangan & Estimasi Nutrisi AI</span>
           </div>
           <div className="flex items-center gap-3 text-slate-500 font-mono text-[10px]">
             <span>Rancangan prototipe</span>

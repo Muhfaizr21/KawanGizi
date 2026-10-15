@@ -80,6 +80,7 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 
 	// Scan routes — submit & history require scan.submit (role validator)
 	mux.Handle("POST /api/scans", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.Submit)))
+	mux.Handle("POST /api/v1/scan", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.Submit)))
 	mux.Handle("GET /api/scans/recent", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.Recent)))
 	mux.Handle("PUT /api/scans/{id}", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.UpdateFeedback)))
 	mux.Handle("DELETE /api/scans/all", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.DeleteAllScans)))

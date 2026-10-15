@@ -223,7 +223,7 @@ export function ErrorPage({ code = 404, title, description, path, onHome, onRetr
 
       <footer className="border-t border-slate-200/80">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-2 px-6 py-5 font-mono text-[11px] text-slate-400 sm:flex-row">
-          <span>KawanGizi &bull; Skrining Mutu Porsi MBG</span>
+          <span>KawanGizi &bull; Skrining Mutu Porsi Nutrisi</span>
           <span className="flex items-center gap-2">
             <span className={`h-1.5 w-1.5 rounded-full ${accent.dot} animate-pulse`} />
             {isServer ? 'Pemantauan status aktif' : 'Sistem berjalan normal'}

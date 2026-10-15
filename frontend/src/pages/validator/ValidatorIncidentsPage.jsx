@@ -169,7 +169,7 @@ export function ValidatorIncidentsPage() {
       if (createdItem) {
         showToast(
           severity === 'high'
-            ? `🚨 SIRENE DARURAT DIAKTIFKAN: Tiket ${createdItem.id} terbit! Satgas MBG & Dapur SPPG diinstruksikan isolasi batch.`
+            ? `🚨 SIRENE DARURAT DIAKTIFKAN: Tiket ${createdItem.id} terbit! Satgas KawanGizi & Dapur SPPG diinstruksikan isolasi batch.`
             : `Tiket insiden ${createdItem.id} berhasil dikirimkan ke Manajer Dapur SPPG.`,
           'success',
         )
@@ -221,7 +221,7 @@ export function ValidatorIncidentsPage() {
     <ValidatorLayout
       activeMenu="incidents"
       title="Lapor Insiden & Siaga Mutu"
-      subtitle="Eskalasi temuan organoleptik, kontaminasi asing, dan respons tanggap darurat Satgas MBG."
+      subtitle="Eskalasi temuan organoleptik, kontaminasi asing, dan respons tanggap darurat Satgas KawanGizi."
       primaryAction={
         <button
           type="button"
@@ -346,7 +346,7 @@ export function ValidatorIncidentsPage() {
               </h2>
             </div>
             <p className="mt-1 text-xs text-slate-400 font-medium">
-              Laporkan bau basi, benda asing, atau reaksi medis siswa secara langsung ke terminal SPPG dan dasbor pusat Satgas MBG.
+              Laporkan bau basi, benda asing, atau reaksi medis siswa secara langsung ke terminal SPPG dan dasbor pusat Satgas KawanGizi.
             </p>
           </div>
 
@@ -473,7 +473,7 @@ export function ValidatorIncidentsPage() {
             ) : (
               <>
                 <Radio className="h-4 w-4" />
-                <span>Kirim Laporan Siaga ke SPPG & Satgas MBG</span>
+                <span>Kirim Laporan Siaga ke SPPG & Satgas KawanGizi</span>
               </>
             )}
           </button>

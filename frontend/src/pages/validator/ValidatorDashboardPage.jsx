@@ -298,7 +298,7 @@ export function ValidatorDashboardPage() {
 
           <div className="flex items-center gap-1.5 text-[11px] text-emerald-100/90 font-medium">
             <span className="inline-flex items-center justify-center h-4 px-1.5 rounded-sm border border-emerald-400/40 text-[9px] font-bold text-emerald-300">
-              BGN
+              Nutrisi
             </span>
             <span>Porsi Siswa Terdaftar Hari Ini</span>
           </div>
@@ -465,7 +465,7 @@ export function ValidatorDashboardPage() {
 
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
             <span>Rata-rata Pekan Ini</span>
-            <span className="font-extrabold text-emerald-800">97.8% Sesuai Standar BGN</span>
+            <span className="font-extrabold text-emerald-800">97.8% Sesuai Standar Mutu</span>
           </div>
         </div>
 

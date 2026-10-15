@@ -7,7 +7,7 @@ export function SiteFooter() {
           <div className="md:col-span-5 space-y-3">
             <a href="/" className="inline-flex items-center gap-2 text-lg font-black tracking-tight text-gray-900">
               <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-600" />
-              <span>MBG by KawanGizi</span>
+              <span>KawanGizi</span>
             </a>
             <p className="max-w-md text-sm leading-relaxed text-gray-600">
               Purwarupa Minimum Viable Product untuk ICONFEST 2026. Computer Vision YOLOv8 + arsitektur terdesentralisasi untuk skrining kelayakan fisik porsi & estimasi makronutrien instan sebelum distribusi ke siswa.

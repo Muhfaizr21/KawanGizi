@@ -7,7 +7,7 @@ export function BottomCta() {
         <div className="max-w-2xl">
           <p className="font-serif text-base italic text-white/80 sm:text-lg">Setiap Porsi Seharusnya Terverifikasi.</p>
           <h2 className="mt-3 text-3xl sm:text-5xl font-black tracking-tight leading-tight">
-            Bantu Tutup Celah Validasi Tahap Akhir MBG
+            Bantu Tutup Celah Validasi Tahap Akhir Nutrisi Pangan
           </h2>
           <p className="mt-4 text-sm sm:text-base leading-relaxed text-white/80">
             KawanGizi adalah purwarupa Minimum Viable Product. Integrasi pemindaian visual di lokasi sekolah dengan sinkronisasi data ke pusat komando menjawab tiga celah kritis: tidak adanya validasi tahap akhir, keterbatasan tenaga validator, dan subjektivitas pemeriksaan manual.

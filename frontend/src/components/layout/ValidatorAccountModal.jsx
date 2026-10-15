@@ -134,7 +134,7 @@ export function ValidatorAccountModal({ onClose }) {
       role="dialog"
       aria-modal="true"
       aria-label="Informasi akun validator"
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4"
       onClick={onClose}
     >
       <div

@@ -1,7 +1,7 @@
 {
   "name": "KawanGizi Portal",
   "short_name": "KawanGizi",
-  "description": "Portal Pemantauan Sekolah MBG",
+  "description": "Sistem Skrining Kelayakan Pangan & Estimasi Nutrisi AI",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

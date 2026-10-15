@@ -235,7 +235,7 @@ export function AdminPage() {
                     </div>
                     {/* Bottom Book (Navy) */}
                     <div className="px-2 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-white shadow-xs">
-                      AUDIT MBG 2026
+                      AUDIT NUTRISI 2026
                     </div>
                   </div>
                 </div>
@@ -425,7 +425,7 @@ export function AdminPage() {
               </div>
 
               <div className="pt-3 border-t border-slate-100 text-right">
-                <span className="text-[11px] font-medium text-slate-500">Satuan Tugas MBG Nasional</span>
+                <span className="text-[11px] font-medium text-slate-500">Satgas KawanGizi Nasional</span>
               </div>
             </div>
           </div>

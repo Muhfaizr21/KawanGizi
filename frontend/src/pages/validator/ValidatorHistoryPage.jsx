@@ -136,7 +136,7 @@ export function ValidatorHistoryPage() {
         return {
           ...row,
           time: created.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
-          classTarget: row.menuName || 'Nasi & Lauk MBG',
+          classTarget: row.menuName || 'Nasi & Lauk Nutrisi',
           temp: row.holdingTempC != null ? row.holdingTempC : (row.releaseTempC != null ? row.releaseTempC : null),
           score: row.aiConfidence != null ? Math.round(row.aiConfidence * 100) : (row.visualScore != null ? Math.round(row.visualScore) : null),
           status,
@@ -243,7 +243,7 @@ export function ValidatorHistoryPage() {
     try {
       const reportData = {
         metadata: {
-          title: 'BERITA ACARA REKONSILIASI HARIAN DISTRIBUSI MAKANAN BERGIZI GRATIS (MBG)',
+          title: 'BERITA ACARA REKONSILIASI HARIAN DISTRIBUSI PORSI NUTRISI KAWANGIZI',
           schoolName: bundle?.school?.name || 'SDN 01 Menteng Pagi',
           schoolNpsn: bundle?.school?.npsn || '33.210.130',
           sppgName: bundle?.parentSppg?.name || 'Dapur Sentral SPPG-01 Menteng',
@@ -265,13 +265,13 @@ export function ValidatorHistoryPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `BA_Rekonsiliasi_MBG_${bundle?.school?.npsn || '33210130'}_${bundle?.date || '20261013'}.json`
+      a.download = `BA_Rekonsiliasi_KawanGizi_${bundle?.school?.npsn || '33210130'}_${bundle?.date || '20261013'}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
-      showToast('Laporan harian sekolah berhasil diekspor (Format JSON Resmi BGN).', 'success')
+      showToast('Laporan harian sekolah berhasil diekspor (Format JSON Resmi KawanGizi).', 'success')
     } catch (err) {
       console.error('Ekspor laporan gagal:', err)
       showToast('Gagal mengekspor laporan: ' + err.message, 'error')
@@ -282,7 +282,7 @@ export function ValidatorHistoryPage() {
     <ValidatorLayout
       activeMenu="history"
       title="Riwayat & Presensi Makan"
-      subtitle="Rekonsiliasi log pindai nampan, presensi kelas sekolah & tata kelola porsi sisa BGN."
+      subtitle="Rekonsiliasi log pindai nampan, presensi kelas sekolah & tata kelola porsi sisa nutrisi."
       primaryAction={
         <button
           type="button"
@@ -386,7 +386,7 @@ export function ValidatorHistoryPage() {
             </h3>
           </div>
           <span className="text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full self-start">
-            Perlu Alokasi BGN
+            Perlu Alokasi Nutrisi
           </span>
         </div>
       </div>
@@ -470,7 +470,7 @@ export function ValidatorHistoryPage() {
                     <tr key={s.id} className="hover:bg-slate-50/70 transition">
                       <td className="py-3 pr-3 font-mono text-xs font-extrabold text-slate-800">{s.time}</td>
                       <td className="py-3 pr-3">
-                        <p className="font-mono text-xs font-extrabold text-slate-900">{s.boxId || 'BOK-MBG'}</p>
+                        <p className="font-mono text-xs font-extrabold text-slate-900">{s.boxId || 'BOK-GIZI'}</p>
                         <p className="font-mono text-[10px] text-slate-400 truncate max-w-[180px]">
                           {s.qrToken || s.batchId || bundle?.activeBatch || 'MBG-2026-B01'}
                         </p>
@@ -533,7 +533,7 @@ export function ValidatorHistoryPage() {
               Papan Rekonsiliasi Distribusi Kelas & Alokasi Porsi Sisa
             </h2>
             <p className="text-xs text-slate-400 font-medium mt-0.5">
-              Presensi kelas digital yang tercatat permanen di database BGN untuk alokasi surplus makanan.
+              Presensi kelas digital yang tercatat permanen di database KawanGizi untuk alokasi surplus makanan.
             </p>
           </div>
           <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
@@ -545,7 +545,7 @@ export function ValidatorHistoryPage() {
           <table className="w-full text-left border-collapse min-w-[760px]">
             <thead>
               <tr className="border-b border-slate-100">
-                {['Kelas', 'Kuota Terdaftar', 'Hadir', 'Sakit/Izin', 'Porsi Diserahkan', 'Sisa', 'Alokasi Porsi Sisa (Regulasi BGN)'].map(
+                {['Kelas', 'Kuota Terdaftar', 'Hadir', 'Sakit/Izin', 'Porsi Diserahkan', 'Sisa', 'Alokasi Porsi Sisa (Regulasi Standar)'].map(
                   (h) => (
                     <th
                       key={h}

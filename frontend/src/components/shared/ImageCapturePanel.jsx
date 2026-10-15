@@ -1,5 +1,16 @@
-﻿import { useState, useRef, useCallback, useEffect } from "react"
-import { Camera, Upload, X, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react"
+import { useState, useRef, useCallback, useEffect } from "react"
+import {
+  Camera,
+  Upload,
+  X,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  Sparkles,
+  Smartphone,
+  ScanLine,
+  HelpCircle,
+} from "lucide-react"
 
 export async function convertToWebP(sourceFile, quality = 0.85) {
   return new Promise((resolve, reject) => {
@@ -11,7 +22,7 @@ export async function convertToWebP(sourceFile, quality = 0.85) {
       let w = img.naturalWidth
       let h = img.naturalHeight
       if (w > MAX) { h = Math.round(h * (MAX / w)); w = MAX }
-      if (h > MAX) { w = Math.round(w * (MAX / h)); h = MAX }
+      if (h > MAX) { h = Math.round(h * (MAX / h)); h = MAX }
       const canvas = document.createElement("canvas")
       canvas.width = w
       canvas.height = h
@@ -30,7 +41,18 @@ export async function convertToWebP(sourceFile, quality = 0.85) {
   })
 }
 
-export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil / Unggah Foto", hint }) {
+export function ImageCapturePanel({
+  onCapture,
+  onScanStart,
+  disabled = false,
+  label = "",
+  hint,
+  title = "Pemindai Visual Kelayakan & Makronutrien AI",
+  description = "Arahkan kamera ke porsi hidangan untuk skrining visual kebusukan instan serta kalkulasi otomatis karbohidrat, protein, & lemak porsi anak.",
+  badges = ["✨ YOLOv8 Edge AI", "⚡ Latensi ~45ms"],
+  scanButtonText = "Mulai Pindai Makanan Bergizi",
+  onHelpClick,
+}) {
   const [mode, setMode] = useState("idle")
   const [preview, setPreview] = useState(null)
   const [cameraError, setCameraError] = useState(null)
@@ -39,13 +61,21 @@ export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil 
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
-  const fileInputRef = useRef(null)
+  const cameraRef = useRef(null)
+  const uploadRef = useRef(null)
+  // Compatibility aliases
+  const cameraInputRef = cameraRef
+  const fileInputRef = uploadRef
 
-  useEffect(() => () => stopCamera(), [])
+  useEffect(() => {
+    return () => stopCamera()
+  }, [])
 
   const stopCamera = () => {
-    streamRef.current?.getTracks().forEach((t) => t.stop())
-    streamRef.current = null
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
   }
 
   const startCamera = async (facingMode) => {
@@ -80,6 +110,7 @@ export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil 
 
   const captureFromCamera = () => {
     if (!videoRef.current || !canvasRef.current) return
+    onScanStart?.()
     const video = videoRef.current
     const canvas = canvasRef.current
     canvas.width = video.videoWidth
@@ -117,17 +148,34 @@ export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil 
     }
   }, [onCapture])
 
-  const handleFileInput = (e) => {
+  const handleFileSelect = (e) => {
     const file = e.target.files?.[0]
-    e.target.value = ""
-    if (file) handleFile(file)
+    if (!file) return
+
+    onScanStart?.()
+    const previewUrl = URL.createObjectURL(file)
+    setPreview(previewUrl)
+    setMode("preview")
+    onCapture?.(file, previewUrl)
+
+    // Delay resetting input value to the very end to prevent destroying file reference in mobile browsers
+    try {
+      e.target.value = ""
+    } catch (_) {}
   }
+
+  const handleFileInput = handleFileSelect
 
   const handleDrop = (e) => {
     e.preventDefault()
     setIsDragging(false)
     const file = e.dataTransfer.files?.[0]
-    if (file) handleFile(file)
+    if (!file) return
+    onScanStart?.()
+    const previewUrl = URL.createObjectURL(file)
+    setPreview(previewUrl)
+    setMode("preview")
+    onCapture?.(file, previewUrl)
   }
 
   const reset = () => {
@@ -145,25 +193,43 @@ export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil 
         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
       )}
 
+      {/* State: Preview Foto Terambil */}
       {mode === "preview" && preview && (
-        <div className="relative rounded-2xl overflow-hidden border border-emerald-300 shadow-md">
-          <img src={preview} alt="Preview gambar" className="w-full max-h-72 object-cover" />
-          <div className="absolute top-2 right-2 flex gap-2">
-            <span className="inline-flex items-center gap-1 bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow">
-              <CheckCircle2 className="h-3 w-3" /> WebP
+        <div className="relative rounded-[22px] overflow-hidden border border-emerald-500/40 bg-[#0e2c1c] shadow-lg">
+          <img src={preview} alt="Preview nampan makanan" className="w-full max-h-72 object-cover" />
+          <div className="absolute top-2.5 right-2.5 flex items-center gap-2 z-10">
+            <span className="inline-flex items-center gap-1 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md border border-emerald-400/30">
+              <CheckCircle2 className="h-3 w-3" /> WebP Siap Uji
             </span>
             {!disabled && (
-              <button type="button" onClick={reset} title="Hapus & ambil ulang"
-                className="bg-white/90 backdrop-blur-sm text-slate-700 rounded-full p-1.5 shadow hover:bg-white transition cursor-pointer">
+              <button
+                type="button"
+                onClick={reset}
+                title="Hapus & ambil ulang"
+                className="bg-black/60 hover:bg-black/80 backdrop-blur-xs text-white rounded-full p-1.5 shadow-md border border-white/20 transition cursor-pointer"
+              >
                 <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent absolute bottom-0 inset-x-0 flex items-center justify-between text-white text-xs">
+            <span className="text-[11px] font-medium text-emerald-200">Foto nampan berhasil dimuat</span>
+            {!disabled && (
+              <button
+                type="button"
+                onClick={reset}
+                className="text-[11px] font-bold text-amber-300 hover:text-amber-200 underline cursor-pointer"
+              >
+                Ganti / Ambil Ulang
               </button>
             )}
           </div>
         </div>
       )}
 
+      {/* State: Kamera WebRTC Langsung (Desktop Fallback) */}
       {mode === "camera" && (
-        <div className="relative rounded-2xl overflow-hidden border border-amber-400 shadow-lg bg-black">
+        <div className="relative rounded-[22px] overflow-hidden border border-amber-400 shadow-lg bg-black">
           <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-72 object-cover" />
           <div className="absolute inset-0 pointer-events-none">
             <div className="absolute inset-6 border-2 border-dashed border-amber-400/80 rounded-xl animate-pulse" />
@@ -172,16 +238,27 @@ export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil 
             </span>
           </div>
           <div className="absolute bottom-3 inset-x-3 flex items-center justify-between gap-2">
-            <button type="button" onClick={flipCamera} title="Ganti kamera"
-              className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer">
+            <button
+              type="button"
+              onClick={flipCamera}
+              title="Ganti kamera"
+              className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            >
               <RefreshCw className="h-4 w-4" />
             </button>
-            <button type="button" onClick={captureFromCamera}
-              className="px-6 py-2 rounded-full bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition shadow-lg cursor-pointer">
+            <button
+              type="button"
+              onClick={captureFromCamera}
+              className="px-6 py-2 rounded-full bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition shadow-lg cursor-pointer"
+            >
               Ambil Foto
             </button>
-            <button type="button" onClick={reset} title="Batalkan"
-              className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer">
+            <button
+              type="button"
+              onClick={reset}
+              title="Batalkan"
+              className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -189,43 +266,134 @@ export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil 
         </div>
       )}
 
+      {/* State: Konversi ke WebP */}
       {mode === "converting" && (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 py-10 flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-[3px] border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs font-semibold text-slate-500">Mengkonversi ke WebP...</p>
+        <div className="rounded-[22px] border border-emerald-900/40 bg-[#123624] py-10 flex flex-col items-center gap-3 text-white">
+          <div className="h-8 w-8 border-[3px] border-emerald-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-semibold text-emerald-100">Mengoptimalkan & Mengkonversi ke WebP...</p>
         </div>
       )}
 
+      {/* State: Idle / Premium Dark Green Wavy Card with YOLOv8 Edge AI */}
       {mode === "idle" && (
         <div
           onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
-          className={[
-            "rounded-2xl border-2 border-dashed transition-all p-6 flex flex-col items-center gap-4",
-            isDragging ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-slate-50 hover:border-slate-300",
-            disabled ? "opacity-50 pointer-events-none" : "",
-          ].join(" ")}
+          className={`relative overflow-hidden rounded-[22px] bg-[#123624] p-5 sm:p-6 shadow-md border border-emerald-900/60 text-white transition-all ${
+            isDragging ? "ring-2 ring-emerald-400 bg-[#0e2c1c]" : ""
+          } ${disabled ? "opacity-50 pointer-events-none" : ""}`}
         >
-          <div className="flex items-center gap-3 flex-wrap justify-center">
-            <button type="button" onClick={() => startCamera()} disabled={disabled}
-              className="flex flex-col items-center gap-2 px-5 py-3 rounded-2xl bg-amber-600 text-white font-bold text-xs hover:bg-amber-700 transition shadow-md cursor-pointer disabled:opacity-50">
-              <Camera className="h-6 w-6" />
-              Buka Kamera
+          {/* Wavy Contour Lines Background Pattern (PWA Dark Green Signature) */}
+          <svg
+            className="absolute inset-0 w-full h-full opacity-20 pointer-events-none text-emerald-400"
+            viewBox="0 0 320 200"
+            preserveAspectRatio="none"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M-30,50 Q80,130 160,60 T350,100" stroke="currentColor" strokeWidth="2.5" />
+            <path d="M-30,80 Q80,160 160,90 T350,130" stroke="currentColor" strokeWidth="2" />
+            <path d="M-30,110 Q80,190 160,120 T350,160" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M-30,140 Q80,220 160,150 T350,190" stroke="currentColor" strokeWidth="1" />
+          </svg>
+
+          {/* Top Badges Inside Card: ✨ YOLOv8 Edge AI & ⚡ Latensi ~45ms */}
+          <div className="relative z-10 flex items-center flex-wrap gap-2 mb-3">
+            {badges.map((badge, idx) => (
+              <span
+                key={idx}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/10 text-emerald-200 border border-white/15 text-[10px] font-bold backdrop-blur-xs tracking-tight shadow-2xs"
+              >
+                {badge}
+              </span>
+            ))}
+          </div>
+
+          {/* Card Title & YOLOv8 Copywriting */}
+          <div className="relative z-10 space-y-1.5 mb-4">
+            <h3 className="text-base sm:text-lg font-black text-white tracking-tight leading-snug">
+              {title}
+            </h3>
+            <p className="text-xs sm:text-[13px] text-emerald-100/90 leading-relaxed font-normal">
+              {description}
+            </p>
+          </div>
+
+          {/* Action Row: Prominent White Button & Question Mark Icon Button */}
+          <div className="relative z-10 flex items-center gap-2.5 mb-3">
+            {/* White Prominent Button with Dark Text */}
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              disabled={disabled}
+              className="flex-1 flex items-center justify-center gap-2.5 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl bg-white hover:bg-slate-100 active:scale-[0.98] text-slate-900 font-extrabold text-xs sm:text-sm transition-all shadow-md cursor-pointer disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            >
+              <ScanLine className="h-4.5 w-4.5 text-slate-900 shrink-0" />
+              <span>{scanButtonText}</span>
             </button>
-            <span className="text-slate-300 text-sm font-bold">atau</span>
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={disabled}
-              className="flex flex-col items-center gap-2 px-5 py-3 rounded-2xl bg-slate-800 text-white font-bold text-xs hover:bg-slate-900 transition shadow-md cursor-pointer disabled:opacity-50">
-              <Upload className="h-6 w-6" />
-              Upload Gambar
+
+            {/* Small Question Mark Icon Button (Opens AI Guide Modal) */}
+            <button
+              type="button"
+              onClick={onHelpClick}
+              className="h-11 w-11 sm:h-12 sm:w-12 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white border border-white/20 flex items-center justify-center transition shadow-xs cursor-pointer shrink-0 focus:outline-none focus:ring-2 focus:ring-white/30"
+              title="Panduan Pemindai AI"
+            >
+              <HelpCircle className="h-5 w-5 text-emerald-200" />
             </button>
           </div>
-          <p className="text-[11px] text-slate-400 text-center leading-relaxed max-w-xs">
-            {isDragging
-              ? "Lepaskan untuk mengunggah gambar"
-              : (hint || "Drag & drop gambar, buka kamera, atau klik Upload • Otomatis dikonversi ke WebP")}
-          </p>
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileInput} />
+
+          {/* Secondary Quick Action: Upload Gambar dari File & Hint */}
+          <div className="relative z-10 flex items-center justify-between gap-2 pt-2.5 border-t border-emerald-800/40 text-[11px] text-emerald-200/80">
+            <span className="truncate">
+              {isDragging
+                ? "Lepaskan file nampan untuk memulai inspeksi..."
+                : (hint || "PWA Mode Siaga: Sentuh tombol putih untuk membuka kamera")}
+            </span>
+            <button
+              type="button"
+              onClick={() => uploadRef.current?.click()}
+              disabled={disabled}
+              className="text-[11px] font-bold text-amber-300 hover:text-amber-200 underline cursor-pointer shrink-0 flex items-center gap-1.5"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              <span>Upload Gambar</span>
+            </button>
+          </div>
+
+          {/* Desktop WebRTC Fallback Link */}
+          <div className="relative z-10 text-center pt-2 mt-2 border-t border-emerald-800/40 hidden md:block">
+            <button
+              type="button"
+              onClick={() => startCamera()}
+              disabled={disabled}
+              className="text-[10px] font-medium text-emerald-300/80 hover:text-white underline transition cursor-pointer"
+            >
+              Gunakan kamera video webcam live (desktop)
+            </button>
+          </div>
+
+          {/* Hidden HTML Inputs for PWA Functionality */}
+          {/* 1. Direct rear-camera trigger for mobile PWA */}
+          <input
+            id="foodscan-camera-input"
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          {/* 2. Standard file picker / gallery upload */}
+          <input
+            id="foodscan-file-input"
+            ref={uploadRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
         </div>
       )}
 
@@ -243,3 +411,4 @@ export function ImageCapturePanel({ onCapture, disabled = false, label = "Ambil 
 }
 
 export default ImageCapturePanel
+

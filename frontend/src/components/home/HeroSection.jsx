@@ -14,7 +14,7 @@ export function HeroSection() {
           Gizi Terjamin.
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-sm leading-relaxed text-gray-500 sm:text-base md:text-lg font-normal">
-          KawanGizi memadukan Computer Vision YOLOv8 dan arsitektur terdesentralisasi untuk menskrining kelayakan fisik makanan serta mengestimasi kandungan makronutrien secara instan untuk mencegah risiko keracunan pada program Makan Bergizi Gratis.
+          KawanGizi memadukan Computer Vision YOLOv8 dan arsitektur terdesentralisasi untuk menskrining kelayakan fisik makanan serta mengestimasi kandungan makronutrien secara instan untuk mencegah risiko keracunan pangan dan menjaga mutu nutrisi anak.
         </p>
         <div className="mt-8 flex items-center justify-center gap-4">
           <CtaButton href="/mulai">Mulai Sekarang</CtaButton>

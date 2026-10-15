@@ -36,7 +36,7 @@ export function OverviewSection() {
             <p className="font-serif text-sm italic text-gray-500">03 / Peringatan Dini</p>
             <h3 className="mt-2 text-lg font-bold text-gray-900">Sinkronisasi & Eskalasi</h3>
             <p className="mt-2 text-sm leading-relaxed text-gray-500">
-              Hasil pemindaian tersinkronisasi seketika ke dasbor Satgas MBG, sehingga anomali terdeteksi memicu pelacakan dapur penyuplai dan pembekuan distribusi.
+              Hasil pemindaian tersinkronisasi seketika ke dasbor Satgas KawanGizi, sehingga anomali terdeteksi memicu pelacakan dapur penyuplai dan pembekuan distribusi.
             </p>
           </div>
         </div>

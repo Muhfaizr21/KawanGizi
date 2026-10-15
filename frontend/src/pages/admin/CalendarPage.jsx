@@ -32,8 +32,8 @@ export function CalendarPage() {
   return (
     <AdminLayout
       activeMenu="calendar"
-      title="Kalender MBG"
-      badge="SIKLUS MENU BGN"
+      title="Kalender Distribusi Nutrisi"
+      badge="SIKLUS MENU STANDAR"
       showSearch={false}
     >
       {toast && (

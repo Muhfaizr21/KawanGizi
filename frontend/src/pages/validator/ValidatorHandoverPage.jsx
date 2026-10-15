@@ -438,7 +438,7 @@ export function ValidatorHandoverPage() {
       })
 
       showToast(
-        `BAST ${result.bastNo} RESMI TERBIT! Data disinkronkan ke Dapur SPPG dan Satgas MBG.`,
+        `BAST ${result.bastNo} RESMI TERBIT! Data disinkronkan ke Dapur SPPG dan Satgas KawanGizi.`,
         'success',
       )
 

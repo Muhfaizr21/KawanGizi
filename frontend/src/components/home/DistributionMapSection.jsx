@@ -492,7 +492,7 @@ export function DistributionMapSection() {
                 Dapur Sentral SPPG
               </h4>
               <p className="mt-1 text-xs leading-relaxed text-gray-500">
-                Fasilitas pengolahan pangan tersertifikasi higienitas & sanitasi resmi BGN.
+                Fasilitas pengolahan pangan tersertifikasi higienitas & sanitasi standar mutu pangan.
               </p>
             </div>
 

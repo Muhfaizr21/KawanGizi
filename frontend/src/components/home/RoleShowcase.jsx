@@ -68,7 +68,7 @@ export function RoleShowcase() {
                 &ldquo;{activeRole.highlight}&rdquo;
               </p>
               <div className="mt-6 border-t border-gray-100 pt-4 flex items-center justify-between text-xs text-gray-500">
-                <span>Status Ekosistem MBG</span>
+                <span>Status Ekosistem KawanGizi</span>
                 <span className="font-bold text-emerald-700">Purwarupa MVP</span>
               </div>
             </div>

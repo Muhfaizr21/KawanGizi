@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useState, useMemo, Fragment } from 'react'
 import {
   AlertTriangle,
   CalendarDays,
@@ -29,6 +29,7 @@ import {
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { useAuth } from '../../context/AuthContext'
 import {
+  api,
   deleteAllScans,
   deleteScan,
   fetchDeliveries,
@@ -229,20 +230,43 @@ export function ValidatorFoodScanPage() {
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
-  const [identifierType, setIdentifierType] = useState('batch')
-  const [batchOrQr, setBatchOrQr] = useState('')
-  const [holdingTemp, setHoldingTemp] = useState('64.5')
-  const [releaseTemp, setReleaseTemp] = useState('76.0')
   const [formError, setFormError] = useState('')
   const [actionError, setActionError] = useState('')
-  const [analyzing, setAnalyzing] = useState(false)
-  const [result, setResult] = useState(null)
-  const [recent, setRecent] = useState([])
+
+  // State Management for Real Data as specified - strictly empty initial states
+  const [scanResult, setScanResult] = useState(null)
+  const [historyList, setHistoryList] = useState([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [hasScanned, setHasScanned] = useState(false)
+  const [scanKey, setScanKey] = useState(0)
+
+  // Subcomponent aliases
+  const result = scanResult
+  const setResult = setScanResult
+  const recent = historyList
+  const setRecent = setHistoryList
+  const analyzing = isLoading
+  const isScanning = isLoading
+
   const [deliveries, setDeliveries] = useState([])
-  const [selectedDeliveryId, setSelectedDeliveryId] = useState('')
-  const [isManualBatch, setIsManualBatch] = useState(false)
   const [detail, setDetail] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
+
+  // Reset view to initial state for testing a new sample
+  const handleNewSample = useCallback(() => {
+    setFile(null)
+    setPreview((current) => {
+      if (current) URL.revokeObjectURL(current)
+      return null
+    })
+    setScanResult(null)
+    setHasScanned(false)
+    setFormError('')
+    setActionError('')
+    setIsLoading(false)
+    setScanKey((prev) => prev + 1)
+  }, [])
 
   // Recent Scans Table / Grid Toggle & Search & Filter
   const [recentViewMode, setRecentViewMode] = useState('table') // 'table' | 'grid'
@@ -251,14 +275,13 @@ export function ValidatorFoodScanPage() {
 
   const refreshRecent = useCallback(() => {
     fetchRecentScans(15)
-      .then((rows) => setRecent(Array.isArray(rows) ? rows : []))
+      .then((rows) => setHistoryList(Array.isArray(rows) ? rows : []))
       .catch(() => {})
   }, [])
 
   useEffect(() => {
-    refreshRecent()
     fetchDeliveries().then((rows) => setDeliveries(Array.isArray(rows) ? rows : [])).catch(() => {})
-  }, [refreshRecent])
+  }, [])
 
   // Context Sekolah Validator & Active School Switcher
   const [activeSchool, setActiveSchool] = useState(() => getSelectedSchool(user))
@@ -269,8 +292,6 @@ export function ValidatorFoodScanPage() {
     const handleSchoolChanged = (e) => {
       if (e.detail) {
         setActiveSchool(e.detail)
-        setSelectedDeliveryId('')
-        setIsManualBatch(false)
       }
     }
     window.addEventListener('mbg_school_changed', handleSchoolChanged)
@@ -292,15 +313,11 @@ export function ValidatorFoodScanPage() {
 
   // Active delivery otomatis terpilih untuk sekolah aktif
   const activeDelivery = useMemo(() => {
-    if (selectedDeliveryId) {
-      const found = schoolDeliveries.find((d) => d.id === selectedDeliveryId) || deliveries.find((d) => d.id === selectedDeliveryId)
-      if (found) return found
-    }
     return (
       schoolDeliveries[0] || {
         id: `DEL-${activeSchool?.id || activeSchool?.npsn || '01'}`,
         batchId: activeSchool?.activeBatch || `MBG-2026-${(activeSchool?.sppgId || 'SPPG01').replace('-', '')}-${(activeSchool?.id || activeSchool?.npsn || 'SCH01').slice(-6)}-B01`,
-        menuName: activeSchool?.menuName || 'Nasi & Lauk Pauk Bergizi MBG',
+        menuName: activeSchool?.menuName || 'Nasi & Lauk Pauk Bergizi',
         sppgName: activeSchool?.sppgName || `Dapur Sentral ${activeSchool?.sppgId || 'SPPG-01'}`,
         schoolName: activeSchool?.name || 'SDN 01 Menteng Pagi',
         portions: activeSchool?.students || 500,
@@ -308,14 +325,8 @@ export function ValidatorFoodScanPage() {
         eta: activeSchool?.eta || '07:00 WIB',
       }
     )
-  }, [schoolDeliveries, deliveries, selectedDeliveryId, activeSchool])
+  }, [schoolDeliveries, activeSchool])
 
-  // Sync kode batch otomatis dari activeDelivery
-  useEffect(() => {
-    if (!isManualBatch && activeDelivery?.batchId) {
-      setBatchOrQr(activeDelivery.batchId)
-    }
-  }, [activeDelivery, isManualBatch])
 
   // Notifikasi & konfirmasi bertema (menggantikan alert/confirm bawaan browser)
   const [toast, setToast] = useState(null)
@@ -415,52 +426,77 @@ export function ValidatorFoodScanPage() {
     }
   }, [confirmState])
 
-  const acceptFile = useCallback((blob, previewUrl) => {
-    if (!blob) {
-      setFile(null)
-      if (preview) URL.revokeObjectURL(preview)
-      setPreview(null)
-      setResult(null)
-      setFormError('')
-      return
-    }
-    setFile(new File([blob], 'meal-scan.webp', { type: 'image/webp' }))
-    setPreview(previewUrl)
-    setResult(null)
-    setFormError('')
-    setActionError('')
-  }, [preview])
-
-  const handleAnalyze = async () => {
-    if (!file) {
+  // Build and submit real FormData with YOLOv8 backend API
+  const handleSubmitScan = useCallback(async (imageFile) => {
+    const fileToUpload = imageFile || file
+    if (!fileToUpload) {
       setFormError('Ambil atau pilih foto hidangan matang terlebih dahulu.')
       return
     }
-    if (file.size > MAX_IMAGE_BYTES) {
+    if (fileToUpload.size > MAX_IMAGE_BYTES) {
       setFormError('Ukuran foto maksimal 8MB.')
       return
     }
+
     setFormError('')
     setActionError('')
-    setAnalyzing(true)
-    const identifier = (batchOrQr || activeDelivery.batchId || '').trim()
-    const isQr = identifierType === 'qr'
+    setIsLoading(true)
+
     try {
-      const response = await scanRequest({
-        image: file,
-        boxId: buildBoxId(),
-        batchId: isQr ? '' : identifier,
-        qrToken: isQr ? identifier : '',
-        holdingTempC: Number(holdingTemp) || 64.5,
-        releaseTempC: Number(releaseTemp) || 76.0,
+      const formData = new FormData()
+      formData.append('image', fileToUpload)
+      if (activeDelivery?.batchId) {
+        formData.append('batchId', activeDelivery.batchId)
+      }
+      formData.append('boxId', buildBoxId())
+
+      // Execute POST request to backend API
+      const response = await api('/api/v1/scan', {
+        method: 'POST',
+        body: formData,
       })
-      setResult(response.data)
+
+      const payload = response?.data || response
+      setScanResult(payload)
+      setHasScanned(true)
+
+      // Prepend new scan result to historyList so the table updates instantly
+      setHistoryList((prev) => [payload, ...(Array.isArray(prev) ? prev : [])])
       refreshRecent()
     } catch (error) {
+      console.error('Scan submission error:', error)
       setActionError(errorMessage(error))
     } finally {
-      setAnalyzing(false)
+      setIsLoading(false)
     }
+  }, [file, activeDelivery, refreshRecent])
+
+  const acceptFile = useCallback((fileOrBlob, previewUrl) => {
+    if (!fileOrBlob) {
+      setFile(null)
+      if (preview) URL.revokeObjectURL(preview)
+      setPreview(null)
+      setScanResult(null)
+      setFormError('')
+      return
+    }
+    const uploadFile = fileOrBlob instanceof File
+      ? fileOrBlob
+      : new File([fileOrBlob], 'meal-scan.webp', { type: 'image/webp' })
+    const previewString = previewUrl || (fileOrBlob instanceof File || fileOrBlob instanceof Blob ? URL.createObjectURL(fileOrBlob) : null)
+
+    setFile(uploadFile)
+    setPreview(previewString)
+    setScanResult(null)
+    setFormError('')
+    setActionError('')
+
+    // Automatically submit real scan to backend
+    handleSubmitScan(uploadFile)
+  }, [preview, handleSubmitScan])
+
+  const handleAnalyze = async () => {
+    handleSubmitScan(file)
   }
 
   const style = result ? (VERDICT_STYLE[result.verdict] || VERDICT_STYLE.peringatan) : null
@@ -527,400 +563,117 @@ export function ValidatorFoodScanPage() {
   return (
     <ValidatorLayout
       activeMenu="foodscan"
-      title="Uji Mutu & Pindai Nampan"
+      title="Uji Mutu & Pindai Nutrisi"
       subtitle="Pemeriksaan visual kelengkapan 5 sekat gizi, kepatuhan suhu holding & kelayakan konsumsi sekolah."
       primaryAction={
-        <button
-          type="button"
-          onClick={() => {
-            acceptFile(null, null)
-            setResult(null)
-          }}
-          className="flex items-center gap-2 rounded-full bg-[#185338] text-white px-5 py-2.5 text-xs font-bold hover:bg-[#12422c] transition shadow-xs cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          <span>+ Uji Sampel Baru</span>
-        </button>
+        hasScanned ? (
+          <button
+            type="button"
+            onClick={handleNewSample}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs font-bold bg-[#185338] hover:bg-[#12422c] text-white transition shadow-xs cursor-pointer"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>+ Uji Sampel Baru</span>
+          </button>
+        ) : null
       }
       secondaryAction={
-        recent.length > 0 && (
+        recent.length > 0 ? (
           <button
             type="button"
             onClick={requestDeleteAllScans}
             disabled={deletingId === 'all'}
-            className="flex items-center gap-2 rounded-full bg-white border border-slate-300 text-slate-800 px-5 py-2.5 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs font-bold bg-white border border-slate-300 text-slate-800 hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
           >
             <Trash2 className="h-3.5 w-3.5 text-rose-600" />
             <span>Bersihkan Riwayat</span>
           </button>
-        )
+        ) : null
       }
     >
       {/* ========================================================================= */}
-      {/* TOP STAT CARDS (Donezo Signature Cards - Dynamic & Consistent) */}
+      {/* UNIFIED VERTICAL INSPECTION WORKSPACE (Single Scrollable Column) */}
       {/* ========================================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
-        {/* Card 1: Total Sampel Teruji */}
-        <div className="rounded-[22px] bg-[#185338] text-white p-5 flex flex-col justify-between shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-emerald-100/90">Sampel Terverifikasi</span>
-            <div className="h-7 w-7 rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white">
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="my-2">
-            <h3 className="text-3xl sm:text-4xl font-black tracking-tight font-sans">
-              {totalScanned}
-            </h3>
-          </div>
-          <p className="text-[11px] text-emerald-200/80 font-medium">Boks nampan terinspeksi hari ini</p>
+      <div className="flex flex-col space-y-4 sm:space-y-5 max-w-4xl mx-auto mb-4 sm:mb-5">
+        {/* Panel Kamera / Unggah Sampel (Pemindai Visual Kelayakan & Makronutrien AI - TOP PRIORITY) */}
+        <div>
+          <ImageCapturePanel
+            key={scanKey}
+            onCapture={acceptFile}
+            onScanStart={() => setIsLoading(true)}
+            disabled={analyzing || isScanning}
+            label=""
+            title="Pemindai Visual Kelayakan & Makronutrien AI"
+            description="Arahkan kamera ke porsi hidangan untuk skrining visual kebusukan instan serta kalkulasi otomatis karbohidrat, protein, & lemak porsi anak."
+            badges={["✨ YOLOv8 Edge AI", "⚡ Latensi ~45ms"]}
+            scanButtonText="Mulai Pindai Porsi"
+            onHelpClick={() => setIsGuideOpen(true)}
+            hint="Arahkan kamera tegak lurus ke nampan hidangan agar terdeteksi akurat."
+          />
         </div>
 
-        {/* Card 2: Lolos Uji Standar */}
-        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-800">Lolos Standar Mutu</span>
-            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
-              <ArrowUpRight className="h-3.5 w-3.5" />
+        {/* Loading Spinner saat proses pemindaian AI */}
+        {isScanning && (
+          <div className="rounded-[22px] border border-emerald-900/40 bg-[#123624] p-8 text-center text-white shadow-lg animate-pulse transition">
+            <div className="flex flex-col items-center justify-center space-y-3">
+              <div className="relative flex h-12 w-12 items-center justify-center">
+                <div className="absolute h-full w-full rounded-full border-4 border-emerald-500/30 border-t-emerald-400 animate-spin" />
+                <ScanLine className="h-5 w-5 text-emerald-300 animate-pulse" />
+              </div>
+              <div>
+                <h4 className="text-sm font-extrabold text-white">Memproses Pindai Visual AI YOLOv8...</h4>
+                <p className="text-xs text-emerald-200/80 mt-0.5">Mendeteksi sekat 5 bintang gizi & parameter kesegaran (~45ms)</p>
+              </div>
             </div>
           </div>
-          <div className="my-2">
-            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-sans">
-              {passedCount}
-            </h3>
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold">
-            <span className="inline-flex items-center justify-center h-4 px-1.5 rounded-sm border border-emerald-200 bg-emerald-50 text-[9px] font-bold text-emerald-800">
-              {passRate}%
-            </span>
-            <span>Tingkat Kelolosan Uji</span>
-          </div>
-        </div>
+        )}
 
-        {/* Card 3: Suhu Holding Rata-rata */}
-        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-800">Suhu Holding Terukur</span>
-            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="my-2">
-            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-sans">
-              {holdingTemp ? `${holdingTemp}°C` : '64.5°C'}
-            </h3>
-          </div>
-          <span className="text-[11px] text-slate-500 font-medium">Standar BGN: Min. 60°C</span>
-        </div>
 
-        {/* Card 4: Karantina / Tolak */}
-        <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-800">Porsi Karantina</span>
-            <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </div>
-          </div>
-          <div className="my-2">
-            <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-sans">
-              {quarantineCount}
-            </h3>
-          </div>
-          <div>
-            {quarantineCount === 0 ? (
-              <span className="text-[11px] text-emerald-700 font-semibold">Nihil Cacat Mutu Pangan</span>
+
+        {formError && (
+          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700">
+            {formError}
+          </p>
+        )}
+        {actionError && (
+          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700">
+            {actionError}
+          </p>
+        )}
+
+        {/* ========================================================================= */}
+        {/* STEP 4: STRICT CONDITIONAL RENDERING (Real Data Results vs Empty State Prompt) */}
+        {/* ========================================================================= */}
+        {hasScanned && scanResult ? (
+          <Fragment>
+            {/* Tombol Eksekusi Verifikasi Mutu & Kelayakan Nampan */}
+        <div>
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={analyzing || !file}
+            className={`w-full py-3.5 px-6 rounded-full text-xs font-extrabold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer ${
+              analyzing || !file
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-[#185338] hover:bg-[#12422c] text-white shadow-md'
+            }`}
+          >
+            {analyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Memeriksa 5 Sekat & Standar Suhu...</span>
+              </>
             ) : (
-              <span className="inline-flex items-center text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                {quarantineCount} Sampel Perlu Tindak Lanjut
-              </span>
+              <>
+                <ShieldCheck className="h-4 w-4" />
+                <span>Verifikasi Mutu & Kelayakan Nampan</span>
+              </>
             )}
-          </div>
+          </button>
         </div>
-      </div>
 
-      {/* ========================================================================= */}
-      {/* SCANNER WORKSPACE: FORM INPUT (Left) & HASIL UJI (Right) */}
-      {/* ========================================================================= */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 mb-6">
-        {/* Form Pindai & Input Parameter */}
-        <section className="space-y-4 rounded-[22px] border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs lg:col-span-7 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h2 className="text-base font-extrabold text-slate-900 tracking-tight">Parameter Pemeriksaan Sampel</h2>
-                <div className="flex items-center flex-wrap gap-2 mt-1">
-                  <span className="text-xs font-bold text-slate-700">{activeSchool?.name || 'SDN 01 Menteng Pagi'}</span>
-                  <span className="text-slate-300">&bull;</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsSchoolModalOpen(true)}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-[#185338] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs"
-                    title="Ganti sekolah yang dipantau"
-                  >
-                    <Building2 className="h-3 w-3" />
-                    <span>Ganti Sekolah</span>
-                    <ChevronRight className="h-2.5 w-2.5" />
-                  </button>
-                  <span className="text-[11px] text-slate-400 hidden sm:inline">&bull; Konfirmasi kondisi nampan sebelum pembagian kelas</span>
-                </div>
-              </div>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
-                <Utensils className="h-3 w-3" />
-                Standar 5 Sekat BGN
-              </span>
-            </div>
-
-            <div className="mt-4 space-y-3.5">
-              {/* KARTU BATCH PENGIRIMAN AKTIF (ELEGANT & AUTO-SELECTED - NO MASSIVE DROPDOWN!) */}
-              {!isManualBatch ? (
-                <div className="rounded-2xl border border-emerald-200/90 bg-emerald-50/40 p-4 transition shadow-2xs">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
-                      </span>
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800">
-                        Jadwal Distribusi Aktif Hari Ini
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsSchoolModalOpen(true)}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold text-[#185338] bg-white border border-emerald-200 hover:bg-emerald-100/60 transition cursor-pointer shadow-2xs"
-                        title="Ganti sekolah yang dipantau"
-                      >
-                        <Building2 className="h-3 w-3" />
-                        <span>Ganti Sekolah</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsManualBatch(true)}
-                        className="text-[11px] font-bold text-[#185338] hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        <span>Ubah Batch</span>
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="font-mono text-sm font-black text-slate-900 tracking-tight">
-                        {activeDelivery.batchId || 'MBG-2026-SPPG01-SDN01P-B01'}
-                      </h4>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
-                        {activeDelivery.eta ? `Tiba ${activeDelivery.eta}` : 'Tiba di Sekolah'}
-                      </span>
-                    </div>
-                    <p className="text-xs font-bold text-slate-800">
-                      {activeDelivery.menuName || 'Nasi Pulen, Ayam Panggang Madu, Capcay Sayur & Susu'}
-                    </p>
-                    <p className="text-[11px] text-slate-500 font-medium">
-                      {activeDelivery.sppgName || 'Dapur Sentral SPPG-01 Menteng'} · Target: {activeDelivery.portions || 650} Porsi
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                /* Mode Input Manual / Switch Jadwal Sekolah */
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-xs font-bold text-slate-800">Pilih Jadwal atau Masukkan Kode Manual</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setIsSchoolModalOpen(true)}
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#185338] hover:underline cursor-pointer"
-                      >
-                        <Building2 className="h-3 w-3" />
-                        <span>Ganti Sekolah Lain</span>
-                      </button>
-                      <span className="text-slate-300">&bull;</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsManualBatch(false)
-                          setBatchOrQr(activeDelivery?.batchId || 'MBG-2026-SPPG01-SDN01P-B01')
-                        }}
-                        className="text-[11px] font-bold text-emerald-700 hover:underline cursor-pointer"
-                      >
-                        Batal (Gunakan Batch Otomatis)
-                      </button>
-                    </div>
-                  </div>
-
-                  {schoolDeliveries.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-semibold text-slate-600">Jadwal Pengiriman Sekolah Ini:</p>
-                      <div className="space-y-1">
-                        {schoolDeliveries.map((del) => (
-                          <button
-                            key={del.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedDeliveryId(del.id)
-                              setBatchOrQr(del.batchId)
-                              setIsManualBatch(false)
-                            }}
-                            className={`w-full p-2.5 rounded-xl border text-left text-xs transition cursor-pointer flex items-center justify-between ${
-                              del.id === activeDelivery.id
-                                ? 'border-[#185338] bg-white ring-2 ring-[#185338]/10'
-                                : 'border-slate-200 bg-white hover:bg-slate-50'
-                            }`}
-                          >
-                            <div className="min-w-0 pr-2">
-                              <p className="font-bold text-slate-900 truncate">{del.batchId}</p>
-                              <p className="text-[11px] text-slate-500 truncate">{del.menuName}</p>
-                            </div>
-                            <span className="text-[10px] font-bold text-emerald-700 shrink-0">
-                              {del.eta || 'Hari ini'}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-200">
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-600">Tipe Input</span>
-                      <select
-                        value={identifierType}
-                        onChange={(e) => setIdentifierType(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-[#185338]"
-                      >
-                        <option value="batch">ID Batch</option>
-                        <option value="qr">Kode QR</option>
-                      </select>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-[11px] font-bold text-slate-600">Kode Pengenal Boks / QR</span>
-                      <input
-                        value={batchOrQr}
-                        onChange={(e) => setBatchOrQr(e.target.value)}
-                        placeholder={identifierType === 'qr' ? 'MBG-QR-001928' : 'MBG-20261013-001'}
-                        className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-mono outline-none focus:border-[#185338]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Input Suhu dengan Quick Preset Chips */}
-              <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                    <Thermometer className="h-3.5 w-3.5 text-[#185338]" />
-                    Pencatatan Suhu Holding Sekolah (°C)
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setHoldingTemp('60.0')}
-                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      60°C Min
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHoldingTemp('65.0')}
-                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      65°C Standar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHoldingTemp('70.0')}
-                      className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 transition cursor-pointer"
-                    >
-                      70°C Hangat
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
-                    <span className="text-[11px] text-slate-500 font-medium">Suhu Holding Nampan (°C)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="120"
-                      step="0.1"
-                      value={holdingTemp}
-                      onChange={(event) => setHoldingTemp(event.target.value)}
-                      placeholder="64.5"
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-[#185338]"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] text-slate-500 font-medium">Suhu Lepas Dapur SPPG (°C)</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="120"
-                      step="0.1"
-                      value={releaseTemp}
-                      onChange={(event) => setReleaseTemp(event.target.value)}
-                      placeholder="76.0"
-                      className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-[#185338]"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {/* Panel Kamera / Unggah Sampel */}
-              <div>
-                <ImageCapturePanel
-                  onCapture={acceptFile}
-                  disabled={analyzing}
-                  label=""
-                  hint="Arahkan kamera tegak lurus ke nampan makanan agar sekat terdeteksi akurat."
-                />
-              </div>
-
-              {formError && (
-                <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700">
-                  {formError}
-                </p>
-              )}
-              {actionError && (
-                <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700">
-                  {actionError}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Tombol Eksekusi Verifikasi */}
-          <div className="pt-3 border-t border-slate-100">
-            <button
-              type="button"
-              onClick={handleAnalyze}
-              disabled={analyzing || !file}
-              className={`w-full py-3.5 px-6 rounded-full text-xs font-extrabold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer ${
-                analyzing || !file
-                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  : 'bg-[#185338] hover:bg-[#12422c] text-white'
-              }`}
-            >
-              {analyzing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Memeriksa 5 Sekat & Standar Suhu...</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="h-4 w-4" />
-                  <span>Verifikasi Mutu & Kelayakan Nampan</span>
-                </>
-              )}
-            </button>
-          </div>
-        </section>
-
-        {/* Panel Lembar Verifikasi Mutu (Right) */}
-        <section className="self-start overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-xs lg:col-span-5">
+        {/* Panel Lembar Verifikasi Mutu Nampan */}
+        <section className="overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-xs">
           {/* Header Banner */}
           <div className={`px-5 py-4 text-white ${result ? (style?.bg || 'bg-[#185338]') : 'bg-[#185338]'}`}>
             <div className="flex items-center gap-3">
@@ -928,41 +681,13 @@ export function ValidatorFoodScanPage() {
               <div className="min-w-0">
                 <p className="text-sm font-extrabold">{result ? (style?.label || result.verdictLabel) : 'Lembar Verifikasi Mutu Nampan'}</p>
                 <p className="truncate font-mono text-[11px] opacity-85">
-                  {result ? `${result.boxId || 'BOK-SAMPEL'} · ${result.batchId || 'MBG-20261013'}` : 'Siaga Pemeriksaan Mutu Sekolah'}
+                  {result ? `${result.boxId || 'BOK-SAMPEL'} · ${result.batchId || 'BTH-0B42-MNT'}` : 'Siaga Pemeriksaan Mutu Sekolah'}
                 </p>
               </div>
             </div>
           </div>
 
           <div className="space-y-4 p-5">
-            {!result ? (
-              <div className="py-8 text-center">
-                <div className="h-12 w-12 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto text-[#185338] mb-3 border border-emerald-100">
-                  <Utensils className="h-6 w-6" />
-                </div>
-                <h4 className="text-sm font-extrabold text-slate-800">Siap Memeriksa Nampan</h4>
-                <p className="mt-1 text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                  Ambil foto nampan hidangan matang melalui kamera di sebelah kiri untuk memverifikasi kesesuaian resep dan suhu holding.
-                </p>
-
-                <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50/70 p-4 text-left text-xs text-slate-600 space-y-2.5">
-                  <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Prosedur Uji Sampel Sekolah:</p>
-                  <div className="flex items-start gap-2.5">
-                    <span className="h-4 w-4 rounded-full bg-[#185338] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
-                    <span className="text-[11px] leading-tight">Ambil 1 nampan acak dari master tote teratas.</span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <span className="h-4 w-4 rounded-full bg-[#185338] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
-                    <span className="text-[11px] leading-tight">Ukur suhu inti hidangan dengan termometer tusuk (min 60°C).</span>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <span className="h-4 w-4 rounded-full bg-[#185338] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
-                    <span className="text-[11px] leading-tight">Foto nampan tegak lurus dan klik Verifikasi Mutu.</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
                 {result.verdict !== 'layak' && (
                   <div className={`rounded-2xl border p-3.5 ${result.verdict === 'tolak' ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}>
                     <div className="flex items-center gap-2">
@@ -1004,8 +729,8 @@ export function ValidatorFoodScanPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <Metadata label="Batch" value={batch?.batchId || result.batchId || 'MBG-20261013'} />
                   <Metadata label="Tanggal" value={displayDate(batch?.productionDate)} icon={<CalendarDays className="h-3 w-3" />} />
-                  <Metadata label="Suhu Holding" value={displayTemp(result.holdTemp || holdingTemp)} />
-                  <Metadata label="Suhu Lepas" value={displayTemp(result.releaseTemp || releaseTemp)} />
+                  <Metadata label="Suhu Holding" value={displayTemp(result.suhuHolding ?? result.holdTemp ?? result.holdingTempC ?? 64.5)} />
+                  <Metadata label="Suhu Lepas" value={displayTemp(result.suhuLepasDapur ?? result.releaseTemp ?? result.releaseTempC ?? 76.0)} />
                 </div>
 
                 {/* Status Kesegaran */}
@@ -1055,16 +780,125 @@ export function ValidatorFoodScanPage() {
                 </div>
 
                 <DecisionLogCard log={decisionLog} />
-              </>
-            )}
           </div>
         </section>
-      </div>
 
-      {/* ========================================================================= */}
-      {/* RIWAYAT PINDAI TERBARU (Space-Efficient Compact Table / Mini Grid) */}
-      {/* ========================================================================= */}
-      <section className="rounded-[22px] border border-slate-200/80 bg-white p-5 sm:p-6 shadow-xs mb-8">
+        {/* ========================================================================= */}
+        {/* HISTORY ACTIONS & SUMMARY METRICS CARDS (Bottom Section) */}
+        {/* ========================================================================= */}
+        <div className="space-y-4 pt-3 border-t border-slate-200/80">
+          {/* Action Buttons for History Management */}
+          <div className="flex items-center justify-between sm:justify-start gap-2.5">
+            <button
+              type="button"
+              onClick={handleDeleteAllScans}
+              disabled={deletingId === 'all'}
+              className="flex items-center gap-2 rounded-full bg-white border border-rose-300 text-rose-600 px-4 sm:px-5 py-2.5 text-xs font-bold hover:bg-rose-50 transition shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+              <span>Bersihkan Riwayat</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleNewSample}
+              className="flex items-center gap-2 rounded-full bg-[#185338] text-white px-4 sm:px-5 py-2.5 text-xs font-bold hover:bg-[#12422c] transition shadow-xs cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              <span>+ Uji Sampel Baru</span>
+            </button>
+          </div>
+
+          {/* 4 Summary Statistic Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+            {/* Card 1: Total Sampel Terverifikasi */}
+            <div className="rounded-[22px] bg-[#185338] text-white p-5 flex flex-col justify-between shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-emerald-100/90">Sampel Terverifikasi</span>
+                <div className="h-7 w-7 rounded-full border border-white/20 bg-white/10 flex items-center justify-center text-white">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
+              </div>
+              <div className="my-2">
+                <h3 className="text-3xl sm:text-4xl font-black tracking-tight font-sans">
+                  {totalScanned}
+                </h3>
+              </div>
+              <p className="text-[11px] text-emerald-200/80 font-medium">{totalScanned} Boks nampan terinspeksi hari ini</p>
+            </div>
+
+            {/* Card 2: Lolos Uji Standar */}
+            <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-800">Lolos Standar Mutu</span>
+                <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
+              </div>
+              <div className="my-2">
+                <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-sans">
+                  {passedCount}
+                </h3>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold">
+                <span className="inline-flex items-center justify-center h-4 px-1.5 rounded-sm border border-emerald-200 bg-emerald-50 text-[9px] font-bold text-emerald-800">
+                  {passRate}%
+                </span>
+                <span>Tingkat Kelolosan Uji</span>
+              </div>
+            </div>
+
+            {/* Card 3: Suhu Holding Rata-rata */}
+            <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-800">Suhu Holding Terukur</span>
+                <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
+              </div>
+              <div className="my-2">
+                <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-sans">
+                  {scanResult?.suhuHolding != null
+                    ? `${scanResult.suhuHolding}°C`
+                    : (scanResult?.holdTemp != null
+                        ? `${scanResult.holdTemp}°C`
+                        : (scanResult?.holdingTempC != null
+                            ? `${scanResult.holdingTempC}°C`
+                            : '64.5°C'))}
+                </h3>
+              </div>
+              <span className="text-[11px] text-slate-500 font-medium">Standar Suhu: Min. 60°C</span>
+            </div>
+
+            {/* Card 4: Karantina / Tolak */}
+            <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-800">Porsi Karantina</span>
+                <div className="h-7 w-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-700">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
+              </div>
+              <div className="my-2">
+                <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-sans">
+                  {quarantineCount}
+                </h3>
+              </div>
+              <div>
+                {quarantineCount === 0 ? (
+                  <span className="text-[11px] text-emerald-700 font-semibold">Nihil Cacat Mutu Pangan</span>
+                ) : (
+                  <span className="inline-flex items-center text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                    {quarantineCount} Sampel Perlu Tindak Lanjut
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* RIWAYAT PINDAI TERBARU (Space-Efficient Compact Table / Mini Grid) */}
+        {/* ========================================================================= */}
+        <section className="rounded-[22px] border border-slate-200/80 bg-white p-4 sm:p-5 shadow-xs">
         {/* Header Section dengan Filter & Tampilan View Mode */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-100">
           <div>
@@ -1199,7 +1033,7 @@ export function ValidatorFoodScanPage() {
                   const verdict = VERDICT_STYLE[row.verdict] || VERDICT_STYLE.peringatan
                   const VerdictIcon = verdict.icon
                   const imageSrc = uploadUrl(row.imageRef)
-                  const title = row.menuName || String(row.menuClass || '').replaceAll('_', ' ') || 'Nasi & Lauk MBG'
+                  const title = row.menuName || String(row.menuClass || '').replaceAll('_', ' ') || 'Nasi & Lauk Nutrisi'
                   const isHoldingSafe = (row.holdingTempC == null || row.holdingTempC >= 60)
 
                   return (
@@ -1301,7 +1135,7 @@ export function ValidatorFoodScanPage() {
               const verdict = VERDICT_STYLE[row.verdict] || VERDICT_STYLE.peringatan
               const VerdictIcon = verdict.icon
               const imageSrc = uploadUrl(row.imageRef)
-              const title = row.menuName || String(row.menuClass || '').replaceAll('_', ' ') || 'Nasi & Lauk MBG'
+              const title = row.menuName || String(row.menuClass || '').replaceAll('_', ' ') || 'Nasi & Lauk Nutrisi'
 
               return (
                 <div
@@ -1357,6 +1191,38 @@ export function ValidatorFoodScanPage() {
           </div>
         )}
       </section>
+    </Fragment>
+  ) : (
+    /* ========================================================================= */
+    /* EMPTY STATE PROMPT: SIAP MEMERIKSA NAMPAN */
+    /* ========================================================================= */
+    <div className="rounded-[22px] border-2 border-dashed border-slate-200/90 bg-white p-8 sm:p-12 text-center flex flex-col items-center justify-center shadow-xs transition-all animate-in fade-in duration-200">
+      <div className="h-14 w-14 rounded-2xl bg-emerald-50 flex items-center justify-center mx-auto text-[#185338] mb-3.5 border border-emerald-100 shadow-2xs">
+        <Utensils className="h-7 w-7" />
+      </div>
+      <h4 className="text-base font-extrabold text-slate-800">Siap Memeriksa Nampan</h4>
+      <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+        Ambil foto nampan hidangan matang melalui kamera di atas untuk memverifikasi kesesuaian resep dan suhu holding.
+      </p>
+
+      <div className="mt-6 w-full max-w-md rounded-2xl border border-slate-100 bg-slate-50/70 p-4 text-left text-xs text-slate-600 space-y-2.5">
+        <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Prosedur Uji Sampel Sekolah:</p>
+        <div className="flex items-start gap-2.5">
+          <span className="h-4 w-4 rounded-full bg-[#185338] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
+          <span className="text-[11px] leading-tight">Ambil 1 nampan acak dari master tote teratas.</span>
+        </div>
+        <div className="flex items-start gap-2.5">
+          <span className="h-4 w-4 rounded-full bg-[#185338] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
+          <span className="text-[11px] leading-tight">Ukur suhu inti hidangan dengan termometer tusuk (min 60°C).</span>
+        </div>
+        <div className="flex items-start gap-2.5">
+          <span className="h-4 w-4 rounded-full bg-[#185338] text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
+          <span className="text-[11px] leading-tight">Foto nampan tegak lurus dan klik Verifikasi Mutu.</span>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
 
       {/* ========================================================================= */}
       {/* MODAL DETAIL PEMERIKSAAN SAMPEL */}
@@ -1370,6 +1236,73 @@ export function ValidatorFoodScanPage() {
         />
       )}
 
+      {/* Modal Panduan Pemindai AI */}
+      {isGuideOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md rounded-[22px] bg-white p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-emerald-50 text-[#185338] flex items-center justify-center font-bold border border-emerald-100">
+                  <ScanLine className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    Panduan Pemindai AI
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Standar Operasional Inspeksi Nampan
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsGuideOpen(false)}
+                className="text-slate-400 hover:text-slate-600 rounded-lg p-1 transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 my-4">
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="h-5 w-5 rounded-full bg-[#185338] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  1
+                </span>
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  Ambil foto seluruh porsi menu hidangan (makanan dan minuman) dengan pencahayaan yang cukup dari sudut atas.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="h-5 w-5 rounded-full bg-[#185338] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  2
+                </span>
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  Sistem AI YOLOv8 akan memindai seluruh komponen lauk matang, sayur, dan buah untuk mendeteksi kelayakan konsumsi serta anomali visual.
+                </p>
+              </div>
+
+              <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="h-5 w-5 rounded-full bg-[#185338] text-white flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                  3
+                </span>
+                <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                  Kalkulasi makronutrien (karbohidrat, protein, lemak) diestimasi secara otomatis berdasarkan segmentasi visual porsi makanan.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsGuideOpen(false)}
+              className="w-full py-3 px-4 rounded-xl bg-[#185338] hover:bg-[#12422c] text-white font-extrabold text-xs transition shadow-md cursor-pointer mt-2"
+            >
+              Mengerti &amp; Tutup Panduan
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Global School Switcher Modal */}
       <SchoolSwitcherModal
         isOpen={isSchoolModalOpen}
@@ -1377,8 +1310,6 @@ export function ValidatorFoodScanPage() {
         onSelect={(school) => {
           setActiveSchool(school)
           setSelectedSchool(school)
-          setSelectedDeliveryId('')
-          setIsManualBatch(false)
         }}
       />
 
@@ -1443,10 +1374,10 @@ function ScanDetailModal({ row, onClose, onDelete, deleting }) {
   const verdict = VERDICT_STYLE[row.verdict] || VERDICT_STYLE.peringatan
   const VerdictIcon = verdict.icon
   const imageSrc = uploadUrl(row.imageRef)
-  const title = row.menuName || String(row.menuClass || '').replaceAll('_', ' ') || 'Menu Nampan MBG'
+  const title = row.menuName || String(row.menuClass || '').replaceAll('_', ' ') || 'Menu Nampan Nutrisi'
   const freshness = freshnessLabel(row.aiClass, row.aiConfidence || 0)
   const detailLog = buildDecisionLog({
-    detected: [{ name: title }].filter((item) => item.name && item.name !== 'Menu Nampan MBG'),
+    detected: [{ name: title }].filter((item) => item.name && item.name !== 'Menu Nampan Nutrisi'),
     verdict: row.verdict,
   })
 
@@ -1545,4 +1476,5 @@ function ScanDetailModal({ row, onClose, onDelete, deleting }) {
   )
 }
 
+export { ValidatorFoodScanPage as SkriningPage }
 export default ValidatorFoodScanPage

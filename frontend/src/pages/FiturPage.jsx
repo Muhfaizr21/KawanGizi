@@ -53,7 +53,7 @@ export function FiturPage() {
           <div className="grid gap-10 lg:grid-cols-12 lg:items-center">
             <div className="lg:col-span-6">
               <p className="font-mono text-xs font-semibold uppercase tracking-widest text-emerald-800">
-                KawanGizi / Validasi porsi MBG
+                KawanGizi / Validasi Porsi Nutrisi
               </p>
               <h1 className="mt-4 text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.1]">
                 Lihat porsinya. Putuskan sebelum dibagikan.

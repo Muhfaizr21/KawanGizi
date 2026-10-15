@@ -101,7 +101,7 @@ export function SppgLayout({
   }, [])
 
   return (
-    <div className="min-h-screen w-full bg-white text-slate-800 font-sans antialiased flex flex-col lg:flex-row selection:bg-[#23259C] selection:text-white">
+    <div className="min-h-screen w-full bg-white text-slate-800 font-sans antialiased flex flex-col lg:flex-row lg:items-start selection:bg-[#23259C] selection:text-white">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 text-white px-4 py-3 text-xs shadow-2xl border border-slate-700 animate-in fade-in slide-in-from-bottom-5">
@@ -116,7 +116,7 @@ export function SppgLayout({
           namun teks tetap berukuran normal, jelas, dan terbaca dengan nyaman.
           ==================================================================== */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-52 bg-[#23259C] text-white flex flex-col justify-between transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:z-30 lg:translate-x-0 lg:transform-none shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-[70] w-52 bg-[#23259C] text-white flex flex-col justify-between transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:self-start lg:z-30 lg:translate-x-0 lg:transform-none shrink-0 ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         } shadow-xl lg:shadow-none overflow-hidden`}
       >
@@ -282,7 +282,7 @@ export function SppgLayout({
       {isSidebarOpen && (
         <div
           onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-30 lg:hidden"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-[60] lg:hidden"
         />
       )}
 

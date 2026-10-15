@@ -63,8 +63,8 @@ const VALIDATOR_NOTIFICATIONS = [
   },
   {
     id: 'v-notif-3',
-    title: 'BAST Resmi BAST/MBG-JKT/005 Terbit',
-    desc: 'Salinan BAST berhasil ditandatangani dan disinkronkan ke Dapur SPPG & Satgas BGN.',
+    title: 'BAST Resmi BAST-JKT/005 Terbit',
+    desc: 'Salinan BAST berhasil ditandatangani dan disinkronkan ke Dapur SPPG & Satgas KawanGizi.',
     time: '1 jam lalu',
     urgency: 'success',
     href: '/validator/handover',
@@ -168,21 +168,21 @@ export function ValidatorLayout({
   return (
     <div className="min-h-screen bg-[#F0F2F4] text-slate-900 font-sans antialiased p-2 sm:p-4 lg:p-5 flex flex-col justify-between selection:bg-[#185338] selection:text-white">
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-full bg-[#185338] text-white px-5 py-3 text-xs font-semibold shadow-2xl animate-in fade-in slide-in-from-bottom-5">
+        <div className="fixed bottom-20 sm:bottom-6 right-6 z-[90] flex items-center gap-3 rounded-full bg-[#185338] text-white px-5 py-3 text-xs font-semibold shadow-2xl animate-in fade-in slide-in-from-bottom-5">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
           <p>{toastMessage}</p>
         </div>
       )}
 
       {/* Main Donezo Floating Canvas Container */}
-      <div className="bg-white rounded-[24px] sm:rounded-[32px] shadow-[0_4px_25px_rgba(0,0,0,0.03)] border border-slate-200/70 overflow-hidden flex flex-col lg:flex-row flex-1 min-h-[92vh]">
+      <div className="bg-white rounded-[24px] sm:rounded-[32px] shadow-[0_4px_25px_rgba(0,0,0,0.03)] border border-slate-200/70 overflow-hidden lg:overflow-visible flex flex-col lg:flex-row lg:items-start flex-1 min-h-[92vh]">
         {/* Sidebar */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-100 flex flex-col justify-between transition-transform duration-300 ease-in-out lg:static lg:h-auto lg:z-10 lg:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-[70] w-64 bg-white border-r border-slate-100 flex flex-col justify-between transition-transform duration-300 ease-in-out lg:sticky lg:top-0 lg:h-screen lg:self-start lg:z-10 lg:translate-x-0 shrink-0 lg:rounded-tl-[32px] lg:rounded-bl-[32px] ${
             isSidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'
           }`}
         >
-          <div className="flex flex-col h-full overflow-y-auto p-5 sm:p-6 justify-between">
+          <div className="flex flex-col h-full overflow-y-auto p-5 sm:p-6 justify-between [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <div>
               {/* Donezo Style Logo Brand */}
               <div className="flex items-center gap-2.5 pb-7 pt-1">
@@ -194,12 +194,12 @@ export function ValidatorLayout({
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xl font-black tracking-tight text-slate-900">MBG</span>
+                    <span className="text-xl font-black tracking-tight text-slate-900">KawanGizi</span>
                     <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200">
                       VALIDATOR
                     </span>
                   </div>
-                  <p className="text-[10px] font-semibold text-slate-400 tracking-tight">Portal Pemantauan Sekolah</p>
+                  <p className="text-[10px] font-semibold text-slate-400 tracking-tight">Sistem Skrining & Nutrisi</p>
                 </div>
               </div>
 
@@ -320,7 +320,7 @@ export function ValidatorLayout({
         {isSidebarOpen && (
           <div
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-30 lg:hidden"
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-[60] lg:hidden"
           />
         )}
 
@@ -369,7 +369,7 @@ export function ValidatorLayout({
                 type="button"
                 onClick={() => setIsSchoolModalOpen(true)}
                 className="group flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-full border border-slate-200/90 bg-slate-50/90 hover:bg-emerald-50/60 hover:border-emerald-300 transition-all text-left cursor-pointer shadow-2xs"
-                title="Klik untuk mengganti sekolah pemantauan MBG"
+                title="Klik untuk mengganti sekolah pemantauan nutrisi"
               >
                 <div className="h-7 w-7 rounded-full bg-[#185338] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
                   <Building2 className="h-3.5 w-3.5" />
@@ -391,7 +391,7 @@ export function ValidatorLayout({
               {/* Mail / Help Button */}
               <button
                 type="button"
-                onClick={() => setToastMessage('Pusat Bantuan & Tiket WhatsApp Satgas MBG siap dihubungi: 0812-9988-7766')}
+                onClick={() => setToastMessage('Pusat Bantuan & Tiket WhatsApp KawanGizi siap dihubungi: 0812-9988-7766')}
                 className="h-9 w-9 rounded-full border border-slate-200/90 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer"
                 title="Pesan & Bantuan"
               >
@@ -532,7 +532,7 @@ export function ValidatorLayout({
           </header>
 
           {/* Subheader / Page Title & Actions */}
-          <div className="px-5 sm:px-8 pt-6 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="px-5 sm:px-8 pt-5 sm:pt-6 pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{title}</h1>
               <p className="text-xs text-slate-400 font-medium mt-1">
@@ -548,12 +548,12 @@ export function ValidatorLayout({
           </div>
 
           {/* Page Body */}
-          <main className="p-5 sm:p-8 space-y-6 flex-1 pb-20 md:pb-8">{children}</main>
+          <main className="px-4 sm:px-6 md:px-8 pt-3 sm:pt-4 pb-6 md:pb-8 space-y-4 sm:space-y-5 flex-1">{children}</main>
 
           {/* Donezo Footer */}
-          <footer className="border-t border-slate-100 px-6 sm:px-8 py-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 gap-2">
+          <footer className="border-t border-slate-100 px-6 sm:px-8 pt-4 pb-20 md:pb-4 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-400 gap-2 text-center sm:text-left">
             <p className="font-medium">
-              &copy; 2026 Badan Gizi Nasional (BGN) &bull; Sistem Pemantauan Pangan Terintegrasi
+              &copy; 2026 KawanGizi &middot; Sistem Skrining Kelayakan Pangan & Estimasi Nutrisi AI
             </p>
             <div className="flex items-center gap-3 font-mono text-[10px]">
               <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
