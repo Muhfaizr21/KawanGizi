@@ -27,11 +27,18 @@ func SeedExtended(ctx context.Context) error {
 		`INSERT INTO sppg_kitchens (id, code, name, legal_entity, type, type_label, address, subdistrict, city, province, cluster, coordinates, manager_name, manager_nip, manager_phone, nutritionist_name, nutritionist_str, staff_count, kitchen_area, fleet_count, fleet_type, max_daily_portions, active_quota, safety_score, cold_chain_score, timeliness_score, composite_score, grade, status)
 		VALUES 
 		('SPPG-01', 'BGN-SPPG-001', 'SPPG Sentral Menteng 01', 'Satuan Pelayanan Pangan Mandiri BGN', 'sentral', 'Dapur Sentral BGN', 'Jl. Pegangsaan Barat No. 14, Menteng', 'Menteng', 'Jakarta Pusat', 'DKI Jakarta', 'Kluster Sentral DKI-01', '-6.1983, 106.8450', 'Chef Aris Munandar, A.Md.Par', '19820514 200801 1 002', '+62 812-8821-4401', 'Nur Aini, S.Gz', 'STR-GZ/2024/09881', 38, '520 m²', 6, 'Mobil Box Berpendingin (IoT Chiller 2-4°C)', 3500, 2800, 99.4, 98.7, 99.6, 99.2, 'A+', 'active'),
+		('SPPG-001', 'BGN-SPPG-001', 'SPPG Sentral Menteng 01', 'Satuan Pelayanan Pangan Mandiri BGN', 'sentral', 'Dapur Sentral BGN', 'Jl. Pegangsaan Barat No. 14, Menteng', 'Menteng', 'Jakarta Pusat', 'DKI Jakarta', 'Kluster Sentral DKI-01', '-6.1983, 106.8450', 'Chef Aris Munandar, A.Md.Par', '19820514 200801 1 002', '+62 812-8821-4401', 'Nur Aini, S.Gz', 'STR-GZ/2024/09881', 38, '520 m²', 6, 'Mobil Box Berpendingin (IoT Chiller 2-4°C)', 3500, 2800, 99.4, 98.7, 99.6, 99.2, 'A+', 'active'),
 		('SPPG-04', 'BGN-SPPG-004', 'SPPG Sentral Sukajadi Bandung', 'PT Pangan Madani Parahyangan', 'sentral', 'Dapur Sentral Mandiri', 'Jl. Sukajadi No. 182, Pasteur', 'Sukajadi', 'Kota Bandung', 'Jawa Barat', 'Kluster Bandung Raya-01', '-6.8842, 107.5961', 'Chef Dicky Suherman, S.ST', '19851120 201102 1 005', '+62 813-2209-1823', 'Rina Wulandari, S.Tr.Gz', 'STR-GZ/2023/11204', 32, '480 m²', 5, 'Mobil Chiller IoT Isuzu Traga (Box PU Foam 10cm)', 3000, 2450, 98.8, 97.9, 98.5, 98.4, 'A', 'active'),
+		('SPPG-004', 'BGN-SPPG-004', 'SPPG Sentral Sukajadi Bandung', 'PT Pangan Madani Parahyangan', 'sentral', 'Dapur Sentral Mandiri', 'Jl. Sukajadi No. 182, Pasteur', 'Sukajadi', 'Kota Bandung', 'Jawa Barat', 'Kluster Bandung Raya-01', '-6.8842, 107.5961', 'Chef Dicky Suherman, S.ST', '19851120 201102 1 005', '+62 813-2209-1823', 'Rina Wulandari, S.Tr.Gz', 'STR-GZ/2023/11204', 32, '480 m²', 5, 'Mobil Chiller IoT Isuzu Traga (Box PU Foam 10cm)', 3000, 2450, 98.8, 97.9, 98.5, 98.4, 'A', 'active'),
 		('SPPG-02', 'BGN-SPPG-002', 'SPPG Kebayoran Baru Mandiri', 'Koperasi Pegawai Pangan Selatan', 'rekanan', 'Dapur Rekanan Terakreditasi', 'Jl. Wijaya IX No. 22, Melawai', 'Kebayoran Baru', 'Jakarta Selatan', 'DKI Jakarta', 'Kluster Selatan DKI-02', '-6.2415, 106.7992', 'Budi Santoso, S.Par', '19800315 200501 1 001', '+62 811-9988-213', 'Maya Indriani, S.Gz', 'STR-GZ/2022/04512', 28, '410 m²', 4, 'Mobil Thermoking IoT -20°C s/d +10°C', 2500, 2100, 97.5, 98.1, 96.8, 97.5, 'A', 'active'),
+		('SPPG-002', 'BGN-SPPG-002', 'SPPG Kebayoran Baru Mandiri', 'Koperasi Pegawai Pangan Selatan', 'rekanan', 'Dapur Rekanan Terakreditasi', 'Jl. Wijaya IX No. 22, Melawai', 'Kebayoran Baru', 'Jakarta Selatan', 'DKI Jakarta', 'Kluster Selatan DKI-02', '-6.2415, 106.7992', 'Budi Santoso, S.Par', '19800315 200501 1 001', '+62 811-9988-213', 'Maya Indriani, S.Gz', 'STR-GZ/2022/04512', 28, '410 m²', 4, 'Mobil Thermoking IoT -20°C s/d +10°C', 2500, 2100, 97.5, 98.1, 96.8, 97.5, 'A', 'active'),
 		('SPPG-07', 'BGN-SPPG-007', 'SPPG Banyumanik Sejahtera Semarang', 'CV Berkah Boga Nusantara', 'sentral', 'Dapur Sentral Wilayah', 'Jl. Setiabudi No. 104, Srondol', 'Banyumanik', 'Kota Semarang', 'Jawa Tengah', 'Kluster Semarang Selatan-01', '-7.0621, 110.4189', 'Siti Rahmawati, S.Pd', '19870912 201403 2 004', '+62 815-7788-990', 'Farhan Maulana, S.Gz', 'STR-GZ/2024/15609', 24, '390 m²', 4, 'Armada Box Insulasi Thermo-Guard', 2200, 1950, 98.1, 96.9, 99.0, 98.0, 'A', 'active'),
-		('SPPG-10', 'BGN-SPPG-010', 'SPPG Wonokromo Sehat Surabaya', 'PT Boga Jatim Mandiri', 'rekanan', 'Dapur Rekanan BGN', 'Jl. Raya Darmo No. 88, Wonokromo', 'Wonokromo', 'Kota Surabaya', 'Jawa Timur', 'Kluster Surabaya Selatan-01', '-7.2981, 112.7381', 'Ir. H. Gunawan Wibisono', '19750421 200112 1 003', '+62 812-3344-5566', 'Dr. dr. Anisa Putri, M.Gizi', 'STR-GZ/2021/08123', 35, '510 m²', 6, 'Armada Chiller Double Cabin IoT GPS', 3200, 2700, 96.5, 95.8, 97.2, 96.5, 'B+', 'active')
+		('SPPG-007', 'BGN-SPPG-007', 'SPPG Banyumanik Sejahtera Semarang', 'CV Berkah Boga Nusantara', 'sentral', 'Dapur Sentral Wilayah', 'Jl. Setiabudi No. 104, Srondol', 'Banyumanik', 'Kota Semarang', 'Jawa Tengah', 'Kluster Semarang Selatan-01', '-7.0621, 110.4189', 'Siti Rahmawati, S.Pd', '19870912 201403 2 004', '+62 815-7788-990', 'Farhan Maulana, S.Gz', 'STR-GZ/2024/15609', 24, '390 m²', 4, 'Armada Box Insulasi Thermo-Guard', 2200, 1950, 98.1, 96.9, 99.0, 98.0, 'A', 'active'),
+		('SPPG-10', 'BGN-SPPG-010', 'SPPG Wonokromo Sehat Surabaya', 'PT Boga Jatim Mandiri', 'rekanan', 'Dapur Rekanan BGN', 'Jl. Raya Darmo No. 88, Wonokromo', 'Wonokromo', 'Kota Surabaya', 'Jawa Timur', 'Kluster Surabaya Selatan-01', '-7.2981, 112.7381', 'Ir. H. Gunawan Wibisono', '19750421 200112 1 003', '+62 812-3344-5566', 'Dr. dr. Anisa Putri, M.Gizi', 'STR-GZ/2021/08123', 35, '510 m²', 6, 'Armada Chiller Double Cabin IoT GPS', 3200, 2700, 96.5, 95.8, 97.2, 96.5, 'B+', 'active'),
+		('SPPG-003', 'BGN-SPPG-003', 'SPPG Wonokromo Sehat Surabaya', 'PT Boga Jatim Mandiri', 'rekanan', 'Dapur Rekanan BGN', 'Jl. Raya Darmo No. 88, Wonokromo', 'Wonokromo', 'Kota Surabaya', 'Jawa Timur', 'Kluster Surabaya Selatan-01', '-7.2981, 112.7381', 'Ir. H. Gunawan Wibisono', '19750421 200112 1 003', '+62 812-3344-5566', 'Dr. dr. Anisa Putri, M.Gizi', 'STR-GZ/2021/08123', 35, '510 m²', 6, 'Armada Chiller Double Cabin IoT GPS', 3200, 2700, 96.5, 95.8, 97.2, 96.5, 'B+', 'active'),
+		('SPPG-006', 'BGN-SPPG-006', 'SPPG Sentral Makassar', 'PT Pangan Timur Sejahtera', 'sentral', 'Dapur Sentral BGN', 'Jl. Sudirman No. 12, Ujung Pandang', 'Ujung Pandang', 'Kota Makassar', 'Sulawesi Selatan', 'Kluster Makassar-01', '-5.1477, 119.4327', 'Daeng Rahmat', '19830510 200902 1 003', '+62 852-4411-2299', 'Faisal Basri, S.Gz', 'STR-GZ/2023/07812', 25, '400 m²', 4, 'Box Termal Logistik', 2500, 2000, 96.0, 95.0, 97.0, 96.0, 'B+', 'active')
 		ON CONFLICT (id) DO NOTHING;`,
+
 	}
 	for _, q := range sppgQueries {
 		if _, err := tx.Exec(ctx, q); err != nil {
@@ -100,8 +107,34 @@ func SeedExtended(ctx context.Context) error {
 		return fmt.Errorf("seed deliveries: %w", err)
 	}
 
-	// 7. Seed Schedules
-	schedQuery := `INSERT INTO schedules (
+	// 7. Seed Schedules (Ambil ID SPPG yang benar-benar ada di database agar tidak melanggar foreign key)
+	var activeSppgID string
+	_ = tx.QueryRow(ctx, "SELECT sppg_id FROM users WHERE role = 'sppg' AND sppg_id != '' LIMIT 1").Scan(&activeSppgID)
+	if activeSppgID == "" {
+		_ = tx.QueryRow(ctx, "SELECT id FROM sppg_kitchens ORDER BY id ASC LIMIT 1").Scan(&activeSppgID)
+	}
+	if activeSppgID == "" {
+		activeSppgID = "SPPG-01"
+	}
+
+	getValidSPPG := func(preferred string) string {
+		var exists bool
+		_ = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM sppg_kitchens WHERE id = $1)", preferred).Scan(&exists)
+		if exists {
+			return preferred
+		}
+		return activeSppgID
+	}
+
+	sppgJKT1 := getValidSPPG("SPPG-01")
+	sppgBDG := getValidSPPG("SPPG-04")
+	sppgSBY := getValidSPPG("SPPG-10")
+	sppgYGY := getValidSPPG("SPPG-07")
+	sppgMKS := getValidSPPG("SPPG-01")
+	sppgMDN := getValidSPPG("SPPG-07")
+	sppgJKT2 := getValidSPPG("SPPG-02")
+
+	schedQuery := fmt.Sprintf(`INSERT INTO schedules (
 		id, school_id, school_name, npsn, city, portions, sppg_id,
 		route_name, fleet_name, license_plate, driver_name, driver_phone,
 		departure_time, arrival_eta, total_portions, status, status_label,
@@ -109,7 +142,7 @@ func SeedExtended(ctx context.Context) error {
 		timestamps, validator_contact, target_schools, telemetry
 	) VALUES 
 	(
-		'SCHED-001', 'SCH-JKT-01', 'SDN 01 Menteng Pagi', '20101456', 'Jakarta Pusat', 450, 'SPPG-001',
+		'SCHED-001', 'SCH-JKT-01', 'SDN 01 Menteng Pagi', '20101456', 'Jakarta Pusat', 450, '%s',
 		'Koridor Menteng - Cikini via Jl. Teuku Umar', 'Van Pendingin Berinsulasi (Cold Chain)', 'B 9842 SXZ', 'Hendra Setiawan', '0812-7711-2233',
 		'06:28 WIB', '06:56 WIB', 450, 'on_time', 'Tepat Waktu',
 		'Perjalanan lancar melalui Koridor Menteng - Cikini.', 'Koridor Menteng - Cikini via Jl. Teuku Umar', 0.8,
@@ -118,7 +151,7 @@ func SeedExtended(ctx context.Context) error {
 		'{"name": "Siti Rahmawati, S.Pd", "phone": "0813-2287-9914"}', '[]', '{}'
 	),
 	(
-		'SCHED-002', 'SCH-BDG-02', 'SMPN 2 Bandung Wetan', '20219876', 'Bandung', 620, 'SPPG-002',
+		'SCHED-002', 'SCH-BDG-02', 'SMPN 2 Bandung Wetan', '20219876', 'Bandung', 620, '%s',
 		'Koridor Cihapit - Dago via Jl. Riau', 'Box Thermo Hybrid', 'D 8124 AC', 'Asep Ridwan', '0819-3322-1144',
 		'06:25 WIB', '06:58 WIB', 620, 'arrived', 'Tiba di Sekolah',
 		'Tiba 7 menit lebih cepat dari jadwal wajib. Telah serah terima validator.', 'Koridor Cihapit - Dago via Jl. Riau', 0.0,
@@ -127,7 +160,7 @@ func SeedExtended(ctx context.Context) error {
 		'{"name": "Rina Kusuma Dewi, S.Pd", "phone": "0857-9912-3341"}', '[]', '{}'
 	),
 	(
-		'SCHED-003', 'SCH-SBY-03', 'SMPN 1 Surabaya Pusat', '20532109', 'Surabaya', 710, 'SPPG-003',
+		'SCHED-003', 'SCH-SBY-03', 'SMPN 1 Surabaya Pusat', '20532109', 'Surabaya', 710, '%s',
 		'Koridor Wonokromo - Genteng via Jl. Darmo', 'Box Cargo Termal Berinsulasi', 'L 9012 XP', 'Bambang Sugiono', '0813-8899-7711',
 		'06:34 WIB', '07:44 WIB', 710, 'delayed_traffic', 'Peringatan Macet (+29m)',
 		'Tertahan proyek perbaikan jalur trem Wonokromo. Prediksi terlambat 29 menit melampaui jam 07:30 WIB.', 'Koridor Wonokromo - Genteng via Jl. Darmo', 3.4,
@@ -136,7 +169,7 @@ func SeedExtended(ctx context.Context) error {
 		'{"name": "Agus Subekti, S.Pd.Jas", "phone": "0812-7765-4321"}', '[]', '{}'
 	),
 	(
-		'SCHED-004', 'SCH-YGY-04', 'SDN Percobaan 1 Sleman', '20401122', 'Sleman', 380, 'SPPG-004',
+		'SCHED-004', 'SCH-YGY-04', 'SDN Percobaan 1 Sleman', '20401122', 'Sleman', 380, '%s',
 		'Koridor Kaliurang - Ring Road Utara', 'Blind Van Insulated Eco', 'AB 1290 KZ', 'Sigit Purnomo', '0878-1122-3344',
 		'06:20 WIB', '06:42 WIB', 380, 'arrived', 'Tiba di Sekolah',
 		'Tiba tepat waktu pada gelombang pertama kedatangan.', 'Koridor Kaliurang - Ring Road Utara', 0.0,
@@ -145,7 +178,7 @@ func SeedExtended(ctx context.Context) error {
 		'{"name": "Rahmat Hidayat, S.Pd", "phone": "0877-3890-1122"}', '[]', '{}'
 	),
 	(
-		'SCHED-005', 'SCH-MKS-06', 'SMPN 5 Makassar', '40305678', 'Makassar', 580, 'SPPG-006',
+		'SCHED-005', 'SCH-MKS-06', 'SMPN 5 Makassar', '40305678', 'Makassar', 580, '%s',
 		'Koridor Mariso - Ujung Pandang via Jl. Sudirman', 'Box Termal Logistik', 'DD 8841 XX', 'Daeng Rahmat', '0852-4411-2299',
 		'06:32 WIB', '07:55 WIB (Darurat)', 580, 'fleet_breakdown', 'Armada Mogok (Re-route)',
 		'Kendaraan katering mengalami kerusakan radiator mendadak di Jl. Haji Bau. Butuh pengiriman armada cadangan.', 'Koridor Mariso - Ujung Pandang via Jl. Sudirman', 2.1,
@@ -154,7 +187,7 @@ func SeedExtended(ctx context.Context) error {
 		'{"name": "Faisal Basri, S.Pd", "phone": "0852-9901-4478"}', '[]', '{}'
 	),
 	(
-		'SCHED-006', 'SCH-MDN-07', 'MIN 2 Medan Petisah', '10204567', 'Medan', 400, 'SPPG-007',
+		'SCHED-006', 'SCH-MDN-07', 'MIN 2 Medan Petisah', '10204567', 'Medan', 400, '%s',
 		'Koridor Medan - Petisah via Jl. S. Parman', 'Van Pendingin Berinsulasi', 'BK 7721 DS', 'Zulkifli Nasution', '0821-5588-9900',
 		'06:30 WIB', '07:10 WIB', 400, 'on_time', 'Tepat Waktu',
 		'Perjalanan stabil dalam koridor utama kota Medan.', 'Koridor Medan - Petisah via Jl. S. Parman', 1.2,
@@ -163,7 +196,7 @@ func SeedExtended(ctx context.Context) error {
 		'{"name": "Aisyah Putri, S.Ag", "phone": "0821-6644-3321"}', '[]', '{}'
 	),
 	(
-		'SCHED-007', 'SCH-JKT-08', 'SDN 05 Tebet Timur', '20108871', 'Jakarta Selatan', 420, 'SPPG-001',
+		'SCHED-007', 'SCH-JKT-08', 'SDN 05 Tebet Timur', '20108871', 'Jakarta Selatan', 420, '%s',
 		'Koridor Menteng - Tebet via Manggarai', 'Box Thermo Hybrid', 'B 9133 TKQ', 'Wahyu Hidayat', '0812-9900-4455',
 		'06:45 WIB', '07:40 WIB', 420, 'rescheduled', 'Jadwal Khusus (07:45)',
 		'Jadwal dimundurkan resmi ke 07:45 WIB karena kegiatan senam kesegaran jasmani Jumat pagi.', 'Koridor Menteng - Tebet via Manggarai', 1.5,
@@ -194,7 +227,9 @@ func SeedExtended(ctx context.Context) error {
 		fleet = EXCLUDED.fleet,
 		timestamps = EXCLUDED.timestamps,
 		validator_contact = EXCLUDED.validator_contact,
-		updated_at = NOW();`
+		updated_at = NOW();`,
+		sppgJKT1, sppgBDG, sppgSBY, sppgYGY, sppgMKS, sppgMDN, sppgJKT2,
+	)
 	if _, err := tx.Exec(ctx, schedQuery); err != nil {
 		return fmt.Errorf("seed schedules: %w", err)
 	}

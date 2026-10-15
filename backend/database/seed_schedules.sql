@@ -7,7 +7,7 @@ INSERT INTO schedules (
     timestamps, validator_contact, target_schools, telemetry
 ) VALUES 
 (
-    'SCHED-001', 'SCH-JKT-01', 'SDN 01 Menteng Pagi', '20101456', 'Jakarta Pusat', 450, 'SPPG-001',
+    'SCHED-001', 'SCH-JKT-01', 'SDN 01 Menteng Pagi', '20101456', 'Jakarta Pusat', 450, 'SPPG-01',
     'Koridor Menteng - Cikini via Jl. Teuku Umar', 'Van Pendingin Berinsulasi (Cold Chain)', 'B 9842 SXZ', 'Hendra Setiawan', '0812-7711-2233',
     '06:28 WIB', '06:56 WIB', 450, 'on_time', 'Tepat Waktu',
     'Perjalanan lancar melalui Koridor Menteng - Cikini.', 'Koridor Menteng - Cikini via Jl. Teuku Umar', 0.8,
@@ -17,7 +17,7 @@ INSERT INTO schedules (
     '[]', '{}'
 ),
 (
-    'SCHED-002', 'SCH-BDG-02', 'SMPN 2 Bandung Wetan', '20219876', 'Bandung', 620, 'SPPG-002',
+    'SCHED-002', 'SCH-BDG-02', 'SMPN 2 Bandung Wetan', '20219876', 'Bandung', 620, 'SPPG-04',
     'Koridor Cihapit - Dago via Jl. Riau', 'Box Thermo Hybrid', 'D 8124 AC', 'Asep Ridwan', '0819-3322-1144',
     '06:25 WIB', '06:58 WIB', 620, 'arrived', 'Tiba di Sekolah',
     'Tiba 7 menit lebih cepat dari jadwal wajib. Telah serah terima validator.', 'Koridor Cihapit - Dago via Jl. Riau', 0.0,
@@ -27,7 +27,7 @@ INSERT INTO schedules (
     '[]', '{}'
 ),
 (
-    'SCHED-003', 'SCH-SBY-03', 'SMPN 1 Surabaya Pusat', '20532109', 'Surabaya', 710, 'SPPG-003',
+    'SCHED-003', 'SCH-SBY-03', 'SMPN 1 Surabaya Pusat', '20532109', 'Surabaya', 710, 'SPPG-10',
     'Koridor Wonokromo - Genteng via Jl. Darmo', 'Box Cargo Termal Berinsulasi', 'L 9012 XP', 'Bambang Sugiono', '0813-8899-7711',
     '06:34 WIB', '07:44 WIB', 710, 'delayed_traffic', 'Peringatan Macet (+29m)',
     'Tertahan proyek perbaikan jalur trem Wonokromo. Prediksi terlambat 29 menit melampaui jam 07:30 WIB.', 'Koridor Wonokromo - Genteng via Jl. Darmo', 3.4,
@@ -37,7 +37,7 @@ INSERT INTO schedules (
     '[]', '{}'
 ),
 (
-    'SCHED-004', 'SCH-YGY-04', 'SDN Percobaan 1 Sleman', '20401122', 'Sleman', 380, 'SPPG-004',
+    'SCHED-004', 'SCH-YGY-04', 'SDN Percobaan 1 Sleman', '20401122', 'Sleman', 380, 'SPPG-07',
     'Koridor Kaliurang - Ring Road Utara', 'Blind Van Insulated Eco', 'AB 1290 KZ', 'Sigit Purnomo', '0878-1122-3344',
     '06:20 WIB', '06:42 WIB', 380, 'arrived', 'Tiba di Sekolah',
     'Tiba tepat waktu pada gelombang pertama kedatangan.', 'Koridor Kaliurang - Ring Road Utara', 0.0,
@@ -47,7 +47,7 @@ INSERT INTO schedules (
     '[]', '{}'
 ),
 (
-    'SCHED-005', 'SCH-MKS-06', 'SMPN 5 Makassar', '40305678', 'Makassar', 580, 'SPPG-006',
+    'SCHED-005', 'SCH-MKS-06', 'SMPN 5 Makassar', '40305678', 'Makassar', 580, 'SPPG-01',
     'Koridor Mariso - Ujung Pandang via Jl. Sudirman', 'Box Termal Logistik', 'DD 8841 XX', 'Daeng Rahmat', '0852-4411-2299',
     '06:32 WIB', '07:55 WIB (Darurat)', 580, 'fleet_breakdown', 'Armada Mogok (Re-route)',
     'Kendaraan katering mengalami kerusakan radiator mendadak di Jl. Haji Bau. Butuh pengiriman armada cadangan.', 'Koridor Mariso - Ujung Pandang via Jl. Sudirman', 2.1,
@@ -57,7 +57,7 @@ INSERT INTO schedules (
     '[]', '{}'
 ),
 (
-    'SCHED-006', 'SCH-MDN-07', 'MIN 2 Medan Petisah', '10204567', 'Medan', 400, 'SPPG-007',
+    'SCHED-006', 'SCH-MDN-07', 'MIN 2 Medan Petisah', '10204567', 'Medan', 400, 'SPPG-07',
     'Koridor Medan - Petisah via Jl. S. Parman', 'Van Pendingin Berinsulasi', 'BK 7721 DS', 'Zulkifli Nasution', '0821-5588-9900',
     '06:30 WIB', '07:10 WIB', 400, 'on_time', 'Tepat Waktu',
     'Perjalanan stabil dalam koridor utama kota Medan.', 'Koridor Medan - Petisah via Jl. S. Parman', 1.2,
@@ -67,7 +67,7 @@ INSERT INTO schedules (
     '[]', '{}'
 ),
 (
-    'SCHED-007', 'SCH-JKT-08', 'SDN 05 Tebet Timur', '20108871', 'Jakarta Selatan', 420, 'SPPG-001',
+    'SCHED-007', 'SCH-JKT-08', 'SDN 05 Tebet Timur', '20108871', 'Jakarta Selatan', 420, 'SPPG-02',
     'Koridor Menteng - Tebet via Manggarai', 'Box Thermo Hybrid', 'B 9133 TKQ', 'Wahyu Hidayat', '0812-9900-4455',
     '06:45 WIB', '07:40 WIB', 420, 'rescheduled', 'Jadwal Khusus (07:45)',
     'Jadwal dimundurkan resmi ke 07:45 WIB karena kegiatan senam kesegaran jasmani Jumat pagi.', 'Koridor Menteng - Tebet via Manggarai', 1.5,
