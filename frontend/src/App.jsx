@@ -248,6 +248,25 @@ export default function App() {
     )
   }
 
+  // Mobile / PWA dashboard sub-routes (Beranda, Skrining, Riwayat, Komunitas)
+  if (path.startsWith('/dashboard/')) {
+    return (
+      <RequireRole roles={['validator', 'superadmin', 'sppg']}>
+        {path === '/dashboard/skrining' || path === '/dashboard/scan' ? (
+          <ValidatorFoodScanPage />
+        ) : path === '/dashboard/riwayat' || path === '/dashboard/history' ? (
+          <ValidatorHistoryPage />
+        ) : path === '/dashboard/komunitas' || path === '/dashboard/incidents' ? (
+          <ValidatorIncidentsPage />
+        ) : path === '/dashboard/handover' ? (
+          <ValidatorHandoverPage />
+        ) : (
+          <ValidatorDashboardPage />
+        )}
+      </RequireRole>
+    )
+  }
+
   // Full-screen isolated auth pages
   if (path === '/login' || path === '/signin' || path === '/auth/signin') {
     return (

@@ -17,6 +17,7 @@ import {
   Sparkles,
   ChevronRight,
   Calendar,
+  Settings,
 } from 'lucide-react'
 
 import { navigate } from '../../App'
@@ -49,15 +50,16 @@ export function SppgLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
   const [isNotifOpen, setIsNotifOpen] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isAccountOpen, setIsAccountOpen] = useState(false)
   const notifRef = useRef(null)
+  const profileMenuRef = useRef(null)
   const { user, logout } = useAuth()
 
   const handleLogout = async () => {
     await logout()
     navigate('/login')
   }
-
 
   const showToast = (msg) => {
     setToastMessage(msg)
@@ -71,18 +73,19 @@ export function SppgLayout({
     return () => clearTimeout(timer)
   }, [toastMessage])
 
-  // Close notif on outside click
+  // Close notif and profile dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
         setIsNotifOpen(false)
       }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setIsProfileMenuOpen(false)
+      }
     }
-    if (isNotifOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
+    document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNotifOpen])
+  }, [])
 
   // Close on ESC
   useEffect(() => {
@@ -90,6 +93,7 @@ export function SppgLayout({
       if (e.key === 'Escape') {
         setIsSidebarOpen(false)
         setIsNotifOpen(false)
+        setIsProfileMenuOpen(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -364,25 +368,69 @@ export function SppgLayout({
               )}
             </div>
 
-            {/* Chef / Account Avatar — klik untuk informasi akun */}
-            <button
-              type="button"
-              onClick={() => setIsAccountOpen(true)}
-              aria-label="Informasi akun dapur"
-              className="flex items-center gap-2.5 pl-2 sm:border-l sm:border-slate-200 rounded-xl hover:bg-slate-100/70 transition cursor-pointer"
-            >
-              <div className="h-9 w-9 rounded-2xl bg-[#23259C] text-white flex items-center justify-center font-semibold text-xs shrink-0">
-                {accountInitials(user?.fullName)}
-              </div>
-              <div className="hidden sm:block text-left leading-tight max-w-[180px]">
-                <p className="text-xs font-extrabold text-slate-900 truncate">
-                  {user?.fullName || SPPG_PROFILE.headChef}
-                </p>
-                <p className="text-[11px] text-slate-500 font-medium truncate">
-                  Akun SPPG &bull; {user?.sppgId || SPPG_PROFILE.code}
-                </p>
-              </div>
-            </button>
+            {/* Chef / Account Avatar Dropdown */}
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                aria-label="Informasi akun dapur"
+                aria-expanded={isProfileMenuOpen}
+                aria-haspopup="true"
+                className="flex items-center gap-2.5 pl-2 sm:border-l sm:border-slate-200 rounded-xl hover:bg-slate-100/70 transition cursor-pointer p-1 text-left focus:outline-none"
+              >
+                <div className="h-9 w-9 rounded-2xl bg-[#23259C] text-white flex items-center justify-center font-semibold text-xs shrink-0">
+                  {accountInitials(user?.fullName)}
+                </div>
+                <div className="hidden sm:block text-left leading-tight max-w-[180px]">
+                  <p className="text-xs font-extrabold text-slate-900 truncate">
+                    {user?.fullName || SPPG_PROFILE.headChef}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium truncate">
+                    Akun SPPG &bull; {user?.sppgId || SPPG_PROFILE.code}
+                  </p>
+                </div>
+              </button>
+
+              {/* Profile Floating Dropdown Menu */}
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 z-50 overflow-hidden py-1 divide-y divide-slate-100 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3.5 py-2.5 bg-slate-50/70 sm:hidden">
+                    <p className="text-xs font-bold text-slate-900 truncate">
+                      {user?.fullName || SPPG_PROFILE.headChef}
+                    </p>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {user?.email || SPPG_PROFILE.code}
+                    </p>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        setIsAccountOpen(true)
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer text-left"
+                    >
+                      <Settings className="h-4 w-4 text-slate-400" />
+                      <span>Pengaturan Akun</span>
+                    </button>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        handleLogout()
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-slate-50 transition cursor-pointer text-left"
+                    >
+                      <LogOut className="h-4 w-4 text-rose-500" />
+                      <span>Keluar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

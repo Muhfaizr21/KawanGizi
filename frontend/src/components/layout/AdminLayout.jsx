@@ -24,6 +24,7 @@ import {
   Check,
   CookingPot,
   ChevronRight,
+  Settings,
 } from 'lucide-react'
 
 import { navigate } from '../../App'
@@ -155,9 +156,11 @@ export function AdminLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState(null)
   const [isNotifOpen, setIsNotifOpen] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [notifFilter, setNotifFilter] = useState('all')
   const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS)
   const notifRef = useRef(null)
+  const profileMenuRef = useRef(null)
 
   const { user, logout } = useAuth()
   const initials = (user?.fullName || user?.email || '?')
@@ -207,25 +210,27 @@ export function AdminLayout({
     return () => clearTimeout(timer)
   }, [toastMessage])
 
-  // Close notif dropdown on click outside
+  // Close notif dropdown & profile menu on click outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
         setIsNotifOpen(false)
       }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target)) {
+        setIsProfileMenuOpen(false)
+      }
     }
-    if (isNotifOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
+    document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isNotifOpen])
+  }, [])
 
-  // Close sidebar and notif popover on ESC key
+  // Close sidebar, notif popover, and profile menu on ESC key
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         setIsSidebarOpen(false)
         setIsNotifOpen(false)
+        setIsProfileMenuOpen(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -568,22 +573,69 @@ export function AdminLayout({
               )}
             </div>
 
-            {/* User Profile */}
-            <div className="flex items-center gap-2.5 pl-2 sm:border-l sm:border-slate-200">
-              <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0 border border-white/20">
-                {initials}
-              </div>
-              <div className="hidden sm:block text-left leading-tight">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-bold text-slate-900">{user?.fullName || 'Pengguna'}</p>
-                  <span className="text-[9px] font-mono font-bold bg-blue-100 text-blue-800 px-1 py-0.2 rounded uppercase">
-                    {user?.role || '-'}
-                  </span>
+            {/* User Profile Dropdown */}
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+                className="flex items-center gap-2.5 pl-2 sm:border-l sm:border-slate-200 cursor-pointer group rounded-xl hover:bg-slate-50 transition p-1 text-left focus:outline-none"
+                aria-expanded={isProfileMenuOpen}
+                aria-haspopup="true"
+                title="Menu Profil"
+              >
+                <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0 border border-white/20 group-hover:scale-105 transition-transform">
+                  {initials}
                 </div>
-                <p className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]">
-                  {ROLE_LABELS[user?.role] || user?.email || ''}
-                </p>
-              </div>
+                <div className="hidden sm:block text-left leading-tight">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                      {user?.fullName || 'Pengguna'}
+                    </p>
+                    <span className="text-[9px] font-mono font-bold bg-blue-100 text-blue-800 px-1 py-0.2 rounded uppercase">
+                      {user?.role || '-'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium truncate max-w-[150px]">
+                    {ROLE_LABELS[user?.role] || user?.email || ''}
+                  </p>
+                </div>
+              </button>
+
+              {/* Profile Floating Dropdown Menu */}
+              {isProfileMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 z-50 overflow-hidden py-1 divide-y divide-slate-100 animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="px-3.5 py-2.5 bg-slate-50/70 sm:hidden">
+                    <p className="text-xs font-bold text-slate-900 truncate">{user?.fullName || 'Pengguna'}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{user?.email || ''}</p>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        navigate('/admin/settings')
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer text-left"
+                    >
+                      <Settings className="h-4 w-4 text-slate-400" />
+                      <span>Pengaturan Akun</span>
+                    </button>
+                  </div>
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsProfileMenuOpen(false)
+                        handleLogout()
+                      }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-slate-50 transition cursor-pointer text-left"
+                    >
+                      <LogOut className="h-4 w-4 text-rose-500" />
+                      <span>Keluar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

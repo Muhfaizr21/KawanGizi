@@ -105,3 +105,11 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Mobile PWA Safe Area Utilities */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
