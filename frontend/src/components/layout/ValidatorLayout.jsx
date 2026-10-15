@@ -25,6 +25,7 @@ import {
 
 import { navigate } from '../../App'
 import { useAuth } from '../../context/AuthContext'
+import { usePWA } from '../../context/PWAContext'
 import { getSelectedSchool, setSelectedSchool } from '../../lib/validatorSchool'
 import { SchoolSwitcherModal } from '../validator/SchoolSwitcherModal'
 import { ValidatorAccountModal } from './ValidatorAccountModal'
@@ -101,6 +102,7 @@ export function ValidatorLayout({
   const searchInputRef = useRef(null)
 
   const { user, logout } = useAuth()
+  const { isInstalled, promptInstall, deferredPrompt } = usePWA()
   const [activeSchool, setActiveSchool] = useState(() => getSelectedSchool(user))
   const [isSchoolModalOpen, setIsSchoolModalOpen] = useState(false)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
@@ -285,39 +287,47 @@ export function ValidatorLayout({
             </div>
 
             {/* Bottom Dark App Promo Card (Signature Donezo Dark Green Widget) */}
-            <div className="mt-8 relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#0e3b28] via-[#09261a] to-[#04120c] p-4 text-white shadow-lg">
-              {/* Wavy Contour Lines Background */}
-              <svg
-                className="absolute inset-0 w-full h-full opacity-20 pointer-events-none"
-                viewBox="0 0 200 200"
-                preserveAspectRatio="none"
-              >
-                <path d="M-20,60 Q40,140 100,70 T220,110" fill="none" stroke="currentColor" strokeWidth="2.5" />
-                <path d="M-20,90 Q40,170 100,100 T220,140" fill="none" stroke="currentColor" strokeWidth="2" />
-                <path d="M-20,120 Q40,200 100,130 T220,170" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M-20,150 Q40,230 100,160 T220,200" fill="none" stroke="currentColor" strokeWidth="1" />
-              </svg>
-
-              <div className="relative z-10 space-y-2.5">
-                <div className="h-7 w-7 rounded-lg bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
-                  <Smartphone className="h-4 w-4 text-emerald-300" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold tracking-tight text-white">Mode Cepat Validator</h4>
-                  <p className="text-[10px] text-slate-300 leading-tight mt-0.5 opacity-80">
-                    PWA kamera & verifikasi offline
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setToastMessage('PWA Mode Siaga Validator telah terpasang di perangkat Anda.')}
-                  className="w-full mt-1.5 py-2 rounded-xl bg-[#1d6b47] hover:bg-[#238155] text-white text-[11px] font-bold transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+            {!isInstalled && (
+              <div className="mt-8 relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#0e3b28] via-[#09261a] to-[#04120c] p-4 text-white shadow-lg">
+                {/* Wavy Contour Lines Background */}
+                <svg
+                  className="absolute inset-0 w-full h-full opacity-20 pointer-events-none"
+                  viewBox="0 0 200 200"
+                  preserveAspectRatio="none"
                 >
-                  <span>Pasang PWA Siaga</span>
-                  <ChevronRight className="h-3 w-3" />
-                </button>
+                  <path d="M-20,60 Q40,140 100,70 T220,110" fill="none" stroke="currentColor" strokeWidth="2.5" />
+                  <path d="M-20,90 Q40,170 100,100 T220,140" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <path d="M-20,120 Q40,200 100,130 T220,170" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M-20,150 Q40,230 100,160 T220,200" fill="none" stroke="currentColor" strokeWidth="1" />
+                </svg>
+
+                <div className="relative z-10 space-y-2.5">
+                  <div className="h-7 w-7 rounded-lg bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
+                    <Smartphone className="h-4 w-4 text-emerald-300" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold tracking-tight text-white">Mode Cepat Validator</h4>
+                    <p className="text-[10px] text-slate-300 leading-tight mt-0.5 opacity-80">
+                      PWA kamera & verifikasi offline
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (deferredPrompt) {
+                        await promptInstall()
+                      } else {
+                        setToastMessage('Aplikasi siap diinstal. Tambahkan ke Layar Utama melalui menu peramban Anda.')
+                      }
+                    }}
+                    className="w-full mt-1.5 py-2 rounded-xl bg-[#1d6b47] hover:bg-[#238155] text-white text-[11px] font-bold transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Pasang PWA Siaga</span>
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </aside>
 

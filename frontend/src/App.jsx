@@ -41,6 +41,7 @@ import { RequireRole } from './components/RequireRole'
 import { RedirectIfAuthed } from './components/RedirectIfAuthed'
 import { useAuth } from './context/AuthContext'
 import { homeForRole } from './lib/api'
+import { InstallPWAPopup } from './components/pwa/InstallPWAPopup'
 
 function DashboardGuard() {
   const { user } = useAuth()
@@ -155,12 +156,13 @@ function PublicPage({ path }) {
 export default function App() {
   const path = usePath()
 
-  const errorCode = getErrorCode(path)
-  if (errorCode) {
-    return <ErrorPage code={errorCode} path={path} />
-  }
+  const renderRoute = () => {
+    const errorCode = getErrorCode(path)
+    if (errorCode) {
+      return <ErrorPage code={errorCode} path={path} />
+    }
 
-  // Full-screen isolated admin dashboard (no public header/footer)
+    // Full-screen isolated admin dashboard (no public header/footer)
   // Superadmin portal.
   if (path.startsWith('/admin')) {
     return (
@@ -332,13 +334,21 @@ export default function App() {
     return <NotFoundPage path={path} />
   }
 
+    return (
+      <div className="min-h-screen bg-white text-gray-900 flex flex-col justify-between selection:bg-gray-900 selection:text-white">
+        <SiteHeader path={path} />
+        <main className="flex-1">
+          <PublicPage path={path} />
+        </main>
+        <SiteFooter />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-white text-gray-900 flex flex-col justify-between selection:bg-gray-900 selection:text-white">
-      <SiteHeader path={path} />
-      <main className="flex-1">
-        <PublicPage path={path} />
-      </main>
-      <SiteFooter />
-    </div>
+    <>
+      {renderRoute()}
+      <InstallPWAPopup path={path} />
+    </>
   )
 }
