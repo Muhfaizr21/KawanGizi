@@ -272,6 +272,8 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 		mux.Handle("POST /api/validator/handover/reset", middlewares.RequirePermission(models.PermHandoverBast)(http.HandlerFunc(deps.ValidatorScanCtrl.ResetHandover)))
 		mux.Handle("GET /api/validator/incidents", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetIncidents)))
 		mux.Handle("POST /api/validator/incidents", middlewares.RequirePermission(models.PermIncidentSubmit)(http.HandlerFunc(deps.ValidatorScanCtrl.CreateIncident)))
+		mux.Handle("GET /api/v1/incidents", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetIncidents)))
+		mux.Handle("POST /api/v1/incidents", middlewares.RequirePermission(models.PermIncidentSubmit)(http.HandlerFunc(deps.ValidatorScanCtrl.CreateIncident)))
 		mux.Handle("GET /api/validator/history/bundle", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetHistory)))
 		mux.Handle("POST /api/validator/history/surplus", middlewares.RequirePermission(models.PermAttendanceRead)(http.HandlerFunc(deps.ValidatorScanCtrl.AllocateSurplus)))
 		mux.Handle("GET /api/validator/dashboard", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetDashboard)))

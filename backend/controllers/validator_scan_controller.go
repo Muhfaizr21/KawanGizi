@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // ValidatorScanController menangani endpoint pemindaian mutu dan sinkronisasi Serah Terima (BAST)
@@ -154,9 +155,32 @@ func (c *ValidatorScanController) CreateIncident(w http.ResponseWriter, r *http.
 	userID := middlewares.UserID(r.Context())
 
 	var payload models.ValidatorCreateIncidentPayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Format payload laporan insiden tidak valid")
-		return
+
+	ct := r.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		_ = r.ParseMultipartForm(10 << 20)
+		payload.Category = r.FormValue("category")
+		payload.Severity = r.FormValue("severity")
+		if payload.Severity == "" {
+			payload.Severity = r.FormValue("severityLevel")
+		}
+		payload.Description = r.FormValue("description")
+		payload.NPSN = r.FormValue("npsn")
+		payload.SPPGID = r.FormValue("sppgId")
+		payload.BatchToken = r.FormValue("batchToken")
+		payload.ReporterName = r.FormValue("reporterName")
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			utils.Error(w, http.StatusBadRequest, "Format payload laporan insiden tidak valid")
+			return
+		}
+	}
+
+	if payload.Severity == "" {
+		payload.Severity = "medium"
+	}
+	if payload.Category == "" {
+		payload.Category = "organoleptic"
 	}
 
 	actorName := payload.ReporterName

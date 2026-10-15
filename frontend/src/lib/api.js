@@ -1429,9 +1429,28 @@ export async function fetchValidatorIncidents(params = {}) {
 }
 
 export async function submitValidatorIncident(payload) {
+  const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData
   const res = await api('/api/validator/incidents', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: isFormData ? payload : JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function fetchIncidents(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/v1/incidents${qs}`)
+  return res?.data || null
+}
+
+export async function submitIncident(payload) {
+  const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData
+  const res = await api('/api/v1/incidents', {
+    method: 'POST',
+    body: isFormData ? payload : JSON.stringify(payload),
   })
   return res?.data || null
 }
