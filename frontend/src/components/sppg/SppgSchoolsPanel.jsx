@@ -28,6 +28,7 @@ import {
   sendSppgSchoolReminder,
   fetchSppgList,
   createOwnedSchool,
+  deleteOwnedSchool,
 } from '../../lib/api'
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#23259C]'
@@ -63,6 +64,9 @@ export function SppgSchoolsPanel() {
   const [contactId, setContactId] = useState(null)
   const [attendanceModalId, setAttendanceModalId] = useState(null)
   const [editDroppointId, setEditDroppointId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
   const [copied, setCopied] = useState(false)
   const [printGuide, setPrintGuide] = useState(null)
 
@@ -234,18 +238,19 @@ export function SppgSchoolsPanel() {
 
   // Keydown escape for modals
   useEffect(() => {
-    if (!guideId && !contactId && !attendanceModalId && !editDroppointId) return
+    if (!guideId && !contactId && !attendanceModalId && !editDroppointId && !deleteTarget) return
     const onKey = (e) => {
       if (e.key === 'Escape') {
         setGuideId(null)
         setContactId(null)
         setAttendanceModalId(null)
         setEditDroppointId(null)
+        setDeleteTarget(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [guideId, contactId, attendanceModalId, editDroppointId])
+  }, [guideId, contactId, attendanceModalId, editDroppointId, deleteTarget])
 
   // Print Guide effect
   useEffect(() => {
@@ -346,6 +351,31 @@ export function SppgSchoolsPanel() {
       setTimeout(() => setNotice(''), 4000)
     } catch (err) {
       setError('Gagal mengirim peringatan: ' + err.message)
+    }
+  }
+
+  const handleDeleteSchool = async (e) => {
+    e.preventDefault()
+    if (!deleteTarget) return
+    if (deleteReason.trim().length < 5) {
+      setError('Alasan penghapusan wajib diisi minimal 5 karakter.')
+      return
+    }
+
+    setDeleteSubmitting(true)
+    setError('')
+    try {
+      await deleteOwnedSchool(deleteTarget.schoolId || deleteTarget.npsn, deleteReason.trim(), activeSppgId)
+      setNotice(`Sekolah ${deleteTarget.name} berhasil dihapus dari daftar sekolah binaan.`)
+      setTimeout(() => setNotice(''), 4000)
+      setDeleteTarget(null)
+      setDeleteReason('')
+      setOpenId('')
+      await loadBundle(true)
+    } catch (err) {
+      setError(err.message || 'Gagal menghapus sekolah.')
+    } finally {
+      setDeleteSubmitting(false)
     }
   }
 
@@ -743,6 +773,20 @@ export function SppgSchoolsPanel() {
                                 Ingatkan
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteTarget(s)
+                                setDeleteReason('')
+                              }}
+                              className="rounded-lg border border-rose-200 bg-white px-2 py-1 text-[11px] font-semibold text-rose-600 transition hover:bg-rose-50 active:scale-[0.97]"
+                              title="Hapus sekolah ini dari daftar sekolah binaan dapur"
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                <Trash2 className="h-3 w-3" />
+                                Hapus
+                              </span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1256,6 +1300,79 @@ export function SppgSchoolsPanel() {
                 </button>
                 <button type="submit" disabled={dpSubmitting} className={BTN}>
                   {dpSubmitting ? 'Menyimpan...' : 'Perbarui Panduan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: Hapus Sekolah Binaan (permanen, tidak bisa dibatalkan) */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Hapus ${deleteTarget.name}`}
+            className="w-full max-w-md rounded-2xl border border-rose-200 bg-white shadow-2xl"
+          >
+            <form onSubmit={handleDeleteSchool}>
+              <div className="flex items-start gap-3 p-6 pb-0">
+                <div className="rounded-xl bg-rose-50 p-2 text-rose-600 shrink-0">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-extrabold tracking-tight text-slate-900">
+                    Hapus sekolah bawaan?
+                  </h2>
+                  <p className="mt-1 text-xs text-slate-600">
+                    <b className="text-slate-900">{deleteTarget.name}</b> (NPSN {deleteTarget.npsn}) akan dihapus
+                    permanen dari database, termasuk catatan presensi, kuota, dan panduan drop-pointnya.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 px-6">
+                <label
+                  htmlFor="delete-reason"
+                  className="block text-[11px] font-bold uppercase tracking-wider text-slate-500"
+                >
+                  Alasan penghapusan (wajib)
+                </label>
+                <textarea
+                  id="delete-reason"
+                  rows={3}
+                  required
+                  minLength={5}
+                  value={deleteReason}
+                  onChange={(e) => setDeleteReason(e.target.value)}
+                  placeholder="Contoh: Terdaftar dua kali saat migrasi data awal"
+                  className={`mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 ${FOCUS}`}
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Jika masih ada akun validator yang terikat, backend akan menolak penghapusan.
+                </p>
+              </div>
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-slate-100 px-6 py-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteTarget(null)
+                    setDeleteReason('')
+                  }}
+                  disabled={deleteSubmitting}
+                  className={`rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 ${FOCUS}`}
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleteSubmitting}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-rose-700 active:scale-[0.98] disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {deleteSubmitting ? 'Menghapus...' : 'Hapus Permanen'}
                 </button>
               </div>
             </form>

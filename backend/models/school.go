@@ -141,6 +141,11 @@ type ToggleSchoolStatusRequest struct {
 	ReturnDate   string `json:"returnDate,omitempty"`
 }
 
+// DeleteSchoolRequest payload penghapusan sekolah dari daftar receivable MBG.
+type DeleteSchoolRequest struct {
+	Reason string `json:"reason"`
+}
+
 // SchoolFilter parameter filter pencarian sekolah.
 type SchoolFilter struct {
 	Search string `json:"search"`

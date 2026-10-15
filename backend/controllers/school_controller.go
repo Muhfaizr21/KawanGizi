@@ -5,6 +5,7 @@ import (
 	"backend/models"
 	"backend/services"
 	"backend/utils"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -190,11 +191,72 @@ func (c *SchoolController) ToggleStatus(w http.ResponseWriter, r *http.Request) 
 	utils.Success(w, http.StatusOK, "Status operasional sekolah berhasil diperbarui", updated)
 }
 
+// Delete menicorp sekolah dari daftar receivable MBG. Reserved untuk Superadmin
+// lewat izin schools.manage.
+func (c *SchoolController) Delete(w http.ResponseWriter, r *http.Request) {
+	npsn := r.PathValue("npsn")
+	actorID := middlewares.UserID(r.Context())
+	if actorID == "" {
+		actorID = "superadmin-01"
+	}
+
+	var req models.DeleteSchoolRequest
+	// Body opsional: decode dibiarkan gagal diam, validasi reason di service yang memutuskan.
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if err := c.svc.Delete(r.Context(), npsn, req, models.User{
+		ID: actorID, FullName: "Administrator Pengelola MBG", Role: models.RoleSuperadmin,
+	}); err != nil {
+		writeSchoolError(w, err)
+		return
+	}
+
+	utils.Success(w, http.StatusOK, "Sekolah beserta data operasionalnya berhasil dihapus dari sistem MBG", nil)
+}
+
+// DeleteOwned menicorp sekolah binaannya sendiri. Dapur selalu diambil dari klaim
+// token, dan NPSN sekolah harus memang milik dapur tersebut, sehingga SPPG tidak
+// dapat menghapus sekolah milik dapurnya maupun dapurnya lain.
+func (c *SchoolController) DeleteOwned(w http.ResponseWriter, r *http.Request) {
+	ownerSppgID := strings.TrimSpace(middlewares.SppgID(r.Context()))
+	if ownerSppgID == "" {
+		utils.Error(w, http.StatusForbidden, "Akun ini tidak terikat pada dapur SPPG sehingga tidak dapat menghapus sekolah")
+		return
+	}
+
+	ref := strings.TrimSpace(r.PathValue("id"))
+	if ref == "" {
+		utils.Error(w, http.StatusBadRequest, "ID sekolah wajib disertakan")
+		return
+	}
+
+	// Authorization against ownership happens before we touch anything.
+	owned, err := c.svc.GetOwnedSchool(r.Context(), ref, ownerSppgID)
+	if err != nil {
+		writeSchoolError(w, err)
+		return
+	}
+
+	var req models.DeleteSchoolRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if err := c.svc.Delete(r.Context(), owned.NPSN, req, models.User{
+		ID: middlewares.UserID(r.Context()), FullName: "Dapur SPPG", Role: middlewares.Role(r.Context()),
+	}); err != nil {
+		writeSchoolError(w, err)
+		return
+	}
+
+	utils.Success(w, http.StatusOK, "Sekolah "+owned.Name+" berhasil dihapus dari daftar sekolah binaan dapur ini", nil)
+}
+
 func writeSchoolError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, services.ErrSchoolNotFound):
 		utils.Error(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, services.ErrSchoolNPSNExists):
+		utils.Error(w, http.StatusConflict, err.Error())
+	case errors.Is(err, services.ErrSchoolHasValidators):
 		utils.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, services.ErrInvalidNPSN),
 		errors.Is(err, services.ErrSchoolNameRequired),
@@ -202,6 +264,7 @@ func writeSchoolError(w http.ResponseWriter, err error) {
 		errors.Is(err, services.ErrInvalidReassignReason),
 		errors.Is(err, services.ErrInvalidSchoolStatus),
 		errors.Is(err, services.ErrMissingStatusReason),
+		errors.Is(err, services.ErrMissingDeleteReason),
 		errors.Is(err, services.ErrMissingContact):
 		utils.Error(w, http.StatusBadRequest, err.Error())
 	default:

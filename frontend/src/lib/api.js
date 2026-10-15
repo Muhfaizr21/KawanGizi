@@ -257,6 +257,28 @@ export async function toggleSchoolStatus(npsn, { status, statusReason, returnDat
   return res?.data || null
 }
 
+/** Hapus sekolah (Superadmin) beserta seluruh data operasionalnya. */
+export async function deleteSchool(npsn, reason = '') {
+  const res = await api(`/api/schools/${npsn}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ reason }),
+  })
+  return res || null
+}
+
+/**
+ * Hapus sekolah armar SPPG. `id` boleh schools.id atau NPSN — backend memverifikasi
+ * sekolah itu memang milik dapur dari klaim token, bukan dari parameter.
+ */
+export async function deleteOwnedSchool(id, reason = '', sppgId = '') {
+  const query = sppgId ? `?sppgId=${encodeURIComponent(sppgId)}` : ''
+  const res = await api(`/api/sppg/schools/${encodeURIComponent(id)}${query}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ reason }),
+  })
+  return res || null
+}
+
 export async function fetchSppgList() {
   const res = await api('/api/sppg')
   return res?.data || []

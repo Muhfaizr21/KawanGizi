@@ -175,6 +175,7 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 		mux.Handle("PUT /api/sppg/schools/{id}/attendance", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgSchoolCtrl.UpdateAttendance)))
 		mux.Handle("PUT /api/sppg/schools/{id}/droppoint", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgSchoolCtrl.UpdateDroppoint)))
 		mux.Handle("POST /api/sppg/schools/{id}/remind", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgSchoolCtrl.RemindAttendance)))
+		mux.Handle("DELETE /api/sppg/schools/{id}", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SchoolCtrl.DeleteOwned)))
 	}
 
 	// SPPG Serah Terima BAST Digital & Kontrol Porsi (SPPG.md Bab 7)
@@ -288,6 +289,7 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 		mux.Handle("PUT /api/schools/{npsn}/sppg", middlewares.RequirePermission(models.PermSchoolsManage)(http.HandlerFunc(deps.SchoolCtrl.ReassignSPPG)))
 		mux.Handle("PUT /api/schools/{npsn}/contacts", middlewares.RequirePermission(models.PermSchoolsManage)(http.HandlerFunc(deps.SchoolCtrl.UpdateContacts)))
 		mux.Handle("PATCH /api/schools/{npsn}/status", middlewares.RequirePermission(models.PermSchoolsManage)(http.HandlerFunc(deps.SchoolCtrl.ToggleStatus)))
+		mux.Handle("DELETE /api/schools/{npsn}", middlewares.RequirePermission(models.PermSchoolsManage)(http.HandlerFunc(deps.SchoolCtrl.Delete)))
 	}
 
 	// Jadwal Distribusi & Armada Cold-Chain MBG

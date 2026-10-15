@@ -18,6 +18,8 @@ var (
 	ErrInvalidSchoolStatus    = errors.New("status operasional sekolah tidak valid (gunakan: active, temp_inactive, radius_warning)")
 	ErrMissingStatusReason    = errors.New("alasan perubahan status operasional sekolah wajib diisi minimal 5 karakter")
 	ErrMissingContact         = errors.New("nama kepala sekolah dan nomor kontak darurat wajib diisi")
+	ErrSchoolHasValidators    = errors.New("masih ada akun validator yang terikat pada sekolah ini; hapus atau alihkan akun validator terlebih dahulu")
+	ErrMissingDeleteReason    = errors.New("alasan penghapusan sekolah wajib diisi minimal 5 karakter")
 )
 
 // SchoolService mengatur aturan bisnis dan validasi pangkalan data master sekolah MBG.
@@ -28,6 +30,9 @@ type SchoolService interface {
 	ReassignSPPG(ctx context.Context, npsn string, req models.ReassignSchoolSPPGRequest, actor models.User) (*models.School, error)
 	UpdateContacts(ctx context.Context, npsn string, req models.UpdateSchoolContactsRequest, actor models.User) (*models.School, error)
 	ToggleStatus(ctx context.Context, npsn string, req models.ToggleSchoolStatusRequest, actor models.User) (*models.School, error)
+	CountLinkedValidatorAccounts(ctx context.Context, npsn string) (int, error)
+	GetOwnedSchool(ctx context.Context, idOrSchoolID, sppgID string) (*models.School, error)
+	Delete(ctx context.Context, npsn string, req models.DeleteSchoolRequest, actor models.User) error
 }
 
 type schoolService struct {
@@ -153,4 +158,61 @@ func (s *schoolService) ToggleStatus(ctx context.Context, npsn string, req model
 	}
 
 	return s.repo.ToggleStatus(ctx, npsn, req, actor)
+}
+
+func (s *schoolService) CountLinkedValidatorAccounts(ctx context.Context, npsn string) (int, error) {
+	return s.repo.CountLinkedValidatorAccounts(ctx, strings.TrimSpace(npsn))
+}
+
+// Delete menicorp sekolah beserta data operasionalnya. Akun login validator yang
+// masih terikat tidak ikut dihapus — linkage-nya dicek lebih dulu supaya tidak
+// ada akun yatim yang menunjuk sekolah yang sudah tidak ada.
+// GetOwnedSchool mengembalikan sekolah hanya bila benar-benar milik dapurnya.
+// idOrSchoolID bisa berupa NPSN, schools.id, maupun id baris kuota harian.
+func (s *schoolService) GetOwnedSchool(ctx context.Context, idOrSchoolID, sppgID string) (*models.School, error) {
+	idOrSchoolID = strings.TrimSpace(idOrSchoolID)
+	sppgID = strings.TrimSpace(sppgID)
+	if idOrSchoolID == "" || sppgID == "" {
+		return nil, ErrSchoolNotFound
+	}
+
+	npsn, err := s.repo.ResolveNPSNByRef(ctx, idOrSchoolID)
+	if err != nil {
+		return nil, ErrSchoolNotFound
+	}
+
+	school, err := s.GetByNPSN(ctx, npsn)
+	if err != nil {
+		return nil, err
+	}
+
+	if school.SPPGID != sppgID {
+		return nil, ErrSchoolNotFound
+	}
+	return school, nil
+}
+
+func (s *schoolService) Delete(ctx context.Context, npsn string, req models.DeleteSchoolRequest, actor models.User) error {
+	npsn = strings.TrimSpace(npsn)
+	if npsn == "" {
+		return ErrSchoolNotFound
+	}
+
+	if len(strings.TrimSpace(req.Reason)) < 5 {
+		return ErrMissingDeleteReason
+	}
+
+	if _, err := s.GetByNPSN(ctx, npsn); err != nil {
+		return err
+	}
+
+	linked, err := s.repo.CountLinkedValidatorAccounts(ctx, npsn)
+	if err != nil {
+		return err
+	}
+	if linked > 0 {
+		return ErrSchoolHasValidators
+	}
+
+	return s.repo.Delete(ctx, npsn, actor)
 }

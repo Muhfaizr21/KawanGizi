@@ -40,7 +40,7 @@ func NewSppgSchoolRepository() SppgSchoolRepository {
 //     status "Belum update" dan kuota cetak mengikuti jumlah siswa terdaftar.
 //
 // Sidecar LATERAL memastikan satu sekolah menghasilkan paling banyak satu baris,
-// walau tabel kuota sempat berisi bari ganda untuk NPSN yang sama.
+// walau tabel kuota sempat berisi baris ganda untuk NPSN yang sama.
 const schoolQuotaProjection = `
 	SELECT
 		COALESCE(q.id, 'q:' || s.npsn || ':' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD')) AS id,
@@ -167,9 +167,8 @@ func (r *pgSppgSchoolRepository) UpdateAttendance(ctx context.Context, idOrSchoo
 	if specials == nil {
 		specials = target.Specials
 	}
-	specJSON, _ := json.Marshal(specials)
 
-	// Upsert: sekolah binaaan yang belum pernah punya baris kuota hari ini
+	// Upsert: sekolah binaan yang belum pernah punya baris kuota hari ini
 	// tetap bisa dimutakhirkan — baris overlay-nya dibuat saat pertama kali disimpan.
 	query := `
 		INSERT INTO sppg_school_quotas (
@@ -197,7 +196,7 @@ func (r *pgSppgSchoolRepository) UpdateAttendance(ctx context.Context, idOrSchoo
 		target.ID, sppgID, target.SchoolID, target.Npsn, target.Name, target.Address, target.Level,
 		target.Lat, target.Lng,
 		target.Enrolled, payload.Present, payload.ReduceSpecial, payload.AbsenceNote,
-		presentTime, specJSON, target.Principal, target.Validator, target.ValidatorPhone,
+		presentTime, specJSON(specials), target.Principal, target.Validator, target.ValidatorPhone,
 		target.Droppoint, target.Fleet,
 	)
 	if err != nil {

@@ -395,6 +395,13 @@ ALTER TABLE validator_profiles   ADD COLUMN IF NOT EXISTS warning_count INT NOT 
 ALTER TABLE validator_profiles   ADD COLUMN IF NOT EXISTS last_warning_at TIMESTAMPTZ;
 ALTER TABLE validator_profiles   ADD COLUMN IF NOT EXISTS last_warning_note TEXT NOT NULL DEFAULT '';
 
+-- Kolom profil sekolah yang dipakai repository sekolah (SELECT & INSERT) tetapi belum
+-- ada pada database yang dibuat sebelum schema ini diperluas.
+ALTER TABLE schools              ADD COLUMN IF NOT EXISTS demographics JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE schools              ADD COLUMN IF NOT EXISTS emergency_contacts JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE schools              ADD COLUMN IF NOT EXISTS transit_details JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE schools              ADD COLUMN IF NOT EXISTS last_audit_date VARCHAR(50) NOT NULL DEFAULT '26 Sep 2026';
+
 -- Kolom jadwal distribusi operasional MBG & cold-chain
 ALTER TABLE schedules ADD COLUMN IF NOT EXISTS status VARCHAR(50) NOT NULL DEFAULT 'on_time';
 ALTER TABLE schedules ADD COLUMN IF NOT EXISTS school_id VARCHAR(64) DEFAULT '';

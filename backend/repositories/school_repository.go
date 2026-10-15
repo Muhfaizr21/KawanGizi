@@ -18,10 +18,13 @@ import (
 type SchoolRepository interface {
 	List(ctx context.Context, filter models.SchoolFilter) ([]models.School, error)
 	GetByNPSN(ctx context.Context, npsn string) (*models.School, error)
+	ResolveNPSNByRef(ctx context.Context, ref string) (string, error)
 	Create(ctx context.Context, req models.CreateSchoolRequest, actor models.User) (*models.School, error)
 	ReassignSPPG(ctx context.Context, npsn string, req models.ReassignSchoolSPPGRequest, actor models.User) (*models.School, error)
 	UpdateContacts(ctx context.Context, npsn string, req models.UpdateSchoolContactsRequest, actor models.User) (*models.School, error)
 	ToggleStatus(ctx context.Context, npsn string, req models.ToggleSchoolStatusRequest, actor models.User) (*models.School, error)
+	CountLinkedValidatorAccounts(ctx context.Context, npsn string) (int, error)
+	Delete(ctx context.Context, npsn string, actor models.User) error
 }
 
 type postgresSchoolRepository struct {
@@ -252,6 +255,35 @@ func (r *postgresSchoolRepository) GetByNPSN(ctx context.Context, npsn string) (
 	return sch, nil
 }
 
+// ResolveNPSNByRef menormalkan berbagai bentuk referensi sekolah menjadi NPSN.
+//
+// Panel SPPG mengirim id baris dari daftar, yang bisa berupa NPSN, schools.id,
+// atau id baris kuota harian (mis. "q:20776543:20261015"). Semua bentuk itu harus
+// bisa dipetakan ke sekolah yang sama supaya delete/mutasi tidak ditolak tipis.
+func (r *postgresSchoolRepository) ResolveNPSNByRef(ctx context.Context, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return "", ErrNotFound
+	}
+
+	var npsn string
+	err := r.pool.QueryRow(ctx, `
+		SELECT npsn FROM schools WHERE npsn = $1 OR id = $1
+		UNION ALL
+		SELECT s.npsn FROM schools s
+		JOIN sppg_school_quotas q ON q.npsn = s.npsn
+		WHERE q.id = $1
+		LIMIT 1
+	`, ref).Scan(&npsn)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("resolve school npsn: %w", err)
+	}
+	return npsn, nil
+}
+
 func (r *postgresSchoolRepository) Create(ctx context.Context, req models.CreateSchoolRequest, actor models.User) (*models.School, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -347,6 +379,83 @@ func (r *postgresSchoolRepository) Create(ctx context.Context, req models.Create
 	}
 
 	return r.GetByNPSN(ctx, req.NPSN)
+}
+
+// CountLinkedValidatorAccounts menghitung akun login validator yang masih terikat
+// ke sekolah ini. Dipakai sebelum penghapusan supaya akun login tidak ikut yatim.
+func (r *postgresSchoolRepository) CountLinkedValidatorAccounts(ctx context.Context, npsn string) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM users WHERE npsn = $1 AND role = 'validator'
+	`, npsn).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count linked validator accounts: %w", err)
+	}
+	return n, nil
+}
+
+// Delete menghapus sekolah beserta seluruh data operasionalnya.
+//
+// attendances, deliveries, feedbacks, dan validator_profiles sudah punya FK ke
+// schools sehingga ikut terhapus (SET NULL untuk feedbacks). Tabel lain hanya
+// menyimpan NPSN/school_id sebagai kolom denormalisasi tanpa FK, jadi needs
+// dibersihkan eksplisit supaya tidak ada sisa data sekolah yang sudah dihapus.
+func (r *postgresSchoolRepository) Delete(ctx context.Context, npsn string, actor models.User) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin delete school: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	schoolID := ""
+	if err := tx.QueryRow(ctx, `SELECT id FROM schools WHERE npsn = $1`, npsn).Scan(&schoolID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("resolve school id: %w", err)
+	}
+
+	// Tiap statement hanya menerima parameter yang benar-benar dipakainya; mengirim
+	// $1 dan $2 ke statement yang hanya memakai satu placeholder membuat PostgreSQL
+	// gagal menebak tipe parameter yang tidak terpakai.
+	cleanups := []struct {
+		stmt string
+		args []any
+	}{
+		{`DELETE FROM sppg_school_quotas              WHERE npsn = $1 OR school_id = $2`, []any{npsn, schoolID}},
+		{`DELETE FROM sppg_handovers                 WHERE school_npsn = $1 OR school_id = $2`, []any{npsn, schoolID}},
+		{`DELETE FROM sppg_incident_tickets          WHERE school_id = $1`, []any{schoolID}},
+		{`DELETE FROM sppg_batches                   WHERE school_id = $1`, []any{schoolID}},
+		{`DELETE FROM sppg_billing_rows              WHERE school_id = $1`, []any{schoolID}},
+		{`DELETE FROM sppg_delivery_notifications    WHERE school_id = $1`, []any{schoolID}},
+		{`DELETE FROM schedules                      WHERE npsn = $1 OR school_id = $2`, []any{npsn, schoolID}},
+		{`DELETE FROM scan_logs                      WHERE school_npsn = $1`, []any{npsn}},
+		{`DELETE FROM digital_basts                  WHERE npsn = $1`, []any{npsn}},
+		{`DELETE FROM validator_class_reconciliation WHERE school_npsn = $1`, []any{npsn}},
+	}
+	for _, c := range cleanups {
+		if _, err := tx.Exec(ctx, c.stmt, c.args...); err != nil {
+			return fmt.Errorf("clean school data: %w", err)
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM schools WHERE npsn = $1`, npsn); err != nil {
+		return fmt.Errorf("delete school: %w", err)
+	}
+
+	auditDetail := fmt.Sprintf("npsn=%s; school_id=%s; deleted_by=%s; role=%s", npsn, schoolID, actor.ID, actor.Role)
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_id, action, target, detail, at)
+		VALUES ($1, $2, 'school.delete', $3, $4, NOW())`,
+		uuid.NewString(), actor.ID, npsn, auditDetail,
+	); err != nil {
+		return fmt.Errorf("insert audit log: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit delete school: %w", err)
+	}
+	return nil
 }
 
 func (r *postgresSchoolRepository) ReassignSPPG(ctx context.Context, npsn string, req models.ReassignSchoolSPPGRequest, actor models.User) (*models.School, error) {
