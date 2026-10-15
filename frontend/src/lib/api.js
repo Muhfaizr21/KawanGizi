@@ -1544,6 +1544,25 @@ export async function fetchValidatorHistoryBundle(params = {}) {
   return res?.data || null
 }
 
+export async function fetchHistorySummary(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/v1/history/summary${qs}`).catch(() => null)
+  return res?.data || null
+}
+
+export async function fetchScanLogs(limit = 100) {
+  const res = await api(`/api/v1/scans/logs?limit=${limit}`).catch(() => null)
+  return res?.data || []
+}
+
+export async function fetchClassAttendance() {
+  const res = await api('/api/v1/attendance').catch(() => null)
+  return res?.data || []
+}
+
 export async function allocateValidatorSurplus(payload) {
   const res = await api('/api/validator/history/surplus', {
     method: 'POST',

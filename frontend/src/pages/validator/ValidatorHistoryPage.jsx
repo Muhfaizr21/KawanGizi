@@ -21,6 +21,7 @@ import {
   Plus,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
+import { GlobalLoader } from '../../components/ui/GlobalLoader'
 import { useAuth } from '../../context/AuthContext'
 import { getSelectedSchool } from '../../lib/validatorSchool'
 import { guardAdminAction } from '../../lib/adminActions'
@@ -30,6 +31,9 @@ import {
 } from '../../data/validatorData'
 import {
   fetchValidatorHistoryBundle,
+  fetchHistorySummary,
+  fetchScanLogs,
+  fetchClassAttendance,
   allocateValidatorSurplus,
 } from '../../lib/api'
 
@@ -39,31 +43,25 @@ const STATUS_ICON = {
   rejected: { Icon: XCircle, cls: 'bg-rose-50 text-rose-800' },
 }
 
-export function ValidatorHistoryPage() {
+export function RiwayatPage() {
   const { user } = useAuth()
 
-  // State Data from Backend
-  const [bundle, setBundle] = useState(null)
-  const [loading, setLoading] = useState(true)
+  // =========================================================================
+  // State Management (Real Backend Data)
+  // =========================================================================
+  const [summaryData, setSummaryData] = useState(null)
+  const [scanLogs, setScanLogs] = useState([])
+  const [classAttendance, setClassAttendance] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Ancillary states for UI filtering, mutations, and school selection
   const [refreshing, setRefreshing] = useState(false)
   const [selectedNPSN, setSelectedNPSN] = useState(() => getSelectedSchool(user).npsn)
-
-  // Listen to global school changes
-  useEffect(() => {
-    const handleSchoolChanged = (e) => {
-      if (e.detail?.npsn) {
-        setSelectedNPSN(e.detail.npsn)
-      }
-    }
-    window.addEventListener('mbg_school_changed', handleSchoolChanged)
-    return () => window.removeEventListener('mbg_school_changed', handleSchoolChanged)
-  }, [])
-
-  // State Filter & Search
   const [filter, setFilter] = useState('today')
   const [query, setQuery] = useState('')
   const [surplusSelections, setSurplusSelections] = useState({})
   const [savingSurplusClass, setSavingSurplusClass] = useState(null)
+  const [bundleMeta, setBundleMeta] = useState(null)
   const [toast, setToast] = useState(null)
 
   const showToast = (message, tone = 'info') => {
@@ -77,40 +75,96 @@ export function ValidatorHistoryPage() {
     error: 'border-rose-200 bg-rose-50 text-rose-900',
   }
 
-  // Load Data from Backend API
-  const loadData = useCallback(async (isSilent = false) => {
-    if (!isSilent) setLoading(true)
-    else setRefreshing(true)
+  // Listen to global school changes
+  useEffect(() => {
+    const handleSchoolChanged = (e) => {
+      if (e.detail?.npsn) {
+        setSelectedNPSN(e.detail.npsn)
+      }
+    }
+    window.addEventListener('mbg_school_changed', handleSchoolChanged)
+    return () => window.removeEventListener('mbg_school_changed', handleSchoolChanged)
+  }, [])
+
+  // =========================================================================
+  // API Data Fetching: GET endpoints for summary, scan logs, and attendance
+  // =========================================================================
+  const fetchHistoryData = useCallback(async (isSilent = false) => {
+    if (!isSilent) {
+      setIsLoading(true)
+    } else {
+      setRefreshing(true)
+    }
 
     try {
-      const data = await fetchValidatorHistoryBundle({
-        npsn: selectedNPSN || undefined,
-        limit: 100,
-      })
-      if (data) {
-        setBundle(data)
-        if (data.surplusSelections) {
-          setSurplusSelections(data.surplusSelections)
+      // Primary fetch: comprehensive history bundle and executive summary in parallel
+      const [bundleRes, summaryRes] = await Promise.all([
+        fetchValidatorHistoryBundle({
+          npsn: selectedNPSN || undefined,
+          limit: 100,
+        }).catch((err) => {
+          console.warn('Bundle endpoint error, falling back:', err)
+          return null
+        }),
+        fetchHistorySummary({
+          npsn: selectedNPSN || undefined,
+        }).catch(() => null),
+      ])
+
+      if (bundleRes) {
+        setBundleMeta({
+          school: bundleRes.school,
+          parentSppg: bundleRes.parentSppg,
+          activeBatch: bundleRes.activeBatch,
+          date: bundleRes.date,
+        })
+        setSummaryData(
+          summaryRes || {
+            totalScans: bundleRes.totals?.boxesScanned || 0,
+            boxesScanned: bundleRes.totals?.boxesScanned || 0,
+            present: bundleRes.totals?.present || 0,
+            quota: bundleRes.totals?.quota || 0,
+            handed: bundleRes.totals?.handed || 0,
+            leftover: bundleRes.totals?.leftover || 0,
+            attendancePct: bundleRes.totals?.attendancePct || 0,
+            reviewRate: bundleRes.totals?.reviewRate || 0,
+          },
+        )
+        setScanLogs(bundleRes.scans || [])
+        setClassAttendance(bundleRes.classRecap || [])
+        if (bundleRes.surplusSelections) {
+          setSurplusSelections(bundleRes.surplusSelections)
         }
+      } else {
+        // Fallback: Individual endpoints
+        const [directSummary, directLogs, directAttendance] = await Promise.all([
+          summaryRes ? Promise.resolve(summaryRes) : fetchHistorySummary({ npsn: selectedNPSN || undefined }),
+          fetchScanLogs(100),
+          fetchClassAttendance(),
+        ])
+
+        if (directSummary) setSummaryData(directSummary)
+        if (directLogs) setScanLogs(Array.isArray(directLogs) ? directLogs : [])
+        if (directAttendance) setClassAttendance(Array.isArray(directAttendance) ? directAttendance : [])
       }
     } catch (err) {
-      console.error('Gagal memuat bundel riwayat rekonsiliasi:', err)
-      showToast('Koneksi backend lambat, menggunakan data sementara.', 'info')
+      console.error('Gagal mengambil data riwayat & presensi dari backend:', err)
+      showToast('Koneksi backend lambat, silakan coba segarkan kembali.', 'info')
     } finally {
-      setLoading(false)
+      setIsLoading(false)
       setRefreshing(false)
     }
   }, [selectedNPSN])
 
+  // Initial fetch on mount or when selected school changes
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    fetchHistoryData()
+  }, [fetchHistoryData])
 
-  const scanRows = useMemo(() => {
-    return bundle?.scans || []
-  }, [bundle])
-
-  const scans = useMemo(() => {
+  // =========================================================================
+  // Derived state: Filtered & formatted scan logs
+  // =========================================================================
+  const filteredScanLogs = useMemo(() => {
     const q = query.trim().toLowerCase()
     const now = new Date()
     const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -119,9 +173,9 @@ export function ValidatorHistoryPage() {
     const startWeek = new Date(startToday)
     startWeek.setDate(startWeek.getDate() - 6)
 
-    return scanRows
+    return (scanLogs || [])
       .map((row) => {
-        const created = new Date(row.createdAt)
+        const created = row.createdAt ? new Date(row.createdAt) : new Date()
         const isReject = row.verdict === 'tolak'
         const isWarn = row.verdict === 'peringatan'
         const status = isReject ? 'rejected' : isWarn ? 'warning' : 'verified'
@@ -136,7 +190,7 @@ export function ValidatorHistoryPage() {
         return {
           ...row,
           time: created.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
-          classTarget: row.menuName || 'Nasi & Lauk Nutrisi',
+          classTarget: row.menuName || row.classTarget || 'Nasi & Lauk Nutrisi',
           temp: row.holdingTempC != null ? row.holdingTempC : (row.releaseTempC != null ? row.releaseTempC : null),
           score: row.aiConfidence != null ? Math.round(row.aiConfidence * 100) : (row.visualScore != null ? Math.round(row.visualScore) : null),
           status,
@@ -163,29 +217,22 @@ export function ValidatorHistoryPage() {
 
         return matchesFilter && matchesQuery
       })
-  }, [filter, query, scanRows])
+  }, [filter, query, scanLogs])
 
-  const classRecap = useMemo(() => {
-    return bundle?.classRecap || []
-  }, [bundle])
+  // Calculated totals for table footer
+  const tableTotals = useMemo(() => {
+    const quota = classAttendance.reduce((s, c) => s + (c.quota || 0), 0)
+    const present = classAttendance.reduce((s, c) => s + (c.present || 0), 0)
+    const sick = classAttendance.reduce((s, c) => s + (c.sick || 0), 0)
+    const permit = classAttendance.reduce((s, c) => s + (c.permit || 0), 0)
+    const handed = classAttendance.reduce((s, c) => s + (c.handed || 0), 0)
+    const leftover = classAttendance.reduce((s, c) => s + (c.leftover || 0), 0)
+    return { quota, present, sick, permit, handed, leftover }
+  }, [classAttendance])
 
-  const totals = useMemo(() => {
-    if (bundle?.totals && bundle.totals.quota > 0) {
-      return bundle.totals
-    }
-    const quota = classRecap.reduce((s, c) => s + c.quota, 0)
-    const present = classRecap.reduce((s, c) => s + c.present, 0)
-    const handed = classRecap.reduce((s, c) => s + c.handed, 0)
-    const leftover = classRecap.reduce((s, c) => s + c.leftover, 0)
-    const today = new Date().toDateString()
-    const todayRows = scanRows.filter((row) => new Date(row.createdAt).toDateString() === today)
-    const needsReview = todayRows.filter((row) => row.verdict === 'peringatan' || row.verdict === 'tolak').length
-    const reviewRate = todayRows.length ? Math.round((needsReview / todayRows.length) * 100) : 0
-    const attendancePct = quota > 0 ? (present / quota) * 100 : 100
-    return { quota, present, handed, leftover, boxesScanned: todayRows.length, reviewRate, attendancePct }
-  }, [bundle, classRecap, scanRows])
-
-  // Handler Alokasi Porsi Sisa
+  // =========================================================================
+  // Mutation Handlers: Surplus Allocation & BAST Export
+  // =========================================================================
   const handleSetSurplus = async (className, optionId, leftoverPortions) => {
     const res = guardAdminAction(
       user,
@@ -202,17 +249,20 @@ export function ValidatorHistoryPage() {
     setSavingSurplusClass(className)
     try {
       const payload = {
-        npsn: bundle?.school?.npsn || '33.210.130',
+        npsn: bundleMeta?.school?.npsn || selectedNPSN || '33.210.130',
         className,
         option: optionId,
         leftoverPortions: leftoverPortions || 1,
-        notes: `Alokasi porsi sisa ${className} via portal validator`,
+        notes: `Alokasi porsi sisa ${className} via portal validator KawanGizi`,
       }
 
       const result = await allocateValidatorSurplus(payload)
 
       if (result) {
         setSurplusSelections((prev) => ({ ...prev, [className]: optionId }))
+        setClassAttendance((prev) =>
+          prev.map((c) => (c.className === className ? { ...c, surplusOption: optionId } : c)),
+        )
         const opt = SURPLUS_OPTIONS.find((o) => o.id === optionId)
         showToast(result.message || `Porsi sisa ${className} dialokasikan: ${opt?.label}.`, 'success')
       } else {
@@ -226,13 +276,12 @@ export function ValidatorHistoryPage() {
     }
   }
 
-  // Ekspor Laporan
   const exportReport = () => {
     const res = guardAdminAction(
       user,
       'ValidatorHistory',
       'ekspor laporan harian (PDF/CSV)',
-      { date: bundle?.date || '2026-10-13', classes: classRecap.length },
+      { date: bundleMeta?.date || new Date().toISOString().split('T')[0], classes: classAttendance.length },
       ['attendance.read'],
     )
     if (!res.allowed) {
@@ -244,28 +293,29 @@ export function ValidatorHistoryPage() {
       const reportData = {
         metadata: {
           title: 'BERITA ACARA REKONSILIASI HARIAN DISTRIBUSI PORSI NUTRISI KAWANGIZI',
-          schoolName: bundle?.school?.name || 'SDN 01 Menteng Pagi',
-          schoolNpsn: bundle?.school?.npsn || '33.210.130',
-          sppgName: bundle?.parentSppg?.name || 'Dapur Sentral SPPG-01 Menteng',
-          sppgCode: bundle?.parentSppg?.code || 'BGN-SPPG-001',
-          activeBatch: bundle?.activeBatch || 'MBG-2026-SPPG01-SDN01P-B01',
-          date: bundle?.date || new Date().toISOString().split('T')[0],
+          schoolName: bundleMeta?.school?.name || 'SDN 01 Menteng Pagi',
+          schoolNpsn: bundleMeta?.school?.npsn || selectedNPSN || '33.210.130',
+          sppgName: bundleMeta?.parentSppg?.name || 'Dapur Sentral SPPG-01 Menteng',
+          sppgCode: bundleMeta?.parentSppg?.code || 'BGN-SPPG-001',
+          activeBatch: bundleMeta?.activeBatch || 'MBG-2026-SPPG01-SDN01P-B01',
+          date: bundleMeta?.date || new Date().toISOString().split('T')[0],
           exportedAt: new Date().toISOString(),
           validatorName: user?.fullName || 'Petugas Validator Lapangan',
         },
-        totals,
-        classRecap: classRecap.map((c) => ({
+        summary: summaryData,
+        classAttendance: classAttendance.map((c) => ({
           ...c,
           allocatedOption: surplusSelections[c.className] || c.surplusOption || 'Belum dialokasikan',
         })),
-        recentScansCount: scans.length,
+        recentScansCount: scanLogs.length,
+        scanLogs,
       }
 
       const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `BA_Rekonsiliasi_KawanGizi_${bundle?.school?.npsn || '33210130'}_${bundle?.date || '20261013'}.json`
+      a.download = `BA_Rekonsiliasi_KawanGizi_${bundleMeta?.school?.npsn || selectedNPSN || '33210130'}_${bundleMeta?.date || new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -276,6 +326,18 @@ export function ValidatorHistoryPage() {
       console.error('Ekspor laporan gagal:', err)
       showToast('Gagal mengekspor laporan: ' + err.message, 'error')
     }
+  }
+
+  // =========================================================================
+  // Global Loader: Return early when initial data is loading
+  // =========================================================================
+  if (isLoading && !summaryData) {
+    return (
+      <GlobalLoader
+        fullScreen
+        label="Memuat Riwayat & Presensi KawanGizi..."
+      />
+    )
   }
 
   return (
@@ -296,7 +358,7 @@ export function ValidatorHistoryPage() {
       secondaryAction={
         <button
           type="button"
-          onClick={() => loadData(true)}
+          onClick={() => fetchHistoryData(true)}
           disabled={refreshing}
           className="flex items-center gap-2 rounded-full bg-white border border-slate-300 text-slate-800 px-5 py-2.5 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
         >
@@ -317,10 +379,10 @@ export function ValidatorHistoryPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* TOP 4 STAT CARDS (Donezo Style) */}
+      {/* 4 SUMMARY STAT CARDS (Bound to summaryData state) */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 mb-6">
-        {/* Card 1: Hasil Scan Hari Ini */}
+        {/* Card 1: Hasil Pindai Hari Ini */}
         <div className="rounded-[22px] bg-[#185338] text-white p-5 flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-emerald-100/90">Hasil Pindai Hari Ini</span>
@@ -330,13 +392,13 @@ export function ValidatorHistoryPage() {
           </div>
           <div className="my-2">
             <h3 className="text-3xl sm:text-4xl font-black tracking-tight font-mono">
-              {totals.boxesScanned || 12}
+              {summaryData?.totalScans ?? summaryData?.boxesScanned ?? 0}
             </h3>
           </div>
           <p className="text-[11px] text-emerald-200/80 font-medium">Boks nampan terverifikasi AI</p>
         </div>
 
-        {/* Card 2: Siswa Hadir */}
+        {/* Card 2: Presensi Siswa Hadir */}
         <div className="rounded-[22px] bg-white border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-800">Presensi Siswa Hadir</span>
@@ -346,11 +408,11 @@ export function ValidatorHistoryPage() {
           </div>
           <div className="my-2">
             <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
-              {totals.present} / {totals.quota}
+              {summaryData?.present ?? 0} / {summaryData?.quota ?? 0}
             </h3>
           </div>
           <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full self-start">
-            {typeof totals.attendancePct === 'number' ? totals.attendancePct.toFixed(1) : '97.5'}% Hadir di Kelas
+            {summaryData?.attendancePct != null ? Number(summaryData.attendancePct).toFixed(1) : '0'}% Hadir di Kelas
           </span>
         </div>
 
@@ -364,7 +426,7 @@ export function ValidatorHistoryPage() {
           </div>
           <div className="my-2">
             <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
-              {totals.handed}
+              {summaryData?.handed ?? 0}
             </h3>
           </div>
           <span className="text-[11px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full self-start">
@@ -382,17 +444,23 @@ export function ValidatorHistoryPage() {
           </div>
           <div className="my-2">
             <h3 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 font-mono">
-              {totals.leftover}
+              {summaryData?.leftover ?? 0}
             </h3>
           </div>
-          <span className="text-[11px] text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full self-start">
-            Perlu Alokasi Nutrisi
+          <span
+            className={`text-[11px] font-bold px-2 py-0.5 rounded-full self-start ${
+              (summaryData?.leftover || 0) > 0
+                ? 'text-amber-800 bg-amber-50'
+                : 'text-emerald-700 bg-emerald-50'
+            }`}
+          >
+            {(summaryData?.leftover || 0) > 0 ? 'Perlu Alokasi Nutrisi' : 'Distribusi Bersih'}
           </span>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* FILTER & PENCARIAN TOOLBAR (Donezo Style) */}
+      {/* FILTER & PENCARIAN TOOLBAR */}
       {/* ========================================================================= */}
       <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-4.5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-1.5 overflow-x-auto">
@@ -424,7 +492,7 @@ export function ValidatorHistoryPage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* BUKU LOG HASIL CLASSIFIER & VERIFIKASI */}
+      {/* BUKU LOG HASIL CLASSIFIER & VERIFIKASI SUHU (Dynamic scanLogs table) */}
       {/* ========================================================================= */}
       <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 space-y-4 mb-6">
         <div className="flex items-center justify-between gap-2">
@@ -438,41 +506,53 @@ export function ValidatorHistoryPage() {
             </p>
           </div>
           <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
-            {scans.length} Catatan
+            {scanLogs.length} Total Log ({filteredScanLogs.length} Ditampilkan)
           </span>
         </div>
 
-        {scans.length === 0 ? (
+        {scanLogs.length === 0 ? (
           <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
             <History className="h-9 w-9 mx-auto text-slate-300" />
-            <p className="mt-3 text-xs font-bold text-slate-700">Tidak ada catatan scan yang cocok</p>
-            <p className="mt-1 text-[11px] text-slate-400">Coba ubah kata kunci atau rentang tanggal pada tombol filter.</p>
+            <p className="mt-3 text-xs font-bold text-slate-700">Belum ada catatan log pemindaian di database</p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Lakukan pemindaian boks di menu Skrining untuk mengisi riwayat verifikasi secara real-time.
+            </p>
+          </div>
+        ) : filteredScanLogs.length === 0 ? (
+          <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+            <Search className="h-9 w-9 mx-auto text-slate-300" />
+            <p className="mt-3 text-xs font-bold text-slate-700">Tidak ada catatan scan yang cocok dengan filter</p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Coba ubah kata kunci atau rentang tanggal pada tombol filter di atas.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="w-full text-left border-collapse min-w-[680px]">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {['Waktu', 'Boks / Batch Token', 'Komponen Hidangan', 'Suhu Holding', 'Skor Model', 'Status Kelayakan'].map((h) => (
-                    <th
-                      key={h}
-                      className="py-3 pr-3 text-[10px] font-bold uppercase tracking-wider text-slate-400"
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  {['Waktu', 'Boks / Batch Token', 'Komponen Hidangan', 'Suhu Holding', 'Skor Model', 'Status Kelayakan'].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="py-3 pr-3 text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {scans.map((s) => {
+                {filteredScanLogs.map((s) => {
                   const { Icon, cls } = STATUS_ICON[s.status] || STATUS_ICON.verified
                   return (
-                    <tr key={s.id} className="hover:bg-slate-50/70 transition">
+                    <tr key={s.id || s.boxId + s.createdAt} className="hover:bg-slate-50/70 transition">
                       <td className="py-3 pr-3 font-mono text-xs font-extrabold text-slate-800">{s.time}</td>
                       <td className="py-3 pr-3">
                         <p className="font-mono text-xs font-extrabold text-slate-900">{s.boxId || 'BOK-GIZI'}</p>
                         <p className="font-mono text-[10px] text-slate-400 truncate max-w-[180px]">
-                          {s.qrToken || s.batchId || bundle?.activeBatch || 'MBG-2026-B01'}
+                          {s.qrToken || s.batchId || bundleMeta?.activeBatch || 'MBG-2026-B01'}
                         </p>
                       </td>
                       <td className="py-3 pr-3">
@@ -486,7 +566,7 @@ export function ValidatorHistoryPage() {
                       <td className="py-3 pr-3 font-mono text-xs font-bold">
                         {s.temp != null ? (
                           <span className={s.temp >= 60 ? 'text-[#185338]' : 'text-rose-600'}>
-                            {s.temp.toFixed(1)}°C
+                            {Number(s.temp).toFixed(1)}°C
                           </span>
                         ) : (
                           <span className="text-slate-400">—</span>
@@ -523,7 +603,7 @@ export function ValidatorHistoryPage() {
       </section>
 
       {/* ========================================================================= */}
-      {/* PAPAN REKONSILIASI DISTRIBUSI KELAS & PORSI SISA */}
+      {/* PAPAN REKONSILIASI DISTRIBUSI KELAS (Dynamic classAttendance table) */}
       {/* ========================================================================= */}
       <section className="bg-white rounded-[22px] border border-slate-200/80 shadow-xs p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -537,113 +617,131 @@ export function ValidatorHistoryPage() {
             </p>
           </div>
           <span className="font-mono text-[10px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
-            {classRecap.length} Kelas Aktif
+            {classAttendance.length} Kelas Aktif
           </span>
         </div>
 
-        <div className="overflow-x-auto -mx-1 px-1">
-          <table className="w-full text-left border-collapse min-w-[760px]">
-            <thead>
-              <tr className="border-b border-slate-100">
-                {['Kelas', 'Kuota Terdaftar', 'Hadir', 'Sakit/Izin', 'Porsi Diserahkan', 'Sisa', 'Alokasi Porsi Sisa (Regulasi Standar)'].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="py-3 pr-3 text-[10px] font-bold uppercase tracking-wider text-slate-400"
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {classRecap.map((c) => {
-                const currentOpt = surplusSelections[c.className] || c.surplusOption || ''
-                const isSaving = savingSurplusClass === c.className
-                return (
-                  <tr key={c.className} className="hover:bg-slate-50/70 transition">
-                    <td className="py-3 pr-3 text-xs font-black text-slate-900">{c.className}</td>
-                    <td className="py-3 pr-3 font-mono text-xs text-slate-600 font-semibold">{c.quota}</td>
-                    <td className="py-3 pr-3 font-mono text-xs font-black text-slate-800">{c.present}</td>
-                    <td className="py-3 pr-3 font-mono text-xs text-slate-400">
-                      {c.sick} / {c.permit}
-                    </td>
-                    <td className="py-3 pr-3 font-mono text-xs font-black text-[#185338]">{c.handed}</td>
-                    <td className="py-3 pr-3">
-                      <span
-                        className={`font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
-                          c.leftover > 0 ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-500'
-                        }`}
+        {classAttendance.length === 0 ? (
+          <div className="py-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+            <Users className="h-9 w-9 mx-auto text-slate-300" />
+            <p className="mt-3 text-xs font-bold text-slate-700">Belum ada data rekonsiliasi presensi kelas</p>
+            <p className="mt-1 text-[11px] text-slate-400">
+              Data presensi harian per kelas dan serah terima makan akan muncul setelah data presensi diinput oleh sekolah.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto -mx-1 px-1">
+            <table className="w-full text-left border-collapse min-w-[760px]">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  {['Kelas', 'Kuota Terdaftar', 'Hadir', 'Sakit/Izin', 'Porsi Diserahkan', 'Sisa', 'Alokasi Porsi Sisa (Regulasi Standar)'].map(
+                    (h) => (
+                      <th
+                        key={h}
+                        className="py-3 pr-3 text-[10px] font-bold uppercase tracking-wider text-slate-400"
                       >
-                        {c.leftover}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-3">
-                      {c.leftover > 0 ? (
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={currentOpt}
-                            disabled={isSaving}
-                            onChange={(e) => handleSetSurplus(c.className, e.target.value, c.leftover)}
-                            className={`text-[11px] font-bold rounded-full border px-3 py-1.5 text-slate-800 focus:outline-none focus:border-[#185338] cursor-pointer max-w-[260px] transition ${
-                              currentOpt
-                                ? 'border-[#185338] bg-emerald-50 text-[#185338]'
-                                : 'border-slate-200 bg-slate-50/70 hover:border-slate-300'
-                            }`}
-                          >
-                            <option value="">Pilih alokasi resmi…</option>
-                            {SURPLUS_OPTIONS.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
-                          {isSaving && (
-                            <RefreshCw className="h-3.5 w-3.5 text-[#185338] animate-spin shrink-0" />
-                          )}
-                          {currentOpt && !isSaving && (
-                            <CheckCircle className="h-3.5 w-3.5 text-[#185338] shrink-0" />
-                          )}
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#185338]">
-                          <PackageCheck className="h-3.5 w-3.5" />
-                          Nol Porsi Sisa
+                        {h}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {classAttendance.map((c) => {
+                  const currentOpt = surplusSelections[c.className] || c.surplusOption || ''
+                  const isSaving = savingSurplusClass === c.className
+                  const leftover = c.leftover ?? 0
+
+                  return (
+                    <tr key={c.className} className="hover:bg-slate-50/70 transition">
+                      <td className="py-3 pr-3 text-xs font-black text-slate-900">{c.className}</td>
+                      <td className="py-3 pr-3 font-mono text-xs text-slate-600 font-semibold">{c.quota ?? 0}</td>
+                      <td className="py-3 pr-3 font-mono text-xs font-black text-slate-800">{c.present ?? 0}</td>
+                      <td className="py-3 pr-3 font-mono text-xs text-slate-400">
+                        {c.sick ?? 0} / {c.permit ?? 0}
+                      </td>
+                      <td className="py-3 pr-3 font-mono text-xs font-black text-[#185338]">{c.handed ?? 0}</td>
+                      <td className="py-3 pr-3">
+                        <span
+                          className={`font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-full ${
+                            leftover > 0 ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {leftover}
                         </span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-slate-100 bg-slate-50/80">
-                <td className="py-3 pr-3 text-[11px] font-black text-slate-900">Total Keseluruhan</td>
-                <td className="py-3 pr-3 font-mono text-xs font-black text-slate-900">{totals.quota}</td>
-                <td className="py-3 pr-3 font-mono text-xs font-black text-slate-900">{totals.present}</td>
-                <td className="py-3 pr-3 font-mono text-xs text-slate-500">
-                  {classRecap.reduce((s, c) => s + c.sick, 0)} / {classRecap.reduce((s, c) => s + c.permit, 0)}
-                </td>
-                <td className="py-3 pr-3 font-mono text-xs font-black text-[#185338]">
-                  {totals.handed}
-                </td>
-                <td className="py-3 pr-3 font-mono text-xs font-black text-amber-700">
-                  {totals.leftover}
-                </td>
-                <td className="py-3 pr-3">
-                  <span className="text-[10px] font-bold text-slate-500">
-                    {Object.keys(surplusSelections).length} dari{' '}
-                    {classRecap.filter((c) => c.leftover > 0).length} kelas bersisa telah dialokasikan
-                  </span>
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                      </td>
+                      <td className="py-3 pr-3">
+                        {leftover > 0 ? (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={currentOpt}
+                              disabled={isSaving}
+                              onChange={(e) => handleSetSurplus(c.className, e.target.value, leftover)}
+                              className={`text-[11px] font-bold rounded-full border px-3 py-1.5 text-slate-800 focus:outline-none focus:border-[#185338] cursor-pointer max-w-[260px] transition ${
+                                currentOpt
+                                  ? 'border-[#185338] bg-emerald-50 text-[#185338]'
+                                  : 'border-slate-200 bg-slate-50/70 hover:border-slate-300'
+                              }`}
+                            >
+                              <option value="">Pilih alokasi resmi…</option>
+                              {SURPLUS_OPTIONS.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                            {isSaving && (
+                              <RefreshCw className="h-3.5 w-3.5 text-[#185338] animate-spin shrink-0" />
+                            )}
+                            {currentOpt && !isSaving && (
+                              <CheckCircle className="h-3.5 w-3.5 text-[#185338] shrink-0" />
+                            )}
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#185338]">
+                            <PackageCheck className="h-3.5 w-3.5" />
+                            Nol Porsi Sisa
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-100 bg-slate-50/80">
+                  <td className="py-3 pr-3 text-[11px] font-black text-slate-900">Total Keseluruhan</td>
+                  <td className="py-3 pr-3 font-mono text-xs font-black text-slate-900">
+                    {summaryData?.quota ?? tableTotals.quota}
+                  </td>
+                  <td className="py-3 pr-3 font-mono text-xs font-black text-slate-900">
+                    {summaryData?.present ?? tableTotals.present}
+                  </td>
+                  <td className="py-3 pr-3 font-mono text-xs text-slate-500">
+                    {tableTotals.sick} / {tableTotals.permit}
+                  </td>
+                  <td className="py-3 pr-3 font-mono text-xs font-black text-[#185338]">
+                    {summaryData?.handed ?? tableTotals.handed}
+                  </td>
+                  <td className="py-3 pr-3 font-mono text-xs font-black text-amber-700">
+                    {summaryData?.leftover ?? tableTotals.leftover}
+                  </td>
+                  <td className="py-3 pr-3">
+                    <span className="text-[10px] font-bold text-slate-500">
+                      {Object.keys(surplusSelections).length} dari{' '}
+                      {classAttendance.filter((c) => (c.leftover || 0) > 0).length} kelas bersisa telah dialokasikan
+                    </span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </section>
     </ValidatorLayout>
   )
 }
 
-export default ValidatorHistoryPage
+// Export aliases for backward and forward compatibility
+export const ValidatorHistoryPage = RiwayatPage
+export default RiwayatPage
