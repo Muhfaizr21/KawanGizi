@@ -13,6 +13,8 @@ type Config struct {
 	Port   string
 	AppEnv string
 
+	DatabaseURL string
+
 	DBHost     string
 	DBPort     int
 	DBUser     string
@@ -60,6 +62,8 @@ func LoadConfig() *Config {
 	return &Config{
 		Port:   port,
 		AppEnv: appEnv,
+
+		DatabaseURL: getEnv("DATABASE_URL", ""),
 
 		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
 		DBPort:     dbPort,

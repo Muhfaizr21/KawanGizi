@@ -21,10 +21,13 @@ var pool *pgxpool.Pool
 
 // Connect opens the PostgreSQL connection pool using the given configuration.
 func Connect(ctx context.Context, cfg *config.Config) error {
-	dsn := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBSSLMode,
-	)
+	dsn := cfg.DatabaseURL
+	if dsn == "" {
+		dsn = fmt.Sprintf(
+			"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBSSLMode,
+		)
+	}
 
 	p, err := pgxpool.New(ctx, dsn)
 	if err != nil {
