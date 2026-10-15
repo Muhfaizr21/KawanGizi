@@ -22,6 +22,7 @@ import {
   Plus,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { useAuth } from '../../context/AuthContext'
 import { getSelectedSchool } from '../../lib/validatorSchool'
 import { guardAdminAction } from '../../lib/adminActions'
@@ -199,6 +200,8 @@ export function ValidatorHandoverPage() {
   const [issued, setIssued] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [resetBusy, setResetBusy] = useState(false)
 
   const showToast = (message, tone = 'info') => {
     setToast({ message, tone })
@@ -449,8 +452,7 @@ export function ValidatorHandoverPage() {
   }
 
   const handleResetSession = async () => {
-    if (!window.confirm('Reset sesi serah terima ini agar dapat diuji ulang dari awal?')) return
-
+    setResetBusy(true)
     try {
       await resetValidatorHandover({
         npsn: bundle?.school?.npsn || '33.210.130',
@@ -463,7 +465,14 @@ export function ValidatorHandoverPage() {
       loadBundle(selectedNpsn)
     } catch (err) {
       showToast('Gagal mereset sesi: ' + (err.message || 'Error'), 'error')
+    } finally {
+      setResetBusy(false)
+      setResetConfirmOpen(false)
     }
+  }
+
+  const requestResetSession = () => {
+    setResetConfirmOpen(true)
   }
 
   const stageDone = useCallback(() => received.length === totalTotes, [received.length, totalTotes])
@@ -629,7 +638,7 @@ export function ValidatorHandoverPage() {
           {issued && (
             <button
               type="button"
-              onClick={handleResetSession}
+              onClick={requestResetSession}
               className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 hover:bg-rose-100 border border-rose-200 px-4 py-2 text-xs font-bold text-rose-700 transition cursor-pointer"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -935,6 +944,24 @@ export function ValidatorHandoverPage() {
           </button>
         </div>
       </section>
+
+      <ConfirmDialog
+        isOpen={resetConfirmOpen}
+        tone="warning"
+        eyebrow="Reset Sesi Serah Terima"
+        title="Reset sesi BAST ini?"
+        description="Sesi serah terima yang sudah terbit akan dikosongkan sehingga dapat diuji ulang dari awal."
+        details={[
+          issued ? `Nomor BAST yang dicabut: ${issued.refNumber}` : null,
+          issued ? `${issued.totes} boks / ${issued.portions} porsi` : null,
+          'Seluruh tanda tangan digital pada sesi ini akan dihapus.',
+          'Tindakan ini tidak dapat dibatalkan.',
+        ].filter(Boolean)}
+        confirmLabel="Ya, Reset Sesi"
+        loading={resetBusy}
+        onCancel={() => !resetBusy && setResetConfirmOpen(false)}
+        onConfirm={handleResetSession}
+      />
     </ValidatorLayout>
   )
 }

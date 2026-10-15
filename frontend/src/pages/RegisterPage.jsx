@@ -1,40 +1,17 @@
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import { navigate } from '../App'
 import loginArt from '../assets/login-art.png'
 import { registerRequest } from '../lib/api'
-import { findRegisterSppg, REGISTER_SPPG_OPTIONS } from '../data/registerData'
 
 export function RegisterPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [sppgId, setSppgId] = useState('')
-  const [kecamatanId, setKecamatanId] = useState('')
-  const [schoolId, setSchoolId] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState(null)
-
-  const sppg = useMemo(() => findRegisterSppg(sppgId), [sppgId])
-  const kecamatan = useMemo(
-    () => sppg?.kecamatanOptions.find((k) => k.id === kecamatanId) || null,
-    [sppg, kecamatanId]
-  )
-  const school = useMemo(
-    () => (kecamatan?.schools.find((s) => s.id === schoolId) || null),
-    [kecamatan, schoolId]
-  )
-
-  const onSelectSppg = (id) => {
-    setSppgId(id)
-    setKecamatanId('')
-    setSchoolId('')
-  }
-  const onSelectKecamatan = (id) => {
-    setKecamatanId(id)
-    setSchoolId('')
-  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -46,8 +23,8 @@ export function RegisterPage() {
       setError('Kata sandi minimal 8 karakter.')
       return
     }
-    if (!sppg || !kecamatan || !school) {
-      setError('Pilih dapur SPPG, kecamatan, dan sekolah terlebih dahulu.')
+    if (password !== confirmPassword) {
+      setError('Konfirmasi kata sandi tidak sama dengan kata sandi.')
       return
     }
     setError(null)
@@ -59,9 +36,6 @@ export function RegisterPage() {
         email: email.trim(),
         password,
         role: 'validator',
-        npsn: school.npsn,
-        schoolName: school.name,
-        sppgId: sppg.id,
       })
       setSuccess('Akun berhasil dibuat! Anda sudah bisa masuk.')
       setTimeout(() => navigate('/login'), 1200)
@@ -72,7 +46,7 @@ export function RegisterPage() {
   }
 
   return (
-    <div className="h-screen max-h-screen w-full overflow-hidden relative bg-white selection:bg-black selection:text-white">
+    <div className="relative min-h-[100dvh] w-full bg-white selection:bg-black selection:text-white">
       {/* Artwork Anchored at Top-Right Corner (Pojok Kanan Atas, Pure White Seamless) */}
       <div className="hidden lg:block absolute top-0 right-0 z-0 pointer-events-none select-none overflow-hidden">
         <img
@@ -83,7 +57,7 @@ export function RegisterPage() {
       </div>
 
       {/* Main Content (Full Height, Pure White, No Scroll) */}
-      <div className="relative z-10 w-full h-full flex flex-col justify-between p-6 sm:p-8 lg:p-10 xl:p-12 overflow-hidden bg-transparent">
+      <div className="relative z-10 flex min-h-[100dvh] w-full flex-col p-6 sm:p-8 lg:p-10 xl:p-12 bg-transparent">
         
         {/* Top Header: Back Button */}
         <div className="flex items-center justify-between w-full shrink-0">
@@ -95,8 +69,9 @@ export function RegisterPage() {
           </a>
         </div>
 
-        {/* Center: Register Form Container (Enlarged, perfectly balanced) */}
-        <div className="w-full max-w-[440px] sm:max-w-[460px] lg:max-w-[480px] my-auto py-3 sm:py-5 shrink-0 max-h-full overflow-y-auto lg:ml-12 xl:ml-24">
+        {/* Scroll Area: form tetap terjangkau di layar pendek, header & footer tidak terpotong */}
+        <div className="flex w-full flex-1 flex-col overflow-y-auto lg:ml-12 xl:ml-24">
+          <div className="my-auto w-full max-w-[440px] sm:max-w-[460px] lg:max-w-[480px] py-4 sm:py-6">
           {/* Minimalist Geometric Logo Mark */}
           <div className="w-9 h-9 text-black flex items-center justify-start mb-3">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
@@ -200,79 +175,48 @@ export function RegisterPage() {
               </div>
             </div>
 
-            <div className="border-t border-gray-100 pt-3 mt-3">
-              <p className="text-[10px] uppercase font-mono text-gray-400 tracking-wider mb-2.5">
-                Penempatan Anda
-              </p>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-mono font-medium text-gray-800 mb-1">
-                  Dapur SPPG
-                </label>
-                <select
-                  required
-                  value={sppgId}
-                  onChange={(e) => onSelectSppg(e.target.value)}
-                  className="w-full px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-sans rounded-xl border border-gray-200 bg-white text-gray-900 focus:outline-none focus:border-gray-900 transition shadow-xs"
-                >
-                  <option value="">Pilih dapur SPPG…</option>
-                  {REGISTER_SPPG_OPTIONS.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} — {s.city}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mt-3">
-                <label className="block text-xs sm:text-sm font-mono font-medium text-gray-800 mb-1">
-                  Kecamatan
-                </label>
-                <select
-                  required
-                  value={kecamatanId}
-                  disabled={!sppg}
-                  onChange={(e) => onSelectKecamatan(e.target.value)}
-                  className="w-full px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-sans rounded-xl border border-gray-200 bg-white text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:border-gray-900 transition shadow-xs"
-                >
-                  <option value="">{sppg ? 'Pilih kecamatan…' : 'Pilih dapur SPPG dahulu'}</option>
-                  {sppg?.kecamatanOptions.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="mt-3">
-                <label className="block text-xs sm:text-sm font-mono font-medium text-gray-800 mb-1">
-                  Sekolah
-                </label>
-                <select
-                  required
-                  value={schoolId}
-                  disabled={!kecamatan}
-                  onChange={(e) => setSchoolId(e.target.value)}
-                  className="w-full px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-sans rounded-xl border border-gray-200 bg-white text-gray-900 disabled:bg-gray-50 disabled:text-gray-400 focus:outline-none focus:border-gray-900 transition shadow-xs"
-                >
-                  <option value="">
-                    {kecamatan ? 'Pilih sekolah…' : sppg ? 'Pilih kecamatan dahulu' : 'Pilih dapur SPPG dahulu'}
-                  </option>
-                  {kecamatan?.schools.map((sc) => (
-                    <option key={sc.id} value={sc.id}>
-                      {sc.name} ({sc.level} · NPSN {sc.npsn})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {school && sppg && kecamatan && (
-                <p className="text-[11px] text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 mt-3">
-                  Anda terdaftar di <span className="font-semibold text-gray-800">{sppg.name}</span>
-                  {' · '}
-                  {kecamatan.name} — {school.name}
+            <div>
+              <label className="block text-xs sm:text-sm font-mono font-medium text-gray-800 mb-1">
+                Konfirmasi kata sandi
+              </label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                placeholder="Ulangi kata sandi"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-sans rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-900 transition shadow-xs"
+              />
+              {confirmPassword && confirmPassword !== password && (
+                <p className="mt-1.5 text-[11px] text-rose-600">
+                  Konfirmasi kata sandi belum sama.
                 </p>
               )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-3 mt-3">
+              <p className="text-[10px] uppercase font-mono text-gray-400 tracking-wider mb-2.5">
+                Peran Akun
+              </p>
+
+              {/* Peran akun dikunci: pendaftaran publik hanya untuk Validator Sekolah */}
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase font-mono text-gray-400 tracking-wider">
+                    Peran
+                  </p>
+                  <p className="text-xs sm:text-sm font-mono font-semibold text-gray-900 mt-0.5">
+                    Validator Sekolah
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-gray-500">
+                  Terkunci
+                </span>
+              </div>
+
+              <p className="text-[11px] text-gray-500 mt-2">
+                Sekolah dipantau dipilih setelah masuk lewat pemilih sekolah.
+              </p>
             </div>
 
             {success && (
@@ -296,17 +240,18 @@ export function RegisterPage() {
             </button>
 
             <p className="text-[11px] text-gray-500 text-center">
-              Akun Anda menunggu verifikasi data penempatan oleh pengelola.
+              Akun Anda menunggu verifikasi oleh pengelola sistem.
             </p>
           </form>
+          </div>
         </div>
 
         {/* Bottom Footer */}
-        <p className="text-xs sm:text-sm text-gray-600 font-mono py-1 shrink-0 lg:ml-12 xl:ml-24">
+        <p className="shrink-0 pt-2 text-xs sm:text-sm font-mono text-gray-600 lg:ml-12 xl:ml-24">
           Sudah punya akun?
           <a
             href="/login"
-            className="text-gray-900 font-semibold underline underline-offset-2 hover:text-black ml-1.5"
+            className="ml-1.5 inline-block py-1 font-semibold text-gray-900 underline underline-offset-2 hover:text-black"
           >
             Masuk
           </a>

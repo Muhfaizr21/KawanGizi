@@ -7,10 +7,12 @@ import (
 	"time"
 )
 
-type HealthController struct{}
+type HealthController struct {
+	landing LandingPage
+}
 
-func NewHealthController() *HealthController {
-	return &HealthController{}
+func NewHealthController(landing LandingPage) *HealthController {
+	return &HealthController{landing: landing}
 }
 
 // HealthCheck godoc
@@ -30,8 +32,28 @@ func (c *HealthController) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	utils.Success(w, http.StatusOK, "Service is healthy", resp)
 }
 
+// Root godoc
+// @Summary      Landing page of the service
+// @Description  Serves the branded KawanGizi landing page with a welcome popup for browsers, and the JSON service banner for API clients.
+// @Tags         health
+// @Produce      json
+// @Produce      html
+// @Success      200  {object}  models.APIResponse
+// @Router       / [get]
 func (c *HealthController) Root(w http.ResponseWriter, r *http.Request) {
-	utils.Success(w, http.StatusOK, "Welcome to MBG Clean Code & SOLID API", map[string]string{
-		"docs": "/swagger/index.html",
+	if wantsHTML(r.Header.Get("Accept")) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Vary", "Accept")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(c.landing.Render())
+		return
+	}
+
+	utils.Success(w, http.StatusOK, "KawanGizi Backend API aktif", map[string]string{
+		"service": "MBG Backend API (Golang Clean MVC)",
+		"env":     c.landing.AppEnv,
+		"docs":    "/swagger/index.html",
+		"health":  "/api/health",
 	})
 }

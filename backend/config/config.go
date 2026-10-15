@@ -26,6 +26,9 @@ type Config struct {
 
 	AIBackendURL string
 
+	// WebClientURL: alamat klien web (React) untuk ditampilkan pada landing page root.
+	WebClientURL string
+
 	// NutritionDataPath: path CSV dataset gizi (backend/data/dataset_nutrisi_kasar.csv).
 	NutritionDataPath string
 }
@@ -70,6 +73,8 @@ func LoadConfig() *Config {
 		CORSOrigins:         strings.Split(getEnv("CORS_ORIGINS", "http://localhost:5173,http://localhost:4173,http://localhost:8081,http://127.0.0.1:8081"), ","),
 
 		AIBackendURL: getEnv("AI_BACKEND_URL", "http://127.0.0.1:8083"),
+
+		WebClientURL: getEnv("WEB_CLIENT_URL", "http://localhost:5173"),
 
 		NutritionDataPath: getEnv("NUTRITION_DATA_PATH", "data/dataset_nutrisi_kasar.csv"),
 	}

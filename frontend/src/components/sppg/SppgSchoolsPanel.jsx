@@ -27,6 +27,7 @@ import {
   updateSppgSchoolDroppoint,
   sendSppgSchoolReminder,
   fetchSppgList,
+  createOwnedSchool,
 } from '../../lib/api'
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#23259C]'
@@ -79,6 +80,29 @@ export function SppgSchoolsPanel() {
   const [dpPhone, setDpPhone] = useState('')
   const [dpPrincipal, setDpPrincipal] = useState('')
   const [dpSubmitting, setDpSubmitting] = useState(false)
+
+  // Formulir pendaftaran sekolah Keenam (field sama dengan modul Superadmin)
+  const [isOnboardOpen, setIsOnboardOpen] = useState(false)
+  const [onboardSubmitting, setOnboardSubmitting] = useState(false)
+  const [newSchoolForm, setNewSchoolForm] = useState({
+    npsn: '',
+    name: '',
+    level: 'SD',
+    city: 'Jakarta Pusat',
+    district: '',
+    address: '',
+    principalName: '',
+    principalPhone: '',
+    uksName: '',
+    uksPhone: '',
+    clinicName: '',
+    clinicPhone: '',
+    lat: '-6.2088',
+    lng: '106.8456',
+    lowerGrade: 150,
+    upperGrade: 180,
+    smpGrade: 0,
+  })
 
   const mapRef = useRef(null)
   const mapInstance = useRef(null)
@@ -339,6 +363,72 @@ export function SppgSchoolsPanel() {
     setAttSpecials(attSpecials.filter((_, i) => i !== index))
   }
 
+  const resetSchoolForm = () => {
+    setNewSchoolForm({
+      npsn: '',
+      name: '',
+      level: 'SD',
+      city: 'Jakarta Pusat',
+      district: '',
+      address: '',
+      principalName: '',
+      principalPhone: '',
+      uksName: '',
+      uksPhone: '',
+      clinicName: '',
+      clinicPhone: '',
+      lat: '-6.2088',
+      lng: '106.8456',
+      lowerGrade: 150,
+      upperGrade: 180,
+      smpGrade: 0,
+    })
+  }
+
+  // Mendaftarkan sekolah equipaje baru milik dapur ini (dapur diambil dari backend).
+  const handleOnboardSubmit = async (e) => {
+    e.preventDefault()
+    if (!newSchoolForm.npsn.trim() || !newSchoolForm.name.trim()) {
+      setError('NPSN dan Nama Resmi Sekolah wajib diisi.')
+      return
+    }
+
+    setOnboardSubmitting(true)
+    setError('')
+    setNotice('')
+    try {
+      const created = await createOwnedSchool({
+        npsn: newSchoolForm.npsn.trim(),
+        name: newSchoolForm.name.trim(),
+        level: newSchoolForm.level || 'SD',
+        city: newSchoolForm.city || 'Jakarta Pusat',
+        district: newSchoolForm.district || 'Kecamatan Terpadu',
+        address: newSchoolForm.address || 'Alamat operasional sekolah binaan',
+        lat: Number(newSchoolForm.lat) || -6.2,
+        lng: Number(newSchoolForm.lng) || 106.8,
+        principalName: newSchoolForm.principalName || 'Kepala Sekolah Terdaftar',
+        principalPhone: newSchoolForm.principalPhone || '0812-0000-0000',
+        uksName: newSchoolForm.uksName || 'Koordinator UKS',
+        uksPhone: newSchoolForm.uksPhone || '0813-0000-0000',
+        clinicName: newSchoolForm.clinicName || `Puskesmas ${newSchoolForm.city || 'Kecamatan'}`,
+        clinicPhone: newSchoolForm.clinicPhone || '021-1234567',
+        lowerGrade: Number(newSchoolForm.lowerGrade) || 0,
+        upperGrade: Number(newSchoolForm.upperGrade) || 0,
+        smpGrade: Number(newSchoolForm.smpGrade) || 0,
+      })
+      setNotice(
+        `Sekolah ${created?.name || newSchoolForm.name} (NPSN: ${created?.npsn || newSchoolForm.npsn}) berhasil terdaftar pada dapur ${activeSppgId}.`
+      )
+      setIsOnboardOpen(false)
+      resetSchoolForm()
+      loadBundle(true)
+    } catch (err) {
+      setError(err?.message || 'Gagal mendaftarkan sekolah baru.')
+    } finally {
+      setOnboardSubmitting(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <style>{`@page{size:A5;margin:8mm}.guide-print-sheet{display:none}@media print{body *{visibility:hidden}.guide-print-sheet,.guide-print-sheet *{visibility:visible}.guide-print-sheet{display:block !important;position:absolute;inset:0}}`}</style>
@@ -440,6 +530,31 @@ export function SppgSchoolsPanel() {
           </div>
         </div>
       </section>
+
+      {/* Toolbar: Tambah Sekolah Binaan milik dapur ini */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-indigo-100 bg-white px-5 py-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="rounded-xl bg-indigo-50 p-2 text-[#23259C]">
+            <School className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              Master Sekolah Binaan
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Daftarkan sekolah 신규 dengan NPSN resmi agar masuk ke alokasi porsi harian dapur ini.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsOnboardOpen(true)}
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#23259C] px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#1b1d7d]"
+        >
+          <Plus className="h-4 w-4" />
+          Tambah Sekolah
+        </button>
+      </div>
 
       {/* SLIP 01: Peta Drop-Point Serah Terima */}
       <div className={`overflow-hidden text-xs ${CARD}`}>
@@ -1141,6 +1256,281 @@ export function SppgSchoolsPanel() {
                 </button>
                 <button type="submit" disabled={dpSubmitting} className={BTN}>
                   {dpSubmitting ? 'Menyimpan...' : 'Perbarui Panduan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: Pendaftaran Sekolah Binaan Baru (field sama dengan modul Superadmin) */}
+      {isOnboardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <div className="rounded-xl bg-indigo-50 p-2 text-[#23259C]">
+                  <School className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900">
+                    Pendaftaran Sekolah Binaan Baru
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    NPSN resmi, demografi siswa, dan kontak darurat sekolah {activeSppgId}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOnboardOpen(false)}
+                className="cursor-pointer rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                title="Tutup"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleOnboardSubmit} className="flex-1 space-y-4 overflow-y-auto p-6 text-xs">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">
+                    NPSN (8 Digit) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={8}
+                    placeholder="Contoh: 20109988"
+                    value={newSchoolForm.npsn}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, npsn: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block font-semibold text-slate-700">
+                    Nama Resmi Sekolah <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: SDN 03 Kramat Jati"
+                    value={newSchoolForm.name}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, name: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Jenjang Pendidikan</label>
+                  <select
+                    value={newSchoolForm.level}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, level: e.target.value })}
+                    className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  >
+                    <option value="SD">Sekolah Dasar (SD)</option>
+                    <option value="MI">Madrasah Ibtidaiyah (MI)</option>
+                    <option value="SMP">Sekolah Menengah Pertama (SMP)</option>
+                    <option value="MTs">Madrasah Tsanawiyah (MTs)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Wilayah / Kota</label>
+                  <input
+                    type="text"
+                    placeholder="Jakarta Pusat"
+                    value={newSchoolForm.city}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, city: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Kecamatan</label>
+                  <input
+                    type="text"
+                    placeholder="Kecamatan Terpadu"
+                    value={newSchoolForm.district}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, district: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block font-semibold text-slate-700">Alamat Lengkap Sekolah</label>
+                <input
+                  type="text"
+                  placeholder="Jl. Merdeka Barat No. 20, RT 02/RW 04..."
+                  value={newSchoolForm.address}
+                  onChange={(e) => setNewSchoolForm({ ...newSchoolForm, address: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Latitude</label>
+                  <input
+                    type="text"
+                    placeholder="-6.2088"
+                    value={newSchoolForm.lat}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, lat: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Longitude</label>
+                  <input
+                    type="text"
+                    placeholder="106.8456"
+                    value={newSchoolForm.lng}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, lng: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-800">
+                  Demografi Siswa Sasaran (Kalkulasi Kalori Otomatis)
+                </span>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      SD Bawah (7-9 thn / 480 kkal)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={newSchoolForm.lowerGrade}
+                      onChange={(e) => setNewSchoolForm({ ...newSchoolForm, lowerGrade: e.target.value })}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      SD Atas (10-12 thn / 550 kkal)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={newSchoolForm.upperGrade}
+                      onChange={(e) => setNewSchoolForm({ ...newSchoolForm, upperGrade: e.target.value })}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                      SMP (13-15 thn / 650 kkal)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={newSchoolForm.smpGrade}
+                      onChange={(e) => setNewSchoolForm({ ...newSchoolForm, smpGrade: e.target.value })}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Nama Kepala Sekolah</label>
+                  <input
+                    type="text"
+                    placeholder="Dra. Hj. Mulyani, M.Pd"
+                    value={newSchoolForm.principalName}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, principalName: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">
+                    No. WhatsApp Kepala Sekolah
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="0812-3456-7890"
+                    value={newSchoolForm.principalPhone}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, principalPhone: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Koordinator UKS</label>
+                  <input
+                    type="text"
+                    placeholder="Ibu Ratna, S.Pd"
+                    value={newSchoolForm.uksName}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, uksName: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">
+                    No. Kontak Koordinator UKS
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="0813-0000-0000"
+                    value={newSchoolForm.uksPhone}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, uksPhone: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Puskesmas Rujukan Terdekat</label>
+                  <input
+                    type="text"
+                    placeholder="Puskesmas Kecamatan Setempat"
+                    value={newSchoolForm.clinicName}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, clinicName: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">
+                    No. Kontak Medis Puskesmas
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="021-7654321 / 119"
+                    value={newSchoolForm.clinicPhone}
+                    onChange={(e) => setNewSchoolForm({ ...newSchoolForm, clinicPhone: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono focus:outline-none focus:ring-2 focus:ring-[#23259C]"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-3.5 py-3 text-[11px] leading-relaxed text-slate-600">
+                Dapur penyuplai otomatis disetel ke <b className="text-slate-800">{activeSppgId}</b> sesuai akun yang
+                sedang login, sehingga sekolah baru langsung masuk ke alokasi porsi dapur ini.
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsOnboardOpen(false)}
+                  className="cursor-pointer rounded-xl border border-slate-200 px-4 py-2 font-semibold text-slate-600 transition hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={onboardSubmitting}
+                  className="flex cursor-pointer items-center gap-1.5 rounded-xl bg-[#23259C] px-5 py-2 font-semibold text-white shadow-sm transition hover:bg-[#1b1d7d] disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  {onboardSubmitting ? 'Mendaftarkan...' : 'Daftarkan Sekolah'}
                 </button>
               </div>
             </form>

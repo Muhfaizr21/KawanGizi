@@ -31,6 +31,8 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ToastNotice } from '../../components/ui/ToastNotice'
 import { navigate } from '../../App'
 import { useAuth } from '../../context/AuthContext'
 import { getSelectedSchool } from '../../lib/validatorSchool'
@@ -77,6 +79,23 @@ export function ValidatorDashboardPage() {
   const [loadError, setLoadError] = useState(null)
   const [isTimerPaused, setIsTimerPaused] = useState(false)
   const [toastMsg, setToastMsg] = useState(null)
+  const [isContactOpen, setIsContactOpen] = useState(false)
+
+  const EMERGENCY_CONTACTS = [
+    { label: 'Kontak Darurat Dapur SPPG', value: '0812-3456-7890', note: 'Kurir dan petugas dapur' },
+    { label: 'Satgas MBG Pusat', value: '0811-9988-7766', note: 'Koordinator Jawa Timur' },
+  ]
+
+  const copyEmergencyContacts = async () => {
+    const text = EMERGENCY_CONTACTS.map((c) => `${c.label}: ${c.value}`).join(' | ')
+    try {
+      await navigator.clipboard.writeText(text)
+      setToastMsg({ tone: 'success', title: 'Nomor disalin', message: 'Daftar kontak darurat tersimpan di clipboard.' })
+    } catch {
+      setToastMsg({ tone: 'error', title: 'Gagal menyalin', message: 'Salin manual: ' + text })
+    }
+    setIsContactOpen(false)
+  }
 
   // Listen to global school changes
   useEffect(() => {
@@ -573,9 +592,7 @@ export function ValidatorDashboardPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-base font-extrabold text-slate-900">Tim Pelaksana Sekolah</h3>
             <button
-              onClick={() => {
-                alert('Kontak Darurat SPPG: 0812-3456-7890 | Satgas MBG Pusat: 0811-9988-7766')
-              }}
+              onClick={() => setIsContactOpen(true)}
               className="px-3 py-1 rounded-full border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
             >
               + Kontak Tim
@@ -771,6 +788,26 @@ export function ValidatorDashboardPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={isContactOpen}
+        tone="info"
+        eyebrow="Jalur Eskalasi Darurat"
+        title="Kontak tim pelaksana"
+        description="Gunakan nomor berikut bila terjadi kondisi darurat pada nampan atau distribusi MBG."
+        details={EMERGENCY_CONTACTS.map((c) => `${c.label} · ${c.note}: ${c.value}`)}
+        confirmLabel="Salin Nomor"
+        hideCancel
+        onCancel={() => setIsContactOpen(false)}
+        onConfirm={copyEmergencyContacts}
+      />
+
+      <ToastNotice
+        tone={toastMsg?.tone}
+        title={toastMsg?.title}
+        message={toastMsg?.message}
+        onDismiss={() => setToastMsg(null)}
+      />
     </ValidatorLayout>
   )
 }

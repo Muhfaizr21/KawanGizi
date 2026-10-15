@@ -64,6 +64,8 @@ func NewAuthService(users repositories.UserRepository, jwtSecret string, accessT
 
 // Register validates the public registration payload, enforces email
 // uniqueness, hashes the password, and creates a new active account.
+// Penempatan (npsn, schoolName, sppgId) bersifat opsional: akun validator dapat
+// memilih sekolah binaannya sendiri setelah login melalui school switcher.
 func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) (*models.User, error) {
 	fullName := strings.TrimSpace(req.FullName)
 	email := strings.ToLower(strings.TrimSpace(req.Email))
@@ -88,9 +90,6 @@ func (s *AuthService) Register(ctx context.Context, req models.RegisterRequest) 
 	}
 	if !publicRegisterRoles[role] {
 		return nil, ErrUnsupportedRole
-	}
-	if npsn == "" || schoolName == "" || sppgID == "" {
-		return nil, ErrValidation
 	}
 
 	// Email harus unik: jika sudah dipakai akun mana pun, tolak pendaftaran.

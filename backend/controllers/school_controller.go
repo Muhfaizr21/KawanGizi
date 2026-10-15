@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 )
 
 // SchoolController menangani antarmuka HTTP untuk pangkalan data master sekolah penerima MBG.
@@ -75,6 +76,37 @@ func (c *SchoolController) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.Success(w, http.StatusCreated, "Sekolah binaan baru berhasil didaftarkan ke sistem MBG", created)
+}
+
+// CreateOwned mendaftarkan sekolah binaannya yang baru milik dapur SPPG
+// yang sedang login. Dapur penyuplai selalu diambil dari klaim token sehingga
+// SPPG tidak dapat mendaftarkan sekolah pada dapur lain.
+func (c *SchoolController) CreateOwned(w http.ResponseWriter, r *http.Request) {
+	ownerSppgID := strings.TrimSpace(middlewares.SppgID(r.Context()))
+	if ownerSppgID == "" {
+		utils.Error(w, http.StatusForbidden, "Akun ini tidak terikat pada dapur SPPG sehingga tidak dapat menambah sekolah")
+		return
+	}
+
+	var req models.CreateSchoolRequest
+	if err := decodeJSON(r, &req); err != nil {
+		utils.Error(w, http.StatusBadRequest, "Payload pendaftaran sekolah tidak valid: "+err.Error())
+		return
+	}
+	req.SPPGID = ownerSppgID
+
+	actor := models.User{
+		ID:       middlewares.UserID(r.Context()),
+		FullName: "Dapur SPPG",
+		Role:     middlewares.Role(r.Context()),
+	}
+
+	created, err := c.svc.Create(r.Context(), req, actor)
+	if err != nil {
+		writeSchoolError(w, err)
+		return
+	}
+	utils.Success(w, http.StatusCreated, "Sekolah binaannya berhasil didaftarkan", created)
 }
 
 // ReassignSPPG mengalihkan dapur penyedia/penyuplai makanan bergizi untuk sekolah ini.

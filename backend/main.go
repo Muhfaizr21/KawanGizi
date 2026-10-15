@@ -134,7 +134,12 @@ func main() {
 	validatorScanService := services.NewValidatorScanService(validatorScanRepo)
 
 	// 5. Initialize Controllers (Presentation / HTTP Layer)
-	healthCtrl := controllers.NewHealthController()
+	healthCtrl := controllers.NewHealthController(controllers.LandingPage{
+		AppEnv: cfg.AppEnv,
+		Port:   cfg.Port,
+		AIURL:  cfg.AIBackendURL,
+		WebURL: cfg.WebClientURL,
+	})
 	itemCtrl := controllers.NewItemController(itemService)
 	authCtrl := controllers.NewAuthController(authService)
 	scanCtrl := controllers.NewScanController(scanService)

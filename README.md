@@ -18,6 +18,7 @@ cd backend
 go run main.go
 ```
 - Server: `http://localhost:8080`
+- Root `/`: landing page bertema KawanGizi (popup sambutan + status layanan) untuk browser; respons JSON tetap dikembalikan ke client API/curl lewat content negotiation `Accept`.
 - Swagger UI: `http://localhost:8080/swagger/index.html`
 
 ### AI Service (required for food scan)

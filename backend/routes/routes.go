@@ -170,6 +170,7 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 	if deps.SppgSchoolCtrl != nil {
 		mux.Handle("GET /api/sppg/schools/bundle", middlewares.RequireAuth(http.HandlerFunc(deps.SppgSchoolCtrl.GetBundle)))
 		mux.Handle("GET /api/sppg/schools", middlewares.RequireAuth(http.HandlerFunc(deps.SppgSchoolCtrl.ListSchools)))
+		mux.Handle("POST /api/sppg/schools", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SchoolCtrl.CreateOwned)))
 		mux.Handle("GET /api/sppg/schools/{id}", middlewares.RequireAuth(http.HandlerFunc(deps.SppgSchoolCtrl.GetSchool)))
 		mux.Handle("PUT /api/sppg/schools/{id}/attendance", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgSchoolCtrl.UpdateAttendance)))
 		mux.Handle("PUT /api/sppg/schools/{id}/droppoint", middlewares.RequirePermission(models.PermKitchenOps)(http.HandlerFunc(deps.SppgSchoolCtrl.UpdateDroppoint)))

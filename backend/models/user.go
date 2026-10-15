@@ -35,7 +35,8 @@ type LoginRequest struct {
 }
 
 // RegisterRequest is the public payload for POST /api/auth/register.
-// Only validator accounts may self-register.
+// Only validator accounts may self-register, and placement fields (NPSN,
+// SchoolName, SppgID) are optional.
 type RegisterRequest struct {
 	FullName   string `json:"fullName"`
 	Email      string `json:"email"`

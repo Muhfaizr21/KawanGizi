@@ -223,6 +223,16 @@ export async function createSchool(payload) {
   return res?.data || null
 }
 
+// Mendaftarkan sekolah baru milik dapur SPPG yang sedang login.
+// Dapur penyuplai ditentukan di backend dari klaim token.
+export async function createOwnedSchool(payload) {
+  const res = await api('/api/sppg/schools', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
 export async function reassignSchoolSPPG(npsn, { targetSppgId, reason }) {
   const res = await api(`/api/schools/${npsn}/sppg`, {
     method: 'PUT',

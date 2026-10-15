@@ -44,6 +44,7 @@ import {
   BATCH_TRACEABILITY_LOGS,
 } from '../../data/sppgRecipesData'
 import { useAuth } from '../../context/AuthContext'
+import { ConfirmDialog } from '../ui/ConfirmDialog'
 import {
   fetchSppgRecipeBundle,
   toggleSppgMenuLock,
@@ -110,6 +111,7 @@ export function SppgRecipesPanel() {
   const [isDetailBatchOpen, setIsDetailBatchOpen] = useState(null)
   const [isRunsheetModalOpen, setIsRunsheetModalOpen] = useState(false)
   const [isAddMenuModalOpen, setIsAddMenuModalOpen] = useState(false)
+  const [isUnlockConfirmOpen, setIsUnlockConfirmOpen] = useState(false)
 
   // Memuat data bundle lengkap untuk ruang dapur aktif dari backend
   const loadBundle = useCallback(async (sppgIdToFetch) => {
@@ -469,17 +471,8 @@ export function SppgRecipesPanel() {
   }, [traceabilityLogs, searchQuery])
 
   // Handle lock/unlock dengan proteksi audit BGN di backend
-  const handleToggleLock = async () => {
+  const toggleMenuLock = async () => {
     const nextLocked = !isLocked
-    if (isLocked) {
-      if (
-        !window.confirm(
-          'Peringatan: Membuka kunci resep resmi akan mencatat log revisi ke Satgas MBG. Lanjutkan buka kunci?'
-        )
-      ) {
-        return
-      }
-    }
 
     setIsLocking(true)
     try {
@@ -522,7 +515,17 @@ export function SppgRecipesPanel() {
       showToast('Gagal mengubah status kunci menu: ' + (err.message || 'Kesalahan server'))
     } finally {
       setIsLocking(false)
+      setIsUnlockConfirmOpen(false)
     }
+  }
+
+  // Membuka kunci resep resmi wajib dikonfirmasi karena tercatat pada audit revisi
+  const handleToggleLock = () => {
+    if (isLocked) {
+      setIsUnlockConfirmOpen(true)
+      return
+    }
+    toggleMenuLock()
   }
 
   // Handle simpan kuota porsi harian ke database dapur SPPG
@@ -737,6 +740,25 @@ export function SppgRecipesPanel() {
           <span>{toastMessage}</span>
         </div>
       )}
+
+      {/* Konfirmasi pembuka kunci resep resmi */}
+      <ConfirmDialog
+        isOpen={isUnlockConfirmOpen}
+        tone="warning"
+        eyebrow="Audit Revisi Menu"
+        title="Buka kunci resep resmi?"
+        description="Menu saat ini terkunci dan terverifikasi. Membuka kunci akan mencatat log revisi pada audit dapur."
+        details={[
+          selectedPackageId ? `Paket menu: ${selectedPackageId}` : null,
+          lockTimestamp ? `Dikunci pada: ${lockTimestamp}` : null,
+          'Takaran dan porsi dapat diubah kembali setelah dibuka.',
+          'Revisi tercatat pada audit dan tidak dapat dihapus.',
+        ].filter(Boolean)}
+        confirmLabel="Ya, Buka Kunci"
+        loading={isLocking}
+        onCancel={() => !isLocking && setIsUnlockConfirmOpen(false)}
+        onConfirm={toggleMenuLock}
+      />
 
       {/* ========================================================================= */}
       {/* MULTI-TENANT KITCHEN SPACE HEADER (ISOLASI RUANG KERJA SPPG) */}

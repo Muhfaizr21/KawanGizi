@@ -39,6 +39,8 @@ import {
 import { ImageCapturePanel } from '../../components/shared/ImageCapturePanel'
 import { getSelectedSchool, setSelectedSchool, MASTER_SCHOOLS } from '../../lib/validatorSchool'
 import { SchoolSwitcherModal } from '../../components/validator/SchoolSwitcherModal'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { ToastNotice } from '../../components/ui/ToastNotice'
 import { buildDecisionLog } from '../../lib/foodBenefits'
 
 const MAX_IMAGE_BYTES = 8 << 20
@@ -315,37 +317,103 @@ export function ValidatorFoodScanPage() {
     }
   }, [activeDelivery, isManualBatch])
 
+  // Notifikasi & konfirmasi bertema (menggantikan alert/confirm bawaan browser)
+  const [toast, setToast] = useState(null)
+  const [confirmState, setConfirmState] = useState(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+
+  const pushToast = useCallback((tone, title, message) => {
+    setToast({ tone, title, message })
+  }, [])
+
   const handleDeleteScan = useCallback(async (row) => {
-    const ok = window.confirm(`Hapus catatan sampel ${row.boxId || row.id}? Tindakan ini tidak dapat dibatalkan.`)
-    if (!ok) return
     setDeletingId(row.id)
     setActionError('')
     try {
       await deleteScan(row.id)
       refreshRecent()
       setDetail((current) => (current?.id === row.id ? null : current))
+      pushToast('success', 'Riwayat dihapus', `Catatan sampel ${row.boxId || row.id} telah dihapus dari riwayat uji.`)
     } catch (error) {
       setActionError(errorMessage(error))
+      pushToast('error', 'Gagal menghapus', errorMessage(error))
     } finally {
       setDeletingId(null)
     }
-  }, [refreshRecent])
+  }, [refreshRecent, pushToast])
 
   const handleDeleteAllScans = useCallback(async () => {
-    const ok = window.confirm(`Hapus SEMUA ${recent.length} riwayat hasil uji sampel hari ini?`)
-    if (!ok) return
     setDeletingId('all')
     setActionError('')
     try {
       await deleteAllScans()
       setDetail(null)
       refreshRecent()
+      pushToast('success', 'Riwayat dibersihkan', `${recent.length} catatan hasil uji sampel hari ini telah dihapus.`)
     } catch (error) {
       setActionError(errorMessage(error))
+      pushToast('error', 'Gagal membersihkan riwayat', errorMessage(error))
     } finally {
       setDeletingId(null)
     }
-  }, [recent.length, refreshRecent])
+  }, [recent.length, refreshRecent, pushToast])
+
+  const requestDeleteScan = useCallback((row) => {
+    const target = row.boxId || row.id
+    const openedFromDetail = detail?.id === row.id
+    setDetail((current) => (openedFromDetail ? null : current))
+    setConfirmState({
+      tone: 'danger',
+      eyebrow: 'Hapus Catatan Sampel',
+      title: `Hapus riwayat ${target}?`,
+      description:
+        'Catatan hasil uji sampel ini akan dihapus permanen dari daftar riwayat Food Scan sekolah.',
+      details: [
+        `Kode sampel: ${target}`,
+        row.batchId ? `Batch: ${row.batchId}` : null,
+        row.menuName ? `Menu: ${row.menuName}` : null,
+        'Data tidak dapat dipulihkan setelah dihapus.',
+      ].filter(Boolean),
+      confirmLabel: 'Hapus Riwayat',
+      restoreDetail: openedFromDetail ? row : null,
+      action: () => handleDeleteScan(row),
+    })
+  }, [detail, handleDeleteScan])
+
+  const requestDeleteAllScans = useCallback(() => {
+    const total = recent.length
+    setConfirmState({
+      tone: 'danger',
+      eyebrow: 'Bersihkan Riwayat Hari Ini',
+      title: `Hapus ${total} catatan hasil uji?`,
+      description:
+        'Seluruh riwayat hasil uji sampel hari ini akan dikosongkan dari modul Food Scan.',
+      details: [
+        `${total} catatan hasil uji akan dihapus.`,
+        'Riwayat tidak dapat dipulihkan setelah dihapus.',
+        'Statistik kelayakan harian akan dihitung ulang.',
+      ],
+      confirmLabel: 'Hapus Semua',
+      action: () => handleDeleteAllScans(),
+    })
+  }, [recent.length, handleDeleteAllScans])
+
+  const closeConfirm = useCallback(() => {
+    if (confirmBusy) return
+    if (confirmState?.restoreDetail) setDetail(confirmState.restoreDetail)
+    setConfirmState(null)
+  }, [confirmBusy, confirmState])
+
+  const runConfirmedAction = useCallback(async () => {
+    if (!confirmState) return
+    setConfirmBusy(true)
+    try {
+      await confirmState.action()
+      setConfirmState(null)
+    } finally {
+      setConfirmBusy(false)
+    }
+  }, [confirmState])
 
   const acceptFile = useCallback((blob, previewUrl) => {
     if (!blob) {
@@ -478,7 +546,7 @@ export function ValidatorFoodScanPage() {
         recent.length > 0 && (
           <button
             type="button"
-            onClick={handleDeleteAllScans}
+            onClick={requestDeleteAllScans}
             disabled={deletingId === 'all'}
             className="flex items-center gap-2 rounded-full bg-white border border-slate-300 text-slate-800 px-5 py-2.5 text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-50"
           >
@@ -1205,7 +1273,7 @@ export function ValidatorFoodScanPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeleteScan(row)}
+                            onClick={() => requestDeleteScan(row)}
                             disabled={deletingId === row.id}
                             title="Hapus Catatan"
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer disabled:opacity-50"
@@ -1275,7 +1343,7 @@ export function ValidatorFoodScanPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDeleteScan(row)}
+                      onClick={() => requestDeleteScan(row)}
                       disabled={deletingId === row.id}
                       className="text-slate-400 hover:text-rose-600 transition p-1 cursor-pointer disabled:opacity-50"
                       title="Hapus"
@@ -1298,7 +1366,7 @@ export function ValidatorFoodScanPage() {
           row={detail}
           deleting={deletingId === detail.id}
           onClose={() => setDetail(null)}
-          onDelete={() => handleDeleteScan(detail)}
+          onDelete={() => requestDeleteScan(detail)}
         />
       )}
 
@@ -1312,6 +1380,27 @@ export function ValidatorFoodScanPage() {
           setSelectedDeliveryId('')
           setIsManualBatch(false)
         }}
+      />
+
+      {/* Dialog Konfirmasi & Notifikasi Bertema */}
+      <ConfirmDialog
+        isOpen={Boolean(confirmState)}
+        tone={confirmState?.tone}
+        eyebrow={confirmState?.eyebrow}
+        title={confirmState?.title}
+        description={confirmState?.description}
+        details={confirmState?.details}
+        confirmLabel={confirmState?.confirmLabel}
+        loading={confirmBusy}
+        onCancel={closeConfirm}
+        onConfirm={runConfirmedAction}
+      />
+
+      <ToastNotice
+        tone={toast?.tone}
+        title={toast?.title}
+        message={toast?.message}
+        onDismiss={() => setToast(null)}
       />
     </ValidatorLayout>
   )
