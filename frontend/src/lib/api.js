@@ -1,8 +1,10 @@
 // API client: Bearer access token (in-memory) + httpOnly refresh cookie.
 // On a 401 it attempts a single silent refresh, then retries the request.
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ||
-  `${window.location.protocol}//${window.location.hostname}:8080`
+const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://kawangizi.onrender.com'
+).replace(/\/+$/, '')
 
 let accessToken = localStorage.getItem('mbg_access_token') || null
 let refreshPromise = null
