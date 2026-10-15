@@ -23,9 +23,8 @@ go run main.go
 
 ### AI Service (required for food scan)
 ```bash
-cd backend
+cd backend/ai_service
 pip install -r requirements.txt
-cd ai_service
 uvicorn app.main:app --host 127.0.0.1 --port 8083
 ```
 - Health: `http://127.0.0.1:8083/health`
