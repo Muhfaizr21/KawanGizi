@@ -97,9 +97,11 @@ func main() {
 	sppgComplianceRepo := repositories.NewSppgComplianceRepository()
 	sppgDashboardRepo := repositories.NewSppgDashboardRepository()
 	validatorScanRepo := repositories.NewValidatorScanRepository()
+	postRepo := repositories.NewPostRepository()
 
 	// 4. Initialize Services (Business Logic Layer - Dependency Inversion)
 	itemService := services.NewItemService(itemRepo)
+	postService := services.NewPostService(postRepo)
 	authService := services.NewAuthService(
 		userRepo,
 		cfg.JWTSecret,
@@ -168,6 +170,7 @@ func main() {
 	sppgBillingCtrl := controllers.NewSppgBillingController(sppgBillingService)
 	sppgComplianceCtrl := controllers.NewSppgComplianceController(sppgComplianceService)
 	sppgDashboardCtrl := controllers.NewSppgDashboardController(sppgDashboardService)
+	postCtrl := controllers.NewPostController(postService, userRepo)
 
 	// 6. Initialize Routes & Middlewares
 	routerDeps := routes.RouterDependencies{
@@ -200,6 +203,7 @@ func main() {
 		SppgComplianceCtrl: sppgComplianceCtrl,
 		SppgDashboardCtrl:  sppgDashboardCtrl,
 		ValidatorScanCtrl:  validatorScanCtrl,
+		PostCtrl:           postCtrl,
 		AuthMW:             middlewares.Auth(authService),
 		CORSOrigins:        cfg.CORSOrigins,
 		AppEnv:             cfg.AppEnv,

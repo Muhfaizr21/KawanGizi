@@ -85,6 +85,7 @@ export function ValidatorLayout({
   children,
   primaryAction,
   secondaryAction,
+  hideBottomNav = false,
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isNotifOpen, setIsNotifOpen] = useState(false)
@@ -582,8 +583,8 @@ export function ValidatorLayout({
         <ValidatorAccountModal onClose={() => setIsAccountModalOpen(false)} />
       )}
 
-      {/* Fixed Mobile Bottom Navigation Bar (Hidden on md/desktop) */}
-      <MobileBottomNav activeMenu={activeMenu} />
+      {/* Fixed Mobile Bottom Navigation Bar (Hidden on md/desktop or if hideBottomNav is set) */}
+      {!hideBottomNav && <MobileBottomNav activeMenu={activeMenu} />}
     </div>
   )
 }

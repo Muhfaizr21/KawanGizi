@@ -41,6 +41,7 @@ type RouterDependencies struct {
 	SppgComplianceCtrl *controllers.SppgComplianceController
 	SppgDashboardCtrl  *controllers.SppgDashboardController
 	ValidatorScanCtrl  *controllers.ValidatorScanController
+	PostCtrl           *controllers.PostController
 	AuthMW             func(http.Handler) http.Handler
 	CORSOrigins    []string
 	AppEnv         string
@@ -85,6 +86,17 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 	mux.Handle("PUT /api/scans/{id}", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.UpdateFeedback)))
 	mux.Handle("DELETE /api/scans/all", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.DeleteAllScans)))
 	mux.Handle("DELETE /api/scans/{id}", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.DeleteScan)))
+
+	// Community / Forum Post routes (feed, 10-item pagination, likes, nested comments, CRUD)
+	if deps.PostCtrl != nil {
+		mux.HandleFunc("GET /api/v1/posts", deps.PostCtrl.List)
+		mux.HandleFunc("GET /api/v1/posts/{id}", deps.PostCtrl.GetByID)
+		mux.HandleFunc("POST /api/v1/posts", deps.PostCtrl.Create)
+		mux.HandleFunc("DELETE /api/v1/posts/{id}", deps.PostCtrl.Delete)
+		mux.HandleFunc("POST /api/v1/posts/{id}/like", deps.PostCtrl.ToggleLike)
+		mux.HandleFunc("GET /api/v1/posts/{id}/comments", deps.PostCtrl.GetComments)
+		mux.HandleFunc("POST /api/v1/posts/{id}/comments", deps.PostCtrl.CreateComment)
+	}
 
 	// Nutrition dataset — any authenticated user may look up item gizi
 	mux.Handle("GET /api/nutrition/items", middlewares.RequireAuth(http.HandlerFunc(deps.NutritionCtrl.Items)))

@@ -35,6 +35,8 @@ import { ValidatorIncidentsPage } from './pages/validator/ValidatorIncidentsPage
 import { ValidatorHistoryPage } from './pages/validator/ValidatorHistoryPage'
 import { ValidatorFoodScanPage } from './pages/validator/ValidatorFoodScanPage'
 import { ValidatorSettingsPage } from './pages/validator/ValidatorSettingsPage'
+import { KomunitasPage } from './pages/validator/KomunitasPage'
+import { KomunitasDetailPage } from './pages/validator/KomunitasDetailPage'
 import { RequireRole } from './components/RequireRole'
 import { RedirectIfAuthed } from './components/RedirectIfAuthed'
 import { useAuth } from './context/AuthContext'
@@ -223,12 +225,23 @@ export default function App() {
   // Full-screen isolated validator portal (guru & staf sekolah — validator lapangan)
   // Hanya role validator; role lain dialihkan ke dasbor miliknya.
   if (path === '/validator' || path.startsWith('/validator/')) {
+    const validatorDetailMatch = path.match(/^\/validator\/(?:komunitas|community)\/([^/]+)$/)
+    if (validatorDetailMatch) {
+      return (
+        <RequireRole roles={['validator']}>
+          <KomunitasDetailPage postId={validatorDetailMatch[1]} />
+        </RequireRole>
+      )
+    }
+
     return (
       <RequireRole roles={['validator']}>
         {path === '/validator/scan' || path === '/validator/foodscan' ? (
           <ValidatorFoodScanPage />
         ) : path === '/validator/handover' ? (
           <ValidatorHandoverPage />
+        ) : path === '/validator/komunitas' || path === '/validator/community' ? (
+          <KomunitasPage />
         ) : path === '/validator/incidents' ? (
           <ValidatorIncidentsPage />
         ) : path === '/validator/history' ? (
@@ -253,13 +266,24 @@ export default function App() {
 
   // Mobile / PWA dashboard sub-routes (Beranda, Skrining, Riwayat, Komunitas, Pengaturan)
   if (path.startsWith('/dashboard/')) {
+    const detailMatch = path.match(/^\/dashboard\/(?:komunitas|community)\/([^/]+)$/)
+    if (detailMatch) {
+      return (
+        <RequireRole roles={['validator', 'superadmin', 'sppg']}>
+          <KomunitasDetailPage postId={detailMatch[1]} />
+        </RequireRole>
+      )
+    }
+
     return (
       <RequireRole roles={['validator', 'superadmin', 'sppg']}>
         {path === '/dashboard/skrining' || path === '/dashboard/scan' ? (
           <ValidatorFoodScanPage />
         ) : path === '/dashboard/riwayat' || path === '/dashboard/history' ? (
           <ValidatorHistoryPage />
-        ) : path === '/dashboard/komunitas' || path === '/dashboard/incidents' ? (
+        ) : path === '/dashboard/komunitas' || path === '/dashboard/community' ? (
+          <KomunitasPage />
+        ) : path === '/dashboard/incidents' ? (
           <ValidatorIncidentsPage />
         ) : path === '/dashboard/handover' ? (
           <ValidatorHandoverPage />

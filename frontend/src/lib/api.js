@@ -1463,6 +1463,62 @@ export async function fetchValidatorDashboardBundle(params = {}) {
   return res?.data || null
 }
 
+// ============================================================================
+// FORUM KOMUNITAS / COMMUNITY POSTS API
+// ============================================================================
+
+export async function fetchPosts({ page = 1, limit = 10, tag = '', search = '' } = {}) {
+  const q = new URLSearchParams()
+  if (page) q.set('page', String(page))
+  if (limit) q.set('limit', String(limit))
+  if (tag && tag !== 'Semua') q.set('tag', tag)
+  if (search) q.set('search', search)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/v1/posts${qs}`)
+  return res?.data || { items: [], total: 0, page, limit, totalPages: 0, hasMore: false }
+}
+
+export async function fetchPostByID(id) {
+  const res = await api(`/api/v1/posts/${id}`)
+  return res?.data || null
+}
+
+export async function createPost(payload) {
+  const res = await api('/api/v1/posts', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function deletePost(id) {
+  const res = await api(`/api/v1/posts/${id}`, {
+    method: 'DELETE',
+  })
+  return res?.data || null
+}
+
+export async function toggleLikePost(id) {
+  const res = await api(`/api/v1/posts/${id}/like`, {
+    method: 'POST',
+  })
+  return res?.data || null
+}
+
+export async function fetchComments(postId) {
+  const res = await api(`/api/v1/posts/${postId}/comments`)
+  return res?.data || []
+}
+
+export async function createComment(postId, payload) {
+  const res = await api(`/api/v1/posts/${postId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+
 
 
 
