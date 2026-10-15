@@ -1099,11 +1099,12 @@ func (r *pgValidatorScanRepository) GetIncidentBundle(ctx context.Context, userR
 				sev := "medium"
 				sevLabel := "Sedang"
 				handler := "Manajer Dapur SPPG 01 Menteng Sentral"
-				if lvl == 1 {
+				switch lvl {
+				case 1:
 					sev = "high"
 					sevLabel = "Tinggi / Darurat Merah"
 					handler = "Satgas MBG Pusat (Push Siren)"
-				} else if lvl == 3 {
+				case 3:
 					sev = "low"
 					sevLabel = "Rendah"
 					handler = "Satgas MBG Wilayah Jakarta Pusat"
@@ -1111,10 +1112,11 @@ func (r *pgValidatorScanRepository) GetIncidentBundle(ctx context.Context, userR
 
 				statKey := "in_progress"
 				statLabel := "Sedang Ditindaklanjuti"
-				if status == "baru" {
+				switch status {
+				case "baru":
 					statKey = "open"
 					statLabel = "Baru Masuk"
-				} else if status == "selesai" {
+				case "selesai":
 					statKey = "resolved"
 					statLabel = "Selesai"
 				}
@@ -1287,11 +1289,12 @@ func (r *pgValidatorScanRepository) CreateIncident(ctx context.Context, payload 
 	sevLabel := "Sedang"
 	handler := "Manajer Dapur SPPG 01 Menteng Sentral"
 
-	if sev == "high" {
+	switch sev {
+	case "high":
 		level = 1
 		sevLabel = "Tinggi / Darurat Merah"
 		handler = "Satgas MBG Pusat (Push Siren)"
-	} else if sev == "low" {
+	case "low":
 		level = 3
 		sevLabel = "Rendah"
 		handler = "Satgas MBG Wilayah Jakarta Pusat"
@@ -1340,10 +1343,11 @@ func (r *pgValidatorScanRepository) CreateIncident(ctx context.Context, payload 
 	photosJSON, _ := json.Marshal(payload.Photos)
 	feedSeverity := "level2"
 	affectedPortions := 25
-	if sev == "high" {
+	switch sev {
+	case "high":
 		feedSeverity = "level1"
 		affectedPortions = 650
-	} else if sev == "low" {
+	case "low":
 		feedSeverity = "level3"
 		affectedPortions = 5
 	}

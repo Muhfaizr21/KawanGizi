@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"errors"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -115,6 +116,9 @@ func loadEnvFile(path string) {
 		if _, exists := os.LookupEnv(key); !exists {
 			os.Setenv(key, value)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("[CONFIG] Peringatan membaca berkas env %s: %v", path, err)
 	}
 }
 

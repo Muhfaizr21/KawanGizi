@@ -83,9 +83,10 @@ func resolveLabels(n *models.Notice) {
 		n.TargetAudienceLabel = "Semua Pihak (Nasional)"
 	}
 
-	if n.Status == "archived" {
+	switch n.Status {
+	case "archived":
 		n.StatusLabel = "Diarsipkan"
-	} else if n.Status == "active" {
+	case "active":
 		n.StatusLabel = "Tayang Publik"
 	}
 
@@ -254,9 +255,10 @@ func (r *postgresNoticeRepository) Create(ctx context.Context, req models.Create
 	requiresAck := req.RequiresAcknowledgement || isFlash
 
 	totalRecipients := 1850
-	if req.TargetAudience == "sppg" {
+	switch req.TargetAudience {
+	case "sppg":
 		totalRecipients = 180
-	} else if req.TargetAudience == "validators" {
+	case "validators":
 		totalRecipients = 1250
 	}
 

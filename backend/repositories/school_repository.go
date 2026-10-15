@@ -562,13 +562,14 @@ func (r *postgresSchoolRepository) ToggleStatus(ctx context.Context, npsn string
 
 	statusLabel := req.StatusLabel
 	if statusLabel == "" {
-		if req.Status == "active" {
+		switch req.Status {
+		case "active":
 			statusLabel = "Aktif Penuh"
-		} else if req.Status == "temp_inactive" {
+		case "temp_inactive":
 			statusLabel = "Nonaktif Sementara"
-		} else if req.Status == "radius_warning" {
+		case "radius_warning":
 			statusLabel = "Peringatan Radius Jauh"
-		} else {
+		default:
 			statusLabel = req.Status
 		}
 	}
