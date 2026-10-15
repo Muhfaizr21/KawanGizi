@@ -260,3 +260,14 @@ export async function removeStorageItem(key: string): Promise<void> {
     }
   }
 }
+
+/**
+ * Adapter AsyncStorage kompatibel lintas platform (Web localStorage, React Native, In-Memory)
+ */
+export const AsyncStorage = {
+  getItem: getStorageItem,
+  setItem: setStorageItem,
+  removeItem: removeStorageItem,
+};
+
+export default AsyncStorage;

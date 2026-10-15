@@ -36,6 +36,7 @@ import { CreatePostModal } from './CreatePostModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
 import { ThreadDetailScreen } from './ThreadDetailScreen';
 import { fetchMockCommunityPosts } from '../../data/communityData';
+import { formatRelativeTime } from '../../utils/dateUtils';
 
 const PAGE_SIZE = 10;
 const FILTER_TAGS = ['Semua', ...AVAILABLE_TAGS];
@@ -417,7 +418,7 @@ export const CommunityTabContent: React.FC<CommunityTabContentProps> = ({ onOpen
           <View style={styles.postFooter}>
             <View style={styles.timeWrapper}>
               <Clock size={12} color="#94A3B8" />
-              <Text style={styles.timeText}>{post.timeAgo}</Text>
+              <Text style={styles.timeText}>{formatRelativeTime(post.createdAt || post.timeAgo)}</Text>
             </View>
 
             <View style={styles.postActions}>

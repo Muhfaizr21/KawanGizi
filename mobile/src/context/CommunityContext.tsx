@@ -6,10 +6,9 @@ import {
   FetchCommunityParams,
   PaginatedCommunityResponse,
 } from '../data/communityData';
-import { getStorageItem, setStorageItem } from '../lib/storage';
+import { AsyncStorage } from '../lib/storage';
+import { forumService, FORUM_STORAGE_KEY } from '../services/forumService';
 import { useAuthRole } from './RoleContext';
-
-const COMMUNITY_STORAGE_KEY = '@kawangizi_community_posts';
 
 interface CreatePostInput {
   title: string;
@@ -52,34 +51,33 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [loading, setLoading] = useState(true);
   const { user } = useAuthRole();
 
-  // Load initial data from persistent storage
+  /**
+   * Hydration State dari AsyncStorage / localStorage saat aplikasi pertama kali dimuat.
+   * Memastikan data yang tersimpan (postingan baru, like count, komentar) TIDAK di-reset
+   * saat halaman browser di-refresh.
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan pemanggilan REST API:
+   * const serverPosts = await apiClient.get('/api/v1/community/posts');
+   */
   useEffect(() => {
     let cancelled = false;
+
     (async () => {
       try {
-        const storedJson = await getStorageItem(COMMUNITY_STORAGE_KEY);
+        const loadedPosts = await forumService.getPosts();
         if (cancelled) return;
-        if (storedJson) {
-          try {
-            const parsed = JSON.parse(storedJson);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              const userPosts = parsed.filter(
-                (p: any) => !INITIAL_COMMUNITY_POSTS.some((ip) => ip.id === p.id),
-              );
-              const combined = [...userPosts, ...INITIAL_COMMUNITY_POSTS];
-              setPosts(combined);
-              await setStorageItem(COMMUNITY_STORAGE_KEY, JSON.stringify(combined));
-              return;
-            }
-          } catch {
-            // JSON parse failed, use fallback
-          }
+
+        if (Array.isArray(loadedPosts) && loadedPosts.length > 0) {
+          setPosts(loadedPosts);
+        } else {
+          setPosts(INITIAL_COMMUNITY_POSTS);
+          await AsyncStorage.setItem(FORUM_STORAGE_KEY, JSON.stringify(INITIAL_COMMUNITY_POSTS));
         }
-        // Initialize with default mock posts
-        setPosts(INITIAL_COMMUNITY_POSTS);
-        await setStorageItem(COMMUNITY_STORAGE_KEY, JSON.stringify(INITIAL_COMMUNITY_POSTS));
       } catch (err) {
-        console.warn('Load community posts error:', err);
+        console.warn('[CommunityContext] Load community posts error:', err);
+        if (!cancelled) {
+          setPosts(INITIAL_COMMUNITY_POSTS);
+        }
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -92,19 +90,35 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   }, []);
 
-  const savePosts = useCallback(async (updated: CommunityPost[]) => {
-    setPosts(updated);
-    setActiveThreadPost((current) => {
-      if (!current) return null;
-      return updated.find((p) => p.id === current.id) || null;
-    });
-    try {
-      await setStorageItem(COMMUNITY_STORAGE_KEY, JSON.stringify(updated));
-    } catch (err) {
-      console.warn('Save community posts error:', err);
-    }
-  }, []);
+  /**
+   * Helper internal untuk mengupdate state dan secara eksplisit menyimpan ke AsyncStorage.
+   * Menjamin sinkronisasi instan ke storage lokal.
+   */
+  const persistPosts = useCallback(
+    async (updated: CommunityPost[]) => {
+      setPosts(updated);
 
+      // Sinkronkan active thread jika sedang dibuka
+      setActiveThreadPost((current) => {
+        if (!current) return null;
+        return updated.find((p) => p.id === current.id) || null;
+      });
+
+      try {
+        await AsyncStorage.setItem(FORUM_STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.warn('[CommunityContext] Save community posts error:', err);
+      }
+    },
+    []
+  );
+
+  /**
+   * Tambah Postingan Baru dengan ISO createdAt timestamp
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan:
+   * await apiClient.post('/api/v1/community/posts', payload);
+   */
   const createPost = useCallback(
     async (input: CreatePostInput): Promise<CommunityPost> => {
       const tagCfg = COMMUNITY_TAG_CONFIGS[input.tag] || {
@@ -119,7 +133,7 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         school: user?.schoolName || 'SDN Menteng 01 Pagi',
         authorId: user?.id || 'current-user',
         timeAgo: 'Baru saja',
-        createdAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(), // Dynamic timestamp ISO
         tag: input.tag,
         tagColor: tagCfg.color,
         tagBg: tagCfg.bg,
@@ -133,12 +147,18 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
 
       const updated = [newPost, ...posts];
-      await savePosts(updated);
+      await persistPosts(updated);
       return newPost;
     },
-    [posts, user, savePosts],
+    [posts, user, persistPosts]
   );
 
+  /**
+   * Update Postingan
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan:
+   * await apiClient.put(`/api/v1/community/posts/${input.id}`, payload);
+   */
   const updatePost = useCallback(
     async (input: UpdatePostInput): Promise<CommunityPost> => {
       const tagCfg = COMMUNITY_TAG_CONFIGS[input.tag] || {
@@ -166,24 +186,36 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return post;
       });
 
-      await savePosts(updated);
-
-      if (updatedPost) {
-        return updatedPost;
+      if (!updatedPost) {
+        throw new Error(`Diskusi dengan ID ${input.id} tidak ditemukan.`);
       }
-      throw new Error(`Diskusi dengan ID ${input.id} tidak ditemukan.`);
+
+      await persistPosts(updated);
+      return updatedPost;
     },
-    [posts, savePosts],
+    [posts, persistPosts]
   );
 
+  /**
+   * Hapus Postingan
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan:
+   * await apiClient.delete(`/api/v1/community/posts/${postId}`);
+   */
   const deletePost = useCallback(
     async (postId: string) => {
       const updated = posts.filter((p) => p.id !== postId);
-      await savePosts(updated);
+      await persistPosts(updated);
     },
-    [posts, savePosts],
+    [posts, persistPosts]
   );
 
+  /**
+   * Suka / Batal Suka Postingan (Like / Unlike)
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan:
+   * await apiClient.post(`/api/v1/community/posts/${postId}/like`);
+   */
   const toggleLikePost = useCallback(
     async (postId: string) => {
       const updated = posts.map((post) => {
@@ -194,28 +226,37 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
         return post;
       });
-      await savePosts(updated);
+
+      await persistPosts(updated);
     },
-    [posts, savePosts],
+    [posts, persistPosts]
   );
 
+  /**
+   * Tambah Komentar Utama
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan:
+   * await apiClient.post(`/api/v1/community/posts/${postId}/comments`, { content });
+   */
   const addComment = useCallback(
     async (postId: string, content: string) => {
       if (!content.trim()) return;
+
+      const newComment = {
+        id: `c-${Date.now()}`,
+        author: user?.name || 'Guru Validator MBG',
+        school: user?.schoolName || 'SDN Menteng 01 Pagi',
+        authorId: user?.id || 'current-user',
+        timeAgo: 'Baru saja',
+        createdAt: new Date().toISOString(),
+        content: content.trim(),
+        likesCount: 0,
+        isLiked: false,
+        replies: [],
+      };
+
       const updated = posts.map((post) => {
         if (post.id === postId) {
-          const newComment = {
-            id: `c-${Date.now()}`,
-            author: user?.name || 'Guru Validator MBG',
-            school: user?.schoolName || 'SDN Menteng 01 Pagi',
-            authorId: user?.id || 'current-user',
-            timeAgo: 'Baru saja',
-            createdAt: new Date().toISOString(),
-            content: content.trim(),
-            likesCount: 0,
-            isLiked: false,
-            replies: [],
-          };
           return {
             ...post,
             comments: [...(post.comments || []), newComment],
@@ -223,29 +264,38 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
         return post;
       });
-      await savePosts(updated);
+
+      await persistPosts(updated);
     },
-    [posts, user, savePosts],
+    [posts, user, persistPosts]
   );
 
+  /**
+   * Tambah Balasan Komentar Bertingkat
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan:
+   * await apiClient.post(`/api/v1/community/posts/${postId}/comments/${commentId}/replies`, { content });
+   */
   const addReply = useCallback(
     async (postId: string, commentId: string, content: string) => {
       if (!content.trim()) return;
+
+      const newReply = {
+        id: `r-${Date.now()}`,
+        author: user?.name || 'Guru Validator MBG',
+        school: user?.schoolName || 'SDN Menteng 01 Pagi',
+        authorId: user?.id || 'current-user',
+        timeAgo: 'Baru saja',
+        createdAt: new Date().toISOString(),
+        content: content.trim(),
+        likesCount: 0,
+        isLiked: false,
+      };
+
       const updated = posts.map((post) => {
         if (post.id === postId) {
           const updatedComments = (post.comments || []).map((comment) => {
             if (comment.id === commentId) {
-              const newReply = {
-                id: `r-${Date.now()}`,
-                author: user?.name || 'Guru Validator MBG',
-                school: user?.schoolName || 'SDN Menteng 01 Pagi',
-                authorId: user?.id || 'current-user',
-                timeAgo: 'Baru saja',
-                createdAt: new Date().toISOString(),
-                content: content.trim(),
-                likesCount: 0,
-                isLiked: false,
-              };
               return {
                 ...comment,
                 replies: [...(comment.replies || []), newReply],
@@ -260,11 +310,18 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
         return post;
       });
-      await savePosts(updated);
+
+      await persistPosts(updated);
     },
-    [posts, user, savePosts],
+    [posts, user, persistPosts]
   );
 
+  /**
+   * Suka Komentar
+   *
+   * [BACKEND_SYNC]: Nanti digantikan dengan:
+   * await apiClient.post(`/api/v1/community/posts/${postId}/comments/${commentId}/like`);
+   */
   const toggleLikeComment = useCallback(
     async (postId: string, commentId: string) => {
       const updated = posts.map((post) => {
@@ -281,20 +338,27 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
         return post;
       });
-      await savePosts(updated);
+
+      await persistPosts(updated);
     },
-    [posts, savePosts],
+    [posts, persistPosts]
   );
 
+  /**
+   * Reset seluruh postingan ke dataset awal bawaan
+   */
   const resetToInitialData = useCallback(async () => {
-    await savePosts(INITIAL_COMMUNITY_POSTS);
-  }, [savePosts]);
+    await persistPosts(INITIAL_COMMUNITY_POSTS);
+  }, [persistPosts]);
 
+  /**
+   * Pagination Query untuk FlatList Feed
+   */
   const fetchPaginatedPosts = useCallback(
     async (params?: FetchCommunityParams): Promise<PaginatedCommunityResponse> => {
       return fetchMockCommunityPosts(posts, params);
     },
-    [posts],
+    [posts]
   );
 
   const value = useMemo(
@@ -327,7 +391,7 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       toggleLikeComment,
       resetToInitialData,
       fetchPaginatedPosts,
-    ],
+    ]
   );
 
   return <CommunityContext.Provider value={value}>{children}</CommunityContext.Provider>;
@@ -340,3 +404,4 @@ export const useCommunity = (): CommunityContextType => {
   }
   return context;
 };
+export default useCommunity;

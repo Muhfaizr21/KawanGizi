@@ -132,6 +132,7 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({ onExit, onOpenProf
   const capturedFileRef = useRef<Blob | null>(null);
   const [activeTab, setActiveTab] = useState<'gizi' | 'kelayakan'>('gizi');
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   // Kalkulasi total nutrisi secara dinamis dari item yang terdeteksi
   const displayItems = useMemo<DetectedFoodItem[]>(() => {
@@ -358,11 +359,7 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({ onExit, onOpenProf
   };
 
   const handleHelpPress = () => {
-    Alert.alert(
-      'Panduan Pemindai AI',
-      '• Ambil foto buah atau sayur dengan pencahayaan cukup.\n• Foto dikirim ke server untuk klasifikasi fresh/stale. Model ini tidak memeriksa lauk matang, benda asing, alergen, atau keamanan mikrobiologis.\n• Nilai gizi dihitung dari bahan dan berat menu yang dikirim, bukan dikenali dari foto.',
-      [{ text: 'Mengerti', style: 'default' }],
-    );
+    setIsGuideOpen(true);
   };
 
   const handleAction = (_approved: boolean) => {
@@ -996,6 +993,72 @@ export const ScannerScreen: React.FC<ScannerScreenProps> = ({ onExit, onOpenProf
           </View>
         </TouchableOpacity>
       )}
+
+      {/* Custom Modal: Panduan Pemindai AI */}
+      <Modal
+        visible={isGuideOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setIsGuideOpen(false)}
+        statusBarTranslucent={true}
+      >
+        <TouchableOpacity
+          style={styles.guideModalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsGuideOpen(false)}
+        >
+          <TouchableOpacity
+            style={styles.guideModalCard}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation?.()}
+          >
+            {/* Header Icon Badge */}
+            <View style={styles.guideModalIconWrapper}>
+              <View style={styles.guideModalIconCircle}>
+                <Sparkles size={24} color="#FFFFFF" strokeWidth={2.2} />
+              </View>
+            </View>
+
+            {/* Title */}
+            <Text style={styles.guideModalTitle}>Panduan Pemindai AI</Text>
+
+            {/* Bullet Points List */}
+            <View style={styles.guideModalList}>
+              <View style={styles.guideModalListItem}>
+                <View style={styles.guideModalBulletDot} />
+                <Text style={styles.guideModalItemText}>
+                  Ambil foto seluruh porsi menu MBG (makanan dan minuman) dengan pencahayaan yang cukup dari sudut atas.
+                </Text>
+              </View>
+
+              <View style={styles.guideModalListItem}>
+                <View style={styles.guideModalBulletDot} />
+                <Text style={styles.guideModalItemText}>
+                  Sistem AI YOLOv8 akan memindai seluruh komponen lauk matang, sayur, dan buah untuk mendeteksi kelayakan konsumsi serta anomali visual.
+                </Text>
+              </View>
+
+              <View style={styles.guideModalListItem}>
+                <View style={styles.guideModalBulletDot} />
+                <Text style={styles.guideModalItemText}>
+                  Kalkulasi makronutrien (karbohidrat, protein, lemak) diestimasi secara otomatis berdasarkan segmentasi visual porsi makanan.
+                </Text>
+              </View>
+            </View>
+
+            {/* Primary Action Button */}
+            <TouchableOpacity
+              style={styles.guideModalPrimaryBtn}
+              onPress={() => setIsGuideOpen(false)}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="Mengerti panduan pemindai AI"
+            >
+              <Text style={styles.guideModalPrimaryBtnText}>Mengerti</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Panduan gizi dan keamanan berbasis hasil server */}
       <ContextualAiChatSheet
@@ -2629,5 +2692,92 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Custom Modal: Panduan Pemindai AI
+  guideModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  guideModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  guideModalIconWrapper: {
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  guideModalIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#EAA016',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EAA016',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  guideModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 18,
+    letterSpacing: -0.3,
+  },
+  guideModalList: {
+    marginBottom: 22,
+  },
+  guideModalListItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  guideModalBulletDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#EAA016',
+    marginTop: 7,
+    marginRight: 10,
+  },
+  guideModalItemText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#475569',
+    fontWeight: '400',
+  },
+  guideModalPrimaryBtn: {
+    width: '100%',
+    backgroundColor: '#EAA016',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#B45309',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  guideModalPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 });

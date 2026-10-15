@@ -3,22 +3,64 @@
 // satu build bisa mencapai backend tanpa konfigurasi tambahan.
 
 import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import { saveAuthSession, loadAuthSession, clearAuthSession } from './storage';
 
-function resolveApiBase(): string {
+export function resolveApiBase(): string {
+  // 1. Explicit override via .env (EXPO_PUBLIC_API_URL)
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl && envUrl.trim().length > 0) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  // 2. Web browser: gunakan hostname saat ini
   if (Platform.OS === 'web') {
     const host = typeof window !== 'undefined' ? window.location?.hostname : '';
     return `http://${host || 'localhost'}:8080`;
   }
-  // hostUri: "10.0.2.2:8081" (emulator), "192.168.x.x:8081" (perangkat), dsb.
-  const hostUri = Constants.expoConfig?.hostUri ?? '';
-  const host = hostUri.split(':')[0];
-  if (!host) return 'http://localhost:8080';
-  return `http://${host}:8080`;
+
+  // 3. React Native Metro scriptURL: paling akurat mendeteksi IP laptop saat dev Expo/Metro
+  const scriptURL: string | undefined = NativeModules?.SourceCode?.scriptURL;
+  if (scriptURL) {
+    const match = scriptURL.match(/^https?:\/\/([^:/]+)/);
+    if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
+      return `http://${match[1]}:8080`;
+    }
+  }
+
+  // 4. Expo Go & Development build debuggerHost
+  const debuggerHost =
+    (Constants as any).expoGoConfig?.debuggerHost ||
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ||
+    (Constants as any).manifest?.debuggerHost ||
+    Constants.expoConfig?.hostUri;
+
+  if (debuggerHost) {
+    const host = String(debuggerHost).split(':')[0];
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `http://${host}:8080`;
+    }
+  }
+
+  // 5. experienceUrl / linkingUri (mis. exp://10.0.174.100:8081)
+  const linkingUri = Constants.experienceUrl || Constants.linkingUri;
+  if (linkingUri) {
+    const match = String(linkingUri).match(/:\/\/([^:/]+)/);
+    if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
+      return `http://${match[1]}:8080`;
+    }
+  }
+
+  // 6. Android Emulator loopback alias (10.0.2.2 mengarah ke 127.0.0.1 host machine)
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:8080';
+  }
+
+  return 'http://localhost:8080';
 }
 
 export const API_BASE = resolveApiBase();
+
 
 export interface BackendUser {
   id: string;
@@ -50,7 +92,8 @@ async function tryRefresh(): Promise<AuthPayload | null> {
   if (!refreshPromise) {
     refreshPromise = (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+        const base = resolveApiBase();
+        const res = await fetch(`${base}/api/auth/refresh`, {
           method: 'POST',
           credentials: 'include',
         });
@@ -72,9 +115,10 @@ async function tryRefresh(): Promise<AuthPayload | null> {
 export async function api(path: string, options: RequestInit = {}): Promise<any> {
   // FormData: jangan set Content-Type manual, biar runtime menentukan boundary.
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const base = resolveApiBase();
 
   const doFetch = () =>
-    fetch(`${API_BASE}${path}`, {
+    fetch(`${base}${path}`, {
       ...options,
       credentials: 'include',
       headers: {

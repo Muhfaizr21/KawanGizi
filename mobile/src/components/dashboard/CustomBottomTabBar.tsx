@@ -7,14 +7,24 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  LogBox,
 } from 'react-native';
 import { Home, Camera, FileText, Users, LucideIcon } from 'lucide-react-native';
 
+// Abaikan warning New Architecture untuk layout animation
+LogBox.ignoreLogs(['setLayoutAnimationEnabledExperimental']);
+
+// Hanya aktifkan pada Android arsitektur legacy jika UIManager tersedia
 if (
   Platform.OS === 'android' &&
-  UIManager.setLayoutAnimationEnabledExperimental
+  typeof UIManager.setLayoutAnimationEnabledExperimental === 'function' &&
+  !(globalThis as any)?.nativeFabricUIManager
 ) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+  try {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  } catch {
+    // Abaikan jika dijalankan di React Native New Architecture di mana LayoutAnimation aktif default
+  }
 }
 
 export type TabKey = 'home' | 'action' | 'journey' | 'community' | 'profile';

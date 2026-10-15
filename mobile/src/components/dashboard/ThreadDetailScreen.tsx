@@ -35,6 +35,7 @@ import { getInitials } from '../../utils/initials';
 import { ProfileAvatarButton } from './ProfileAvatarButton';
 import { CreatePostModal } from './CreatePostModal';
 import { DeleteConfirmationModal } from './DeleteConfirmationModal';
+import { formatRelativeTime } from '../../utils/dateUtils';
 
 interface ThreadDetailScreenProps {
   post: CommunityPost;
@@ -250,7 +251,7 @@ export const ThreadDetailScreen: React.FC<ThreadDetailScreenProps> = ({
               </View>
               <View style={styles.timeBadge}>
                 <Clock size={11} color="#94A3B8" />
-                <Text style={styles.timeText}>{currentPost.timeAgo}</Text>
+                <Text style={styles.timeText}>{formatRelativeTime(currentPost.createdAt || currentPost.timeAgo)}</Text>
               </View>
             </View>
 
@@ -350,7 +351,7 @@ export const ThreadDetailScreen: React.FC<ThreadDetailScreenProps> = ({
                     <Text style={styles.commentAuthorName}>{comment.author}</Text>
                     <Text style={styles.commentAuthorSchool}>{comment.school}</Text>
                   </View>
-                  <Text style={styles.commentTime}>{comment.timeAgo}</Text>
+                  <Text style={styles.commentTime}>{formatRelativeTime(comment.createdAt || comment.timeAgo)}</Text>
                 </View>
 
                 <Text style={styles.commentContent}>{comment.content}</Text>
@@ -402,7 +403,7 @@ export const ThreadDetailScreen: React.FC<ThreadDetailScreenProps> = ({
                             <Text style={styles.nestedAuthorName}>{reply.author}</Text>
                             <Text style={styles.nestedAuthorSchool}>{reply.school}</Text>
                           </View>
-                          <Text style={styles.nestedTime}>{reply.timeAgo}</Text>
+                          <Text style={styles.nestedTime}>{formatRelativeTime(reply.createdAt || reply.timeAgo)}</Text>
                         </View>
                         <Text style={styles.nestedContent}>{reply.content}</Text>
                         <View style={styles.nestedActionsRow}>

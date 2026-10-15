@@ -3,10 +3,13 @@ import { DefaultTheme, ThemeProvider, Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
-import { StatusBar, Platform } from 'react-native';
+import { StatusBar, Platform, LogBox } from 'react-native';
 import { AuthProvider } from '../context/AuthContext';
 import { RoleProvider } from '../context/RoleContext';
 import { CommunityProvider } from '../context/CommunityContext';
+
+// Abaikan warning New Architecture untuk layout animation
+LogBox.ignoreLogs(['setLayoutAnimationEnabledExperimental']);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
