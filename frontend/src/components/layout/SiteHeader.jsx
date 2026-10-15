@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { ROUTES } from '../../data/mbgData'
 import { ArrowIcon } from '../ui/Icons'
 import { CtaButton } from '../ui/CtaButton'
+import { useAuth } from '../../context/AuthContext'
+import { homeForRole } from '../../lib/api'
 
 function isActive(href, path) {
   if (href === '/') return path === '/' || path === '' || path === '/home'
@@ -10,6 +12,9 @@ function isActive(href, path) {
 
 export function SiteHeader({ path }) {
   const [open, setOpen] = useState(false)
+  const { user } = useAuth()
+  const authTarget = user ? homeForRole(user.role) : '/login'
+  const authLabel = user ? 'Dasbor' : 'Masuk'
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur-md">
@@ -46,10 +51,10 @@ export function SiteHeader({ path }) {
             Mulai Sekarang <ArrowIcon />
           </a>
           <a
-            href="/login"
+            href={authTarget}
             className="inline-flex items-center rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-black"
           >
-            Masuk
+            {authLabel}
           </a>
         </div>
 
@@ -89,10 +94,10 @@ export function SiteHeader({ path }) {
           <div className="mt-4 flex flex-col gap-2" onClick={() => setOpen(false)}>
             <CtaButton href="/mulai">Mulai Sekarang</CtaButton>
             <a
-              href="/login"
+              href={authTarget}
               className="w-full text-center py-2.5 rounded-full bg-gray-900 text-white text-xs font-semibold"
             >
-              Masuk
+              {authLabel}
             </a>
           </div>
         </div>

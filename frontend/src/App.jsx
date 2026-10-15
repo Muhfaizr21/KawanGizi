@@ -36,6 +36,24 @@ import { ValidatorHistoryPage } from './pages/validator/ValidatorHistoryPage'
 import { ValidatorFoodScanPage } from './pages/validator/ValidatorFoodScanPage'
 import { RequireRole } from './components/RequireRole'
 import { RedirectIfAuthed } from './components/RedirectIfAuthed'
+import { useAuth } from './context/AuthContext'
+import { homeForRole } from './lib/api'
+
+function DashboardGuard() {
+  const { user } = useAuth()
+  useEffect(() => {
+    if (user?.role) {
+      navigate(homeForRole(user.role))
+    }
+  }, [user])
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-white">
+      <p className="font-mono text-[11px] uppercase tracking-widest text-slate-400">
+        Mengalihkan ke dasbor…
+      </p>
+    </div>
+  )
+}
 
 // Helper for programmatic navigation
 export function navigate(to) {
@@ -221,6 +239,15 @@ export default function App() {
     )
   }
 
+  // Full-screen protected /dashboard route (guards and redirects to role home or /login)
+  if (path === '/dashboard') {
+    return (
+      <RequireRole roles={['superadmin', 'sppg', 'validator']}>
+        <DashboardGuard />
+      </RequireRole>
+    )
+  }
+
   // Full-screen isolated auth pages
   if (path === '/login' || path === '/signin' || path === '/auth/signin') {
     return (
@@ -250,7 +277,8 @@ export default function App() {
     path === '/tentang-kami' ||
     path === '/tentang' ||
     path === '/mulai' ||
-    path === '/scan'
+    path === '/scan' ||
+    path === '/dashboard'
 
   if (!isKnownRoute) {
     return <NotFoundPage path={path} />
