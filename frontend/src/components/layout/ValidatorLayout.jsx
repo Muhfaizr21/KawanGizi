@@ -38,7 +38,7 @@ export const VALIDATOR_SIDEBAR_MENU = [
 ]
 
 export const VALIDATOR_GENERAL_MENU = [
-  { id: 'settings', label: 'Pengaturan Akun', icon: Settings, href: '/validator' },
+  { id: 'settings', label: 'Pengaturan Akun', icon: Settings, href: '/dashboard/pengaturan' },
   { id: 'help', label: 'Panduan & SOP', icon: HelpCircle, href: '/fitur' },
 ]
 
@@ -250,20 +250,21 @@ export function ValidatorLayout({
                 <p className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-2">GENERAL</p>
                 {VALIDATOR_GENERAL_MENU.map((item) => {
                   const Icon = item.icon
+                  const isActive = activeMenu === item.id || (item.id === 'settings' && (activeMenu === 'settings' || activeMenu === 'profile'))
                   return (
                     <button
                       key={item.id}
                       onClick={() => {
                         setIsSidebarOpen(false)
-                        if (item.id === 'settings') {
-                          setIsAccountModalOpen(true)
-                          return
-                        }
                         navigate(item.href)
                       }}
-                      className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-50/80 transition-all text-left cursor-pointer"
+                      className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all text-left cursor-pointer ${
+                        isActive
+                          ? 'bg-[#185338] text-white font-bold shadow-xs'
+                          : 'font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-50/80'
+                      }`}
                     >
-                      <Icon className="h-4.5 w-4.5 shrink-0 text-slate-400" />
+                      <Icon className={`h-4.5 w-4.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
                       <span>{item.label}</span>
                     </button>
                   )
@@ -503,7 +504,7 @@ export function ValidatorLayout({
                         type="button"
                         onClick={() => {
                           setIsProfileMenuOpen(false)
-                          setIsAccountModalOpen(true)
+                          navigate('/dashboard/pengaturan')
                         }}
                         className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer text-left"
                       >

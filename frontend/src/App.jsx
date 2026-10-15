@@ -34,6 +34,7 @@ import { ValidatorHandoverPage } from './pages/validator/ValidatorHandoverPage'
 import { ValidatorIncidentsPage } from './pages/validator/ValidatorIncidentsPage'
 import { ValidatorHistoryPage } from './pages/validator/ValidatorHistoryPage'
 import { ValidatorFoodScanPage } from './pages/validator/ValidatorFoodScanPage'
+import { ValidatorSettingsPage } from './pages/validator/ValidatorSettingsPage'
 import { RequireRole } from './components/RequireRole'
 import { RedirectIfAuthed } from './components/RedirectIfAuthed'
 import { useAuth } from './context/AuthContext'
@@ -232,6 +233,8 @@ export default function App() {
           <ValidatorIncidentsPage />
         ) : path === '/validator/history' ? (
           <ValidatorHistoryPage />
+        ) : path === '/validator/settings' || path === '/validator/profile' || path === '/validator/pengaturan' ? (
+          <ValidatorSettingsPage />
         ) : (
           <ValidatorDashboardPage />
         )}
@@ -248,7 +251,7 @@ export default function App() {
     )
   }
 
-  // Mobile / PWA dashboard sub-routes (Beranda, Skrining, Riwayat, Komunitas)
+  // Mobile / PWA dashboard sub-routes (Beranda, Skrining, Riwayat, Komunitas, Pengaturan)
   if (path.startsWith('/dashboard/')) {
     return (
       <RequireRole roles={['validator', 'superadmin', 'sppg']}>
@@ -260,6 +263,8 @@ export default function App() {
           <ValidatorIncidentsPage />
         ) : path === '/dashboard/handover' ? (
           <ValidatorHandoverPage />
+        ) : path === '/dashboard/pengaturan' || path === '/dashboard/profil' || path === '/dashboard/settings' ? (
+          <ValidatorSettingsPage />
         ) : (
           <ValidatorDashboardPage />
         )}
