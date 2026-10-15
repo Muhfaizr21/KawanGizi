@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import { usePWA } from '../../context/PWAContext'
 import { Download, X, Smartphone, CheckCircle2, Share, PlusSquare } from 'lucide-react'
 
@@ -105,16 +107,31 @@ export function InstallPWAPopup({ path = '' }) {
           <X className="h-5 w-5" />
         </button>
 
-        {/* Header with App Logo & Title */}
-        <div className="flex items-start gap-3.5 pr-8">
-          <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-[#123624] to-[#1d6b47] flex items-center justify-center shadow-md border border-emerald-500/20 shrink-0">
-            <Smartphone className="h-6 w-6 text-emerald-300" />
+        {/* Brand Logo & Mode Badge Header */}
+        <div className="flex items-center justify-between mb-3.5 pr-8">
+          <div className="flex items-center gap-2.5">
+            <Image
+              src={KawangiziLogo}
+              alt="Logo KawanGizi"
+              width={36}
+              height={36}
+              className="object-contain w-auto h-8 sm:h-9"
+              priority
+            />
+            <span className="text-lg font-black tracking-tight text-slate-900">KawanGizi</span>
+          </div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+            Mode Siaga PWA
+          </div>
+        </div>
+
+        {/* Feature Title & Smartphone Icon */}
+        <div className="flex items-start gap-3.5 pr-2">
+          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-[#123624] to-[#1d6b47] flex items-center justify-center shadow-md border border-emerald-500/20 shrink-0">
+            <Smartphone className="h-5.5 w-5.5 text-emerald-300" />
           </div>
           <div>
-            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold uppercase tracking-wider mb-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
-              Mode Siaga PWA
-            </div>
             <h3 className="text-base font-bold text-slate-900 leading-snug">
               Pasang KawanGizi di Layar Utama
             </h3>

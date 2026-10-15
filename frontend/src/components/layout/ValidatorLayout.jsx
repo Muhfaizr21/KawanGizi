@@ -23,6 +23,8 @@ import {
   Users,
 } from 'lucide-react'
 
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import { navigate } from '../../App'
 import { useAuth } from '../../context/AuthContext'
 import { usePWA } from '../../context/PWAContext'
@@ -189,14 +191,16 @@ export function ValidatorLayout({
         >
           <div className="flex flex-col h-full overflow-y-auto p-5 sm:p-6 justify-between [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <div>
-              {/* Donezo Style Logo Brand */}
-              <div className="flex items-center gap-2.5 pb-7 pt-1">
-                <div className="relative flex items-center justify-center">
-                  <div className="h-9 w-9 rounded-full border-[3px] border-[#185338] flex items-center justify-center bg-white shadow-xs">
-                    <div className="h-3.5 w-3.5 rounded-full bg-[#185338]" />
-                  </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 border-2 border-white" />
-                </div>
+              {/* Official Brand Logo */}
+              <div className="flex items-center gap-3 pb-7 pt-1">
+                <Image
+                  src={KawangiziLogo}
+                  alt="Logo KawanGizi"
+                  width={40}
+                  height={40}
+                  className="object-contain w-auto h-9.5 shrink-0"
+                  priority
+                />
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xl font-black tracking-tight text-slate-900">KawanGizi</span>

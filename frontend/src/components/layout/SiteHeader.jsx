@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import { ROUTES } from '../../data/mbgData'
 import { ArrowIcon } from '../ui/Icons'
 import { CtaButton } from '../ui/CtaButton'
@@ -21,8 +23,16 @@ export function SiteHeader({ path }) {
       <nav aria-label="Utama" className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         {/* Left: Brand Logo */}
         <div className="flex items-center">
-          <a href="/" className="text-xl font-black tracking-tight text-gray-900 flex items-center gap-1.5">
-            <span className="text-emerald-600 font-bold">●</span> KawanGizi
+          <a href="/" className="flex items-center gap-2.5 text-xl font-black tracking-tight text-gray-900 group">
+            <Image
+              src={KawangiziLogo}
+              alt="Logo KawanGizi"
+              width={36}
+              height={36}
+              className="object-contain w-auto h-8 sm:h-9 transition-transform group-hover:scale-105"
+              priority
+            />
+            <span>KawanGizi</span>
           </a>
         </div>
 
