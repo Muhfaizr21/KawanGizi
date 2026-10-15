@@ -42,6 +42,7 @@ import { RedirectIfAuthed } from './components/RedirectIfAuthed'
 import { useAuth } from './context/AuthContext'
 import { homeForRole } from './lib/api'
 import { InstallPWAPopup } from './components/pwa/InstallPWAPopup'
+import { GlobalLoader } from './components/ui/GlobalLoader'
 
 function DashboardGuard() {
   const { user } = useAuth()
@@ -50,13 +51,7 @@ function DashboardGuard() {
       navigate(homeForRole(user.role))
     }
   }, [user])
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-white">
-      <p className="font-mono text-[11px] uppercase tracking-widest text-slate-400">
-        Mengalihkan ke dasbor…
-      </p>
-    </div>
-  )
+  return <GlobalLoader fullScreen label="Mengalihkan ke dasbor…" />
 }
 
 // Helper for programmatic navigation

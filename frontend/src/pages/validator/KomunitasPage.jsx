@@ -15,6 +15,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { ToastNotice } from '../../components/ui/ToastNotice'
 import { PostCard } from '../../components/community/PostCard'
 import { CreatePostModal } from '../../components/community/CreatePostModal'
+import { GlobalLoader } from '../../components/ui/GlobalLoader'
 import {
   fetchPosts,
   createPost,
@@ -349,11 +350,8 @@ export function KomunitasPage() {
         {/* POSTS FEED LIST */}
         {/* ========================================================================= */}
         {loading ? (
-          <div className="p-12 text-center rounded-[22px] bg-white border border-slate-200/80 shadow-xs space-y-3">
-            <Loader2 className="h-7 w-7 animate-spin text-[#185338] mx-auto" />
-            <p className="text-xs font-bold text-slate-500">
-              Memuat postingan komunitas…
-            </p>
+          <div className="p-12 text-center rounded-[22px] bg-white border border-slate-200/80 shadow-xs">
+            <GlobalLoader label="Memuat postingan komunitas…" />
           </div>
         ) : error ? (
           <div className="p-8 text-center rounded-[22px] bg-white border border-rose-200 text-rose-700 shadow-xs space-y-3">
