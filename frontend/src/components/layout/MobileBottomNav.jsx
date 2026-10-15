@@ -27,7 +27,7 @@ export const MOBILE_NAV_ITEMS = [
   {
     key: 'komunitas',
     label: 'Komunitas',
-    href: '/validator/incidents',
+    href: '/validator/komunitas',
     alternateHref: '/dashboard/komunitas',
     icon: Users,
   },
@@ -40,7 +40,7 @@ export function MobileBottomNav({ activeMenu }) {
     if (activeMenu === 'dashboard') return 0
     if (activeMenu === 'foodscan' || activeMenu === 'scan') return 1
     if (activeMenu === 'history' || activeMenu === 'handover') return 2
-    if (activeMenu === 'incidents' || activeMenu === 'community') return 3
+    if (activeMenu === 'community') return 3
 
     // 2. Prioritas kedua: pathname URL
     const path = typeof window !== 'undefined' ? window.location.pathname : ''
@@ -60,9 +60,10 @@ export function MobileBottomNav({ activeMenu }) {
       path.startsWith('/dashboard/handover')
     ) return 2
     if (
-      path.startsWith('/validator/incidents') ||
+      path.startsWith('/validator/komunitas') ||
+      path.startsWith('/validator/community') ||
       path.startsWith('/dashboard/komunitas') ||
-      path.startsWith('/dashboard/incidents')
+      path.startsWith('/dashboard/community')
     ) return 3
 
     return 0

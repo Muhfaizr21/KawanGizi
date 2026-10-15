@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Building2,
   ChevronDown,
+  Users,
 } from 'lucide-react'
 
 import { navigate } from '../../App'
@@ -34,6 +35,7 @@ export const VALIDATOR_SIDEBAR_MENU = [
   { id: 'foodscan', label: 'Scan Hidangan', icon: ScanLine, href: '/validator/foodscan', badge: 'AI' },
   { id: 'handover', label: 'Serah Terima', icon: ClipboardCheck, href: '/validator/handover' },
   { id: 'history', label: 'Riwayat & Presensi', icon: History, href: '/validator/history' },
+  { id: 'community', label: 'Forum Komunitas', icon: Users, href: '/validator/komunitas' },
   { id: 'incidents', label: 'Lapor Insiden', icon: AlertTriangle, href: '/validator/incidents', badge: 'Siaga' },
 ]
 
