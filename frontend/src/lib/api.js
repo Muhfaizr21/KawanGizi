@@ -1,10 +1,17 @@
 // API client: Bearer access token (in-memory) + httpOnly refresh cookie.
 // On a 401 it attempts a single silent refresh, then retries the request.
 
-const API_BASE = (
+export const API_BASE = (
   import.meta.env.VITE_API_BASE_URL ||
+  'https://kawangizi-core-api.onrender.com'
+).replace(/\/+$/, '')
+
+export const AI_API_URL = (
+  import.meta.env.VITE_AI_API_URL ||
   'https://kawangizi.onrender.com'
 ).replace(/\/+$/, '')
+
+export const AI_API_BASE = AI_API_URL
 
 let accessToken = localStorage.getItem('mbg_access_token') || null
 let refreshPromise = null
@@ -153,11 +160,86 @@ export async function api(path, options = {}) {
   return body
 }
 
+// =============================================================================
+// API CLIENT INSTANCES: coreApi (Golang) & aiApi (Python YOLOv8)
+// =============================================================================
+
+// Instance untuk urusan Auth, Database, Presensi, dan Pengelolaan (ke Golang)
+export const coreApi = {
+  baseURL: API_BASE,
+  request: (path, options = {}) => api(path, options),
+  get: (path, options = {}) => api(path, { ...options, method: 'GET' }),
+  post: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return api(path, {
+      ...options,
+      method: 'POST',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+  put: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return api(path, {
+      ...options,
+      method: 'PUT',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+  patch: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return api(path, {
+      ...options,
+      method: 'PATCH',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+  delete: (path, options = {}) => api(path, { ...options, method: 'DELETE' }),
+}
+
+// Instance khusus untuk fitur Scan AI YOLOv8 (ke Python FastAPI)
+export const aiApi = {
+  baseURL: AI_API_URL,
+  request: async (path, options = {}) => {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+    const res = await fetch(`${AI_API_URL}${cleanPath}`, {
+      ...options,
+      headers: {
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.headers || {}),
+      },
+    })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) {
+      const err = new Error(body?.detail || body?.error || body?.message || `HTTP ${res.status}`)
+      err.status = res.status
+      throw err
+    }
+    return body
+  },
+  get: (path, options = {}) => aiApi.request(path, { ...options, method: 'GET' }),
+  post: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return aiApi.request(path, {
+      ...options,
+      method: 'POST',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+}
+
+/**
+ * Pindai visual hidangan langsung ke layanan Python AI (YOLOv8 /predict-tray) memakai aiApi.
+ */
+export async function scanFoodAI(imageFile, grid = '2x3') {
+  const body = new FormData()
+  body.append('image', imageFile)
+  if (grid) body.append('grid', grid)
+  return aiApi.post('/predict-tray', body)
+}
+
 export async function loginRequest(email, password) {
-  const body = await api('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  })
+  const body = await coreApi.post('/api/auth/login', { email, password })
   setAccessToken(body.data.accessToken)
   if (body.data?.refreshToken) {
     localStorage.setItem('mbg_refresh_token', body.data.refreshToken)
@@ -241,7 +323,7 @@ export async function scanRequest({
   if (persist === false) body.append('persist', 'false')
   if (rating) body.append('rating', String(rating))
   if (feedback) body.append('feedback', String(feedback))
-  return api('/api/scans', { method: 'POST', body })
+  return coreApi.post('/api/scans', body)
 }
 
 export async function updateScanFeedback(id, payload) {

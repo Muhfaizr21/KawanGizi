@@ -18,6 +18,10 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 			origin := r.Header.Get("Origin")
 			if origin != "" {
 				isAllowed := allowed[origin] ||
+					origin == "https://kawangizi.rentgoindonesia.com" ||
+					origin == "http://kawangizi.rentgoindonesia.com" ||
+					strings.HasSuffix(origin, ".rentgoindonesia.com") ||
+					strings.HasSuffix(origin, ".onrender.com") ||
 					strings.HasPrefix(origin, "http://localhost:") ||
 					strings.HasPrefix(origin, "http://127.0.0.1:") ||
 					strings.HasPrefix(origin, "http://192.168.") ||
@@ -30,7 +34,7 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 				}
 			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Authorization, Accept, X-Requested-With, X-Refresh-Token")
 
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
