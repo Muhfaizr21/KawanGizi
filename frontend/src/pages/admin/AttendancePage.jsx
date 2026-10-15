@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AdminLayout } from '../../components/layout/AdminLayout'
 import { useAuth } from '../../context/AuthContext'
 import { guardAdminAction } from '../../lib/adminActions'
@@ -22,26 +22,24 @@ export function AttendancePage() {
   const [attendanceList, setAttendanceList] = useState(INITIAL_ATTENDANCE_LIST)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let isMounted = true
-    fetchAttendances()
-      .then((data) => {
-        if (isMounted && Array.isArray(data) && data.length > 0) {
-          const mapped = data.map(toAttendanceView)
-          setAttendanceList(mapped)
-        }
-      })
-      .catch((err) => {
-        console.warn('Menggunakan data awal attendance:', err)
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false)
-      })
-
-    return () => {
-      isMounted = false
+  const loadAttendances = useCallback(async () => {
+    try {
+      setLoading(true)
+      const data = await fetchAttendances()
+      if (Array.isArray(data) && data.length > 0) {
+        const mapped = data.map(toAttendanceView)
+        setAttendanceList(mapped)
+      }
+    } catch (err) {
+      console.warn('Gagal memuat data presensi dari PostgreSQL:', err)
+    } finally {
+      setLoading(false)
     }
   }, [])
+
+  useEffect(() => {
+    loadAttendances()
+  }, [loadAttendances])
 
   useEffect(() => {
     if (!toast) return
@@ -77,6 +75,7 @@ export function AttendancePage() {
         attendanceList={attendanceList}
         onSuperadminAction={handleSuperadminAction}
         showToast={setToast}
+        onReload={loadAttendances}
       />
     </AdminLayout>
   )

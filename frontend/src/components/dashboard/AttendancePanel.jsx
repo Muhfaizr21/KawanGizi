@@ -39,6 +39,7 @@ export function AttendancePanel({
   attendanceList: initialAttendanceList,
   onSuperadminAction,
   showToast,
+  onReload,
 }) {
   const [attendanceList, setAttendanceList] = useState(initialAttendanceList || [])
 
@@ -135,7 +136,7 @@ export function AttendancePanel({
     const avgFinishRate =
       total > 0
         ? (
-            attendanceList.reduce((acc, a) => acc + (a.consumptionEvaluation.finishRate || 0), 0) /
+            attendanceList.reduce((acc, a) => acc + (a.consumptionEvaluation?.finishRate || 0), 0) /
             total
           ).toFixed(1)
         : '0.0'
@@ -183,15 +184,15 @@ export function AttendancePanel({
       a.sppg,
       a.registeredStudents,
       a.presentStudents,
-      a.absentDetails.sick,
-      a.absentDetails.permission,
+      a.absentDetails?.sick ?? 0,
+      a.absentDetails?.permission ?? 0,
       a.attendanceRate,
       a.deliveredPortions,
       a.consumedPortions,
       a.surplusPortions,
       a.reconciliationStatus,
-      a.goldenWindow.minutesLeft,
-      a.consumptionEvaluation.finishRate,
+      a.goldenWindow?.minutesLeft ?? 0,
+      a.consumptionEvaluation?.finishRate ?? 0,
       a.targetTomorrowQuota
     ])
 
@@ -235,12 +236,9 @@ export function AttendancePanel({
         prev.map((a) => (a.id === item.id ? (view || { ...a, targetTomorrowQuota: quotaVal }) : a))
       )
       showToast?.(`[ALOKASI H+1 DIPERBARUI] Kuota pesanan ${item.school} untuk esok hari ditetapkan sebesar ${quotaVal} porsi.`)
+      onReload?.()
     } catch (err) {
-      console.warn('Fallback local quota update:', err)
-      setAttendanceList((prev) =>
-        prev.map((a) => (a.id === item.id ? { ...a, targetTomorrowQuota: quotaVal } : a))
-      )
-      showToast?.(`[ALOKASI H+1 DIPERBARUI] Kuota pesanan ${item.school} untuk esok hari ditetapkan sebesar ${quotaVal} porsi.`)
+      showToast?.(`Gagal memperbarui kuota di server: ${err.message || 'Kesalahan server'}`)
     }
 
     setAdjustQuotaModalData(null)
@@ -271,52 +269,13 @@ export function AttendancePanel({
         authorizedBy: 'Dr. Hendra Prasetyo (Satgas MBG Pusat)',
       })
       const view = updated ? toAttendanceView(updated) : null
-      setAttendanceList((prev) =>
-        prev.map((a) => {
-          if (a.id === item.id) {
-            return view || {
-              ...a,
-              reconciliationStatus: 'surplus_redistributed',
-              surplusStatus: 'redistributed',
-              redistributionLog: {
-                dispatchId: `REDIST-${Date.now().toString().slice(-4)}`,
-                authorizedBy: 'Dr. Hendra Prasetyo (Satgas MBG Pusat)',
-                targetFacility,
-                portionsAllocated: portionCount,
-                courierName: courier,
-                dispatchedAt: new Date().toLocaleTimeString('id-ID') + ' WIB',
-                recipientSignature: 'Petugas Posko Sosial Penerima',
-              },
-            }
-          }
-          return a
-        })
-      )
+      if (view) {
+        setAttendanceList((prev) => prev.map((a) => (a.id === item.id ? view : a)))
+      }
       showToast?.(`[PENGALIHAN RESMI DISAHKAN] ${portionCount} porsi utuh dari ${item.school} dialihkan ke ${targetFacility}.`)
+      onReload?.()
     } catch (err) {
-      console.warn('Fallback local redistribute:', err)
-      setAttendanceList((prev) =>
-        prev.map((a) => {
-          if (a.id === item.id) {
-            return {
-              ...a,
-              reconciliationStatus: 'surplus_redistributed',
-              surplusStatus: 'redistributed',
-              redistributionLog: {
-                dispatchId: `REDIST-${Date.now().toString().slice(-4)}`,
-                authorizedBy: 'Dr. Hendra Prasetyo (Satgas MBG Pusat)',
-                targetFacility,
-                portionsAllocated: portionCount,
-                courierName: courier,
-                dispatchedAt: new Date().toLocaleTimeString('id-ID') + ' WIB',
-                recipientSignature: 'Petugas Posko Sosial Penerima',
-              },
-            }
-          }
-          return a
-        })
-      )
-      showToast?.(`[PENGALIHAN RESMI DISAHKAN] ${portionCount} porsi utuh dari ${item.school} dialihkan ke ${targetFacility}.`)
+      showToast?.(`Gagal mengalihkan surplus di server: ${err.message || 'Kesalahan server'}`)
     }
 
     setRedistributeModalData(null)
@@ -344,9 +303,9 @@ export function AttendancePanel({
         setAttendanceList((prev) => prev.map((a) => (a.id === item.id ? view : a)))
       }
       showToast?.(`[BERITA ACARA AUDIT DITERBITKAN] Perintah investigasi selisih porsi untuk ${item.school} telah dicatat dalam log audit.`)
+      onReload?.()
     } catch (err) {
-      console.warn('Fallback local audit:', err)
-      showToast?.(`[BERITA ACARA AUDIT DITERBITKAN] Perintah investigasi selisih porsi untuk ${item.school} telah dicatat dalam log audit.`)
+      showToast?.(`Gagal menerbitkan berita acara audit di server: ${err.message || 'Kesalahan server'}`)
     }
 
     setDiscrepancyAuditModalData(null)
@@ -807,7 +766,7 @@ export function AttendancePanel({
                               Presensi: {item.attendanceRate}%
                             </span>
                             <span className="text-rose-800 font-medium">
-                              Absen: {item.absentDetails.sick + item.absentDetails.permission}
+                              Absen: {(item.absentDetails?.sick || 0) + (item.absentDetails?.permission || 0)}
                             </span>
                           </div>
                         </div>
@@ -823,12 +782,12 @@ export function AttendancePanel({
                             {item.surplusPortions > 0 && (
                               <span
                                 className={`text-[11px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                                  item.goldenWindow.minutesLeft <= 15
+                                  (item.goldenWindow?.minutesLeft || 0) <= 15
                                     ? 'bg-rose-50 text-rose-700'
                                     : 'bg-amber-50 text-amber-800'
                                 }`}
                               >
-                                {item.goldenWindow.minutesLeft > 0
+                                {(item.goldenWindow?.minutesLeft || 0) > 0
                                   ? `${item.goldenWindow.minutesLeft}m tersisa`
                                   : 'Waktu Habis'}
                               </span>
@@ -838,7 +797,7 @@ export function AttendancePanel({
                           <p className="text-[11px] text-slate-500 truncate">
                             Batas Aman:{' '}
                             <strong className="text-slate-700 font-medium font-mono">
-                              {item.goldenWindow.safeUntil}
+                              {item.goldenWindow?.safeUntil || '-'}
                             </strong>
                           </p>
 
@@ -858,19 +817,19 @@ export function AttendancePanel({
                           <div className="flex items-center gap-1.5">
                             <Utensils className="h-3.5 w-3.5 text-emerald-800 shrink-0" />
                             <span className="font-mono font-bold text-slate-900 text-xs">
-                              {item.consumptionEvaluation.finishRate}% Habis
+                              {item.consumptionEvaluation?.finishRate ?? 0}% Habis
                             </span>
                           </div>
 
                           <p className="text-[11px] text-slate-500 truncate">
                             Sisa Sayur:{' '}
                             <span className="font-mono font-medium text-slate-700">
-                              {item.consumptionEvaluation.veggieWastePct}%
+                              {item.consumptionEvaluation?.veggieWastePct ?? 0}%
                             </span>
                             <span className="mx-1 text-slate-300">&bull;</span>
                             Lauk:{' '}
                             <span className="font-mono font-medium text-slate-700">
-                              {item.consumptionEvaluation.proteinWastePct}%
+                              {item.consumptionEvaluation?.proteinWastePct ?? 0}%
                             </span>
                           </p>
 
@@ -1116,7 +1075,7 @@ export function AttendancePanel({
             <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
               <p className="font-semibold text-amber-800 flex items-center gap-1.5">
                 <Clock className="h-4 w-4" />
-                <span>Golden Window Terbatas: Batas Akhir {redistributeModalData.item.goldenWindow.safeUntil}</span>
+                <span>Golden Window Terbatas: Batas Akhir {redistributeModalData.item.goldenWindow?.safeUntil || '-'}</span>
               </p>
               <p className="text-[11px] leading-relaxed">
                 Porsi yang dialihkan harus dalam kondisi segel utuh dan tiba di lokasi penerima sebelum batas waktu konsumsi 4 jam habis.
@@ -1356,7 +1315,7 @@ export function AttendancePanel({
               <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
                 <span className="text-emerald-700 font-semibold">Indeks Piring Bersih:</span>
                 <p className="font-mono font-bold text-emerald-900 text-base mt-0.5">
-                  {inspectModalData.item.consumptionEvaluation.finishRate}%
+                  {inspectModalData.item.consumptionEvaluation?.finishRate ?? 0}%
                 </p>
               </div>
             </div>
@@ -1366,11 +1325,11 @@ export function AttendancePanel({
               <p className="font-bold text-slate-800 flex items-center justify-between">
                 <span>Evaluasi Sisa Makanan &amp; Selera Siswa (Plate Waste)</span>
                 <span className="text-[10px] font-mono text-emerald-700">
-                  Sayur: {inspectModalData.item.consumptionEvaluation.veggieWastePct}% &bull; Lauk: {inspectModalData.item.consumptionEvaluation.proteinWastePct}%
+                  Sayur: {inspectModalData.item.consumptionEvaluation?.veggieWastePct ?? 0}% &bull; Lauk: {inspectModalData.item.consumptionEvaluation?.proteinWastePct ?? 0}%
                 </span>
               </p>
               <p className="text-slate-600 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200 italic">
-                "{inspectModalData.item.consumptionEvaluation.feedbackNotes}"
+                "{inspectModalData.item.consumptionEvaluation?.feedbackNotes || 'Porsi gizi dihabiskan dengan baik oleh siswa.'}"
               </p>
             </div>
 

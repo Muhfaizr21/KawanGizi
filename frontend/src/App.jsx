@@ -235,7 +235,7 @@ export default function App() {
     }
 
     return (
-      <RequireRole roles={['validator']}>
+      <RequireRole roles={['validator', 'superadmin', 'sppg']}>
         {path === '/validator/scan' || path === '/validator/foodscan' ? (
           <ValidatorFoodScanPage />
         ) : path === '/validator/handover' ? (

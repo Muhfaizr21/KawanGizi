@@ -443,6 +443,7 @@ export function ValidatorHandoverPage() {
       )
 
       loadBundle(selectedNpsn, true)
+      window.dispatchEvent(new CustomEvent('mbg_data_updated', { detail: { type: 'bast', result } }))
     } catch (err) {
       console.error('Submit BAST error:', err)
       showToast('Gagal menerbitkan BAST: ' + (err.message || 'Error server'), 'error')
@@ -622,8 +623,8 @@ export function ValidatorHandoverPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                SDN 01 MENTENG
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                {school.name || 'SEKOLAH PANTAU'}
               </span>
               <span className="text-slate-400 text-xs font-mono">NPSN: {school.npsn}</span>
             </div>
@@ -724,7 +725,7 @@ export function ValidatorHandoverPage() {
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-400 font-medium">
-              Verifikasi 13 kontainer termal (1 kontainer = 50 porsi) di gerbang penerimaan sekolah.
+              Verifikasi {totalTotes} kontainer termal (1 kontainer = {toteCapacity} porsi) di gerbang penerimaan {school.name}.
             </p>
 
             <div className="mt-4 grid grid-cols-4 sm:grid-cols-5 gap-2.5">

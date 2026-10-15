@@ -451,7 +451,7 @@ export function ValidatorFoodScanPage() {
       formData.append('boxId', buildBoxId())
 
       // Execute POST request to backend API
-      const response = await api('/api/v1/scan', {
+      const response = await api('/api/scans', {
         method: 'POST',
         body: formData,
       })
@@ -463,6 +463,9 @@ export function ValidatorFoodScanPage() {
       // Prepend new scan result to historyList so the table updates instantly
       setHistoryList((prev) => [payload, ...(Array.isArray(prev) ? prev : [])])
       refreshRecent()
+
+      // Broadcast update ke dashboard agar telemetri langsung terbarui
+      window.dispatchEvent(new CustomEvent('mbg_data_updated', { detail: { type: 'scan', payload } }))
     } catch (error) {
       console.error('Scan submission error:', error)
       setActionError(errorMessage(error))

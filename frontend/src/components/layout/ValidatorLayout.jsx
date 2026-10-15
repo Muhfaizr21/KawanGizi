@@ -81,7 +81,7 @@ const VALIDATOR_NOTIFICATIONS = [
 export function ValidatorLayout({
   activeMenu = 'dashboard',
   title = 'Dashboard Validator',
-  subtitle = 'Pemantauan distribusi pangan, hitung mundur HACCP 4 jam & kepatuhan mutu sekolah.',
+  subtitle = 'Pemantauan distribusi pangan, telemetri sensorik & kepatuhan mutu sekolah.',
   children,
   primaryAction,
   secondaryAction,
@@ -538,15 +538,23 @@ export function ValidatorLayout({
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{title}</h1>
               <p className="text-xs text-slate-400 font-medium mt-1">
-                {subtitle || 'Pemantauan distribusi pangan, hitung mundur HACCP 4 jam & kepatuhan mutu sekolah.'}
+                {subtitle || 'Pemantauan distribusi pangan, telemetri sensorik & kepatuhan mutu sekolah.'}
               </p>
             </div>
 
-            {/* Donezo Top Right Pill Actions */}
-            <div className="flex items-center gap-2.5 shrink-0">
-              {secondaryAction}
-              {primaryAction}
-            </div>
+            {/* Donezo Top Right Actions (Responsive: 1 layer 2 cards on mobile, flex-row on desktop) */}
+            {(primaryAction || secondaryAction) && (
+              <div
+                className={`w-full sm:w-auto mt-2 sm:mt-0 shrink-0 gap-2 sm:gap-2.5 ${
+                  primaryAction && secondaryAction
+                    ? 'grid grid-cols-2 sm:flex sm:flex-row items-stretch sm:items-center'
+                    : 'flex items-stretch sm:items-center'
+                }`}
+              >
+                {primaryAction && <div className="w-full sm:w-auto sm:order-2 h-full flex">{primaryAction}</div>}
+                {secondaryAction && <div className="w-full sm:w-auto sm:order-1 h-full flex">{secondaryAction}</div>}
+              </div>
+            )}
           </div>
 
           {/* Page Body */}

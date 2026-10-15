@@ -26,7 +26,7 @@ import { ScheduleCharts } from './ScheduleCharts'
 import { AVAILABLE_BACKUP_FLEETS } from '../../data/scheduleData'
 import { StatusDot } from './tableKit'
 import { toScheduleView } from './scheduleView'
-import { rescheduleDelivery, sendDelayAlert, rerouteBackupFleet } from '../../lib/api'
+import { rescheduleDelivery, sendDelayAlert, rerouteBackupFleet, fetchBackupFleets } from '../../lib/api'
 
 export function SchedulePanel({
   schedulesList = [],
@@ -40,6 +40,17 @@ export function SchedulePanel({
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'on_time' | 'arrived' | 'delayed_traffic' | 'fleet_breakdown' | 'rescheduled'
   const [cityFilter, setCityFilter] = useState('all')
   const [density, setDensity] = useState('normal') // 'normal' | 'compact'
+  const [backupFleets, setBackupFleets] = useState(AVAILABLE_BACKUP_FLEETS)
+
+  useEffect(() => {
+    fetchBackupFleets()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setBackupFleets(data)
+        }
+      })
+      .catch((err) => console.warn('Gagal memuat armada cadangan:', err))
+  }, [])
 
   useEffect(() => {
     if (Array.isArray(schedulesList) && schedulesList.length > 0) {
@@ -249,7 +260,7 @@ export function SchedulePanel({
     if (!rerouteModalData || isSubmitting) return
 
     const { schedule, backupFleetId, notes } = rerouteModalData
-    const backupObj = AVAILABLE_BACKUP_FLEETS.find((b) => b.vehicleId === backupFleetId) || AVAILABLE_BACKUP_FLEETS[0]
+    const backupObj = backupFleets.find((b) => b.vehicleId === backupFleetId) || backupFleets[0]
 
     try {
       setIsSubmitting(true)
@@ -764,7 +775,7 @@ export function SchedulePanel({
                                 onClick={() => {
                                   setRerouteModalData({
                                     schedule: item,
-                                    backupFleetId: AVAILABLE_BACKUP_FLEETS[0].vehicleId,
+                                    backupFleetId: (backupFleets[0] || {}).vehicleId || 'BKP-01',
                                     notes: 'Kerusakan mesin di jalan, evakuasi porsi ke armada cadangan pendingin.'
                                   })
                                   setOpenMenuId(null)
@@ -1079,7 +1090,7 @@ export function SchedulePanel({
                   }
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-rose-600 cursor-pointer"
                 >
-                  {AVAILABLE_BACKUP_FLEETS.map((b) => (
+                  {backupFleets.map((b) => (
                     <option key={b.vehicleId} value={b.vehicleId}>
                       {b.plateNumber} ({b.driverName}) - {b.depotLocation} [ETA Menuju TKP: {b.etaToScene}]
                     </option>
@@ -1387,7 +1398,7 @@ export function SchedulePanel({
                 onClick={() => {
                   setRerouteModalData({
                     schedule: selectedSchedule,
-                    backupFleetId: AVAILABLE_BACKUP_FLEETS[0].vehicleId,
+                    backupFleetId: (backupFleets[0] || {}).vehicleId || 'BKP-01',
                     notes: 'Kendala di rute, siagakan armada cadangan.'
                   })
                 }}

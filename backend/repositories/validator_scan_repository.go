@@ -551,8 +551,11 @@ func (r *pgValidatorScanRepository) GetHandoverBundle(ctx context.Context, userR
 		&sppg.Nutritionist, &sppg.SafetyScore, &sppg.Grade, &sppg.Phone,
 	)
 
-	// 3. Kuota porsi sekolah dari sppg_school_quotas
-	targetPortions := 650
+	// 3. Kuota porsi sekolah dari sppg_school_quotas atau total_students
+	targetPortions := sch.TotalStudents
+	if targetPortions <= 0 {
+		targetPortions = 650
+	}
 	var quotaPresent int
 	err := database.Pool().QueryRow(ctx, `
 		SELECT (present - reduce_special)
@@ -649,14 +652,14 @@ func (r *pgValidatorScanRepository) GetHandoverBundle(ctx context.Context, userR
 		}
 	}
 
-	// 6. Fleet Status
+	// 6. Fleet Status dari tabel schedules
 	fleet := models.ValidatorFleetStatus{
 		Status:      "tiba",
 		StatusLabel: "Tiba di Gerbang Sekolah",
-		Plate:       "B-9281-KBA",
-		Unit:        "Armada B-9281-KBA",
-		Driver:      "Bpk. Mulyono",
-		DriverPhone: "+62 812-1100-4477",
+		Plate:       "B 9842 SXZ",
+		Unit:        "Armada B 9842 SXZ (Van Pendingin)",
+		Driver:      "Hendra Setiawan",
+		DriverPhone: "+62 812-7711-2233",
 		Courier:     "Ekspedisi Dapur SPPG 01",
 		ETA:         "07:10 WIB",
 		DepartedAt:  "06:22 WIB",
@@ -664,13 +667,57 @@ func (r *pgValidatorScanRepository) GetHandoverBundle(ctx context.Context, userR
 		MasterTotes: masterTotesTotal,
 		Portions:    targetPortions,
 	}
-	if handover.CourierSign != "" {
+
+	var schedRow struct {
+		fleetName, licensePlate, driverName, driverPhone, departureTime, arrivalEta, status, routeName, statusLabel string
+		totalPortions int
+	}
+	err = database.Pool().QueryRow(ctx, `
+		SELECT COALESCE(fleet_name, ''), COALESCE(license_plate, ''), COALESCE(driver_name, ''),
+		       COALESCE(driver_phone, ''), COALESCE(departure_time, ''), COALESCE(arrival_eta, ''),
+		       COALESCE(status, 'arrived'), COALESCE(route_name, ''), COALESCE(total_portions, 0),
+		       COALESCE(status_label, '')
+		FROM schedules
+		WHERE sppg_id = $1 OR npsn = $2 OR school_id = $2
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, sch.SPPGID, sch.NPSN).Scan(
+		&schedRow.fleetName, &schedRow.licensePlate, &schedRow.driverName,
+		&schedRow.driverPhone, &schedRow.departureTime, &schedRow.arrivalEta,
+		&schedRow.status, &schedRow.routeName, &schedRow.totalPortions,
+		&schedRow.statusLabel,
+	)
+	if err == nil && schedRow.driverName != "" {
+		fleet.Driver = schedRow.driverName
+		if schedRow.driverPhone != "" {
+			fleet.DriverPhone = schedRow.driverPhone
+		}
+		if schedRow.licensePlate != "" {
+			fleet.Plate = schedRow.licensePlate
+			fleet.Unit = fmt.Sprintf("Armada %s (%s)", schedRow.licensePlate, schedRow.fleetName)
+		}
+		if schedRow.departureTime != "" {
+			fleet.DepartedAt = schedRow.departureTime
+		}
+		if schedRow.arrivalEta != "" {
+			fleet.ETA = schedRow.arrivalEta
+		}
+		if schedRow.routeName != "" {
+			fleet.Route = schedRow.routeName
+		}
+		if schedRow.status != "" {
+			fleet.Status = schedRow.status
+		}
+		if schedRow.statusLabel != "" {
+			fleet.StatusLabel = schedRow.statusLabel
+		}
+	} else if handover.CourierSign != "" {
 		fleet.Driver = handover.CourierSign
 	}
 
-	// 7. Pilihan sekolah untuk Superadmin switcher
+	// 7. Pilihan sekolah untuk Superadmin & Validator switcher
 	var schoolOptions []models.ValidatorSchoolOption
-	if userRole == models.RoleSuperadmin {
+	if userRole == models.RoleSuperadmin || userRole == models.RoleValidator {
 		schRows, err := database.Pool().Query(ctx, `
 			SELECT s.npsn, s.name, s.sppg_id, COALESCE(k.name, 'SPPG Sentral')
 			FROM schools s

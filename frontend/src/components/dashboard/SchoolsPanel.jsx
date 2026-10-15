@@ -20,12 +20,13 @@ import {
   HeartPulse,
   Navigation,
   Compass,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react'
 import { SchoolsCharts } from './SchoolsCharts'
 import { AVAILABLE_SPPG_ALTERNATIVES, NUTRITION_STANDARDS } from '../../data/schoolsData'
 import { Figure, RowAction, StatusDot } from './tableKit'
-import { createSchool, reassignSchoolSPPG, updateSchoolContacts, toggleSchoolStatus } from '../../lib/api'
+import { createSchool, reassignSchoolSPPG, updateSchoolContacts, toggleSchoolStatus, deleteSchool, fetchSppgList } from '../../lib/api'
 import { toSchoolView } from './schoolView'
 
 export function SchoolsPanel({
@@ -36,6 +37,29 @@ export function SchoolsPanel({
 }) {
   const [schools, setSchools] = useState(schoolsList)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [sppgList, setSppgList] = useState(AVAILABLE_SPPG_ALTERNATIVES)
+
+  useEffect(() => {
+    fetchSppgList()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped = data.map((k) => ({
+            id: k.id,
+            name: k.name,
+            code: k.code || k.id,
+            city: k.city || 'DKI Jakarta',
+            address: k.address || '',
+            capacity: k.capacity || 3000,
+            remainingCapacity: (k.capacity || 3000) - ((k.activeSchoolsCount || 0) * 500),
+            activeSchoolsCount: k.activeSchoolsCount || 0,
+            status: k.status || 'Active',
+            safetyScore: k.safetyScore || 99.0,
+          }))
+          setSppgList(mapped)
+        }
+      })
+      .catch((err) => console.warn('Gagal memuat SPPG real dari DB:', err))
+  }, [])
 
   // Sync state whenever parent schoolsList finishes async load
   useEffect(() => {
@@ -60,6 +84,7 @@ export function SchoolsPanel({
   const [reassignModalData, setReassignModalData] = useState(null) // { school, targetSppgId, reason }
   const [contactModalData, setContactModalData] = useState(null) // { school, formData }
   const [suspendModalData, setSuspendModalData] = useState(null) // { school, reason, returnDate }
+  const [deleteModalData, setDeleteModalData] = useState(null) // { school, reason }
 
   // Form state for Onboarding new school
   const [newSchoolForm, setNewSchoolForm] = useState({
@@ -215,7 +240,7 @@ export function SchoolsPanel({
     const lower = Number(newSchoolForm.lowerGrade) || 0
     const upper = Number(newSchoolForm.upperGrade) || 0
     const smp = Number(newSchoolForm.smpGrade) || 0
-    const assignedSppg = AVAILABLE_SPPG_ALTERNATIVES.find((s) => s.id === newSchoolForm.sppgId) || AVAILABLE_SPPG_ALTERNATIVES[0]
+    const assignedSppg = sppgList.find((s) => s.id === newSchoolForm.sppgId) || sppgList[0] || { id: 'SPPG-01' }
 
     const payload = {
       npsn: newSchoolForm.npsn.trim(),
@@ -260,7 +285,7 @@ export function SchoolsPanel({
     if (!reassignModalData) return
 
     const { school, targetSppgId, reason } = reassignModalData
-    const selectedSppgObj = AVAILABLE_SPPG_ALTERNATIVES.find((s) => s.id === targetSppgId)
+    const selectedSppgObj = sppgList.find((s) => s.id === targetSppgId)
 
     if (!selectedSppgObj && !targetSppgId) {
       showToast('Pilih Dapur SPPG pengganti!')
@@ -354,6 +379,30 @@ export function SchoolsPanel({
       onReload?.()
     } catch (err) {
       showToast(`Gagal mengubah status sekolah: ${err.message || 'Kesalahan server'}`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Handle Delete School
+  const handleDeleteSchoolSubmit = async (e) => {
+    if (onSuperadminAction?.('DELETE_SCHOOL')?.allowed === false) return
+    e.preventDefault()
+    if (!deleteModalData) return
+
+    const { school, reason } = deleteModalData
+    setIsSubmitting(true)
+    try {
+      await deleteSchool(school.npsn, reason)
+      setSchools((prev) => prev.filter((s) => s.npsn !== school.npsn))
+      if (selectedSchool && selectedSchool.npsn === school.npsn) {
+        setSelectedSchool(null)
+      }
+      setDeleteModalData(null)
+      showToast(`[PENGHAPUSAN BERHASIL] Sekolah ${school.name} (NPSN ${school.npsn}) telah dihapus dari sistem.`)
+      onReload?.()
+    } catch (err) {
+      showToast(`Gagal menghapus sekolah: ${err.message || 'Kesalahan server'}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -808,7 +857,7 @@ export function SchoolsPanel({
                                 onClick={() => {
                                   setReassignModalData({
                                     school: item,
-                                    targetSppgId: AVAILABLE_SPPG_ALTERNATIVES[0].id,
+                                    targetSppgId: (sppgList[0] || {}).id || 'SPPG-01',
                                     reason: 'Jarak tempuh terlalu padat',
                                   })
                                   setOpenMenuId(null)
@@ -868,6 +917,22 @@ export function SchoolsPanel({
                                     ? 'Aktifkan kembali alokasi'
                                     : 'Nonaktifkan sementara'}
                                 </span>
+                              </button>
+
+                              <div className="border-t border-slate-100 my-1" />
+
+                              <button
+                                onClick={() => {
+                                  setDeleteModalData({
+                                    school: item,
+                                    reason: '',
+                                  })
+                                  setOpenMenuId(null)
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-rose-50 flex items-center gap-2 text-rose-700 cursor-pointer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Hapus sekolah binaan</span>
                               </button>
                             </div>
                           )}
@@ -1095,9 +1160,9 @@ export function SchoolsPanel({
                   onChange={(e) => setNewSchoolForm({ ...newSchoolForm, sppgId: e.target.value })}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer bg-white"
                 >
-                  {AVAILABLE_SPPG_ALTERNATIVES.map((s) => (
+                  {sppgList.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({s.city}) - Sisa Kapasitas: {s.remainingCapacity} porsi/hari
+                      {s.name} ({s.city}) - Sisa Kapasitas: {s.remainingCapacity != null ? s.remainingCapacity : 1200} porsi/hari
                     </option>
                   ))}
                 </select>
@@ -1169,11 +1234,11 @@ export function SchoolsPanel({
                   }
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
                 >
-                  {AVAILABLE_SPPG_ALTERNATIVES.filter(
-                    (s) => s.id !== reassignModalData.school.sppgSupplier.id
+                  {sppgList.filter(
+                    (s) => s.id !== reassignModalData.school.sppgSupplier?.id
                   ).map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} ({s.city}) - Sisa Kapasitas: {s.remainingCapacity} porsi
+                      {s.name} ({s.city}) - Sisa Kapasitas: {s.remainingCapacity != null ? s.remainingCapacity : 1200} porsi
                     </option>
                   ))}
                 </select>
@@ -1510,6 +1575,78 @@ export function SchoolsPanel({
                       <span>{isSubmitting ? 'Memproses...' : 'Aktifkan Kembali Distribusi'}</span>
                     </>
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ====================================================================
+          MODAL: KONFIRMASI HAPUS SEKOLAH BINAAN (PERMANEN)
+          ==================================================================== */}
+      {deleteModalData && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Konfirmasi hapus sekolah binaan"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in"
+          onClick={() => !isSubmitting && setDeleteModalData(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-extrabold text-slate-900">Hapus Sekolah Binaan</h3>
+                <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                  Sekolah beserta seluruh data operasionalnya akan dihapus permanen dari pangkalan data MBG. Tindakan ini memerlukan otorisasi Superadmin.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-3 text-xs text-slate-700 space-y-1">
+              <p className="font-bold text-slate-900">{deleteModalData.school.name}</p>
+              <p className="font-mono text-[11px] text-slate-500">
+                NPSN: {deleteModalData.school.npsn} &bull; {deleteModalData.school.city} &bull; Dapur: {deleteModalData.school.sppg}
+              </p>
+            </div>
+
+            <form onSubmit={handleDeleteSchoolSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Alasan Penghapusan Sekolah (Wajib diisi):
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={deleteModalData.reason}
+                  onChange={(e) => setDeleteModalData({ ...deleteModalData, reason: e.target.value })}
+                  placeholder="Contoh: Sekolah merger dengan sekolah lain atau alih binaan..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-rose-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => setDeleteModalData(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer disabled:opacity-50"
+                >
+                  Batalkan
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !deleteModalData.reason.trim()}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>{isSubmitting ? 'Menghapus...' : 'Hapus Permanen'}</span>
                 </button>
               </div>
             </form>
@@ -1882,7 +2019,7 @@ export function SchoolsPanel({
                 onClick={() => {
                   setReassignModalData({
                     school: selectedSchool,
-                    targetSppgId: AVAILABLE_SPPG_ALTERNATIVES[0].id,
+                    targetSppgId: (sppgList[0] || {}).id || 'SPPG-01',
                     reason: 'Jarak tempuh terlalu padat'
                   })
                 }}

@@ -221,6 +221,13 @@ func (r *postgresAttendanceRepository) AdjustTomorrowQuota(ctx context.Context, 
 		return nil, ErrNotFound
 	}
 
+	// Sinkronisasi otomatis ke kuota dapur SPPG
+	_, _ = tx.Exec(ctx, `
+		UPDATE sppg_school_quotas
+		SET present = $1, updated_at = NOW()
+		WHERE npsn = (SELECT school_npsn FROM attendances WHERE id = $2)
+	`, req.NewQuota, id)
+
 	// Audit Log
 	auditID := uuid.NewString()
 	auditDetail := fmt.Sprintf("target_tomorrow_quota=%d; reason=%s", req.NewQuota, req.Reason)

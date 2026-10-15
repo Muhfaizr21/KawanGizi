@@ -120,6 +120,7 @@ export function SppgBatchesPanel() {
   const [quarantineReason, setQuarantineReason] = useState('')
   const [isSubmittingQuarantine, setIsSubmittingQuarantine] = useState(false)
   const [quarantineError, setQuarantineError] = useState('')
+  const [batchToDelete, setBatchToDelete] = useState(null)
 
   // Memuat data bundle lengkap dari backend sesuai dapur yang dipilih
   const loadBundle = useCallback(async (sppgIdToFetch) => {
@@ -790,7 +791,7 @@ export function SppgBatchesPanel() {
                         {b.status === 'draft' && (
                           <button
                             type="button"
-                            onClick={() => removeBatch(b.id)}
+                            onClick={() => setBatchToDelete(b)}
                             className={`rounded-lg px-2 py-1 text-[11px] font-semibold text-slate-500 transition hover:bg-rose-50 hover:text-rose-700 ${FOCUS}`}
                             title="Hapus batch draf"
                           >
@@ -1187,6 +1188,63 @@ export function SppgBatchesPanel() {
           </div>
         ))}
       </div>
+
+      {/* Modal Konfirmasi Hapus Batch Draf */}
+      {batchToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Konfirmasi hapus batch"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in"
+          onClick={() => setBatchToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-extrabold text-slate-900">Hapus Batch Draf</h3>
+                <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                  Batch masak berstatus draf ini akan dibatalkan dan dihapus permanen dari sistem.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 border border-slate-200 px-3.5 py-3 text-xs text-slate-700 space-y-1">
+              <p className="font-bold text-slate-900">{batchToDelete.code} &bull; {batchToDelete.menuName}</p>
+              <p className="text-[11px] text-slate-500 font-mono">
+                Porsi: {batchToDelete.portionTarget} boks &bull; Sekolah: {batchToDelete.schoolName}
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setBatchToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Batalkan
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const bId = batchToDelete.id
+                  setBatchToDelete(null)
+                  await removeBatch(bId)
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition shadow-sm cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Hapus Batch</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
