@@ -13,6 +13,7 @@ import (
 	"backend/models"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type SppgSchoolRepository interface {
@@ -30,82 +31,60 @@ func NewSppgSchoolRepository() SppgSchoolRepository {
 	return &pgSppgSchoolRepository{}
 }
 
-const schoolQuotaColumns = `
-	id, sppg_id, school_id, npsn, school_name, address, level, lat, lng,
-	enrolled, present, reduce_special, absence_note, present_updated_at,
-	specials, principal_name, validator_name, validator_phone, droppoint,
-	fleet_assigned, date, created_at, updated_at
+// schoolQuotaProjection menyatukan dua sumber data:
+//
+//   - schools            = sumber kebenaran membership. Sekolah terdaftar di dapurnya
+//     SPPG selalu tampil, walaupun belum pernah ada cuota harian.
+//   - sppg_school_quotas = overlay operasional per tanggal (presensi, porsi khusus,
+//     drop-point, PIC). Opsional: sekolah tanpa baris hari ini tetap tampil dengan
+//     status "Belum update" dan kuota cetak mengikuti jumlah siswa terdaftar.
+//
+// Sidecar LATERAL memastikan satu sekolah menghasilkan paling banyak satu baris,
+// walau tabel kuota sempat berisi bari ganda untuk NPSN yang sama.
+const schoolQuotaProjection = `
+	SELECT
+		COALESCE(q.id, 'q:' || s.npsn || ':' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD')) AS id,
+		s.sppg_id                                                                   AS sppg_id,
+		s.id                                                                        AS school_id,
+		s.npsn                                                                      AS npsn,
+		s.name                                                                      AS school_name,
+		COALESCE(NULLIF(q.address, ''), s.address, '')                              AS address,
+		COALESCE(NULLIF(q.level, ''), s.level, 'SD')                                AS level,
+		s.lat,
+		s.lng,
+		COALESCE(NULLIF(q.enrolled, 0), s.total_students, 0)                        AS enrolled,
+		COALESCE(q.present, 0)                                                      AS present,
+		COALESCE(q.reduce_special, 0)                                               AS reduce_special,
+		COALESCE(q.absence_note, '')                                                AS absence_note,
+		COALESCE(q.present_updated_at, '')                                          AS present_updated_at,
+		COALESCE(q.specials, '[]'::jsonb)                                           AS specials,
+		COALESCE(NULLIF(q.principal_name, ''), s.principal_name, '')                AS principal_name,
+		COALESCE(q.validator_name, '')                                              AS validator_name,
+		COALESCE(q.validator_phone, '')                                             AS validator_phone,
+		COALESCE(q.droppoint, '')                                                   AS droppoint,
+		COALESCE(q.fleet_assigned, '')                                              AS fleet_assigned,
+		TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD')                                         AS date
+	FROM schools s
+	LEFT JOIN LATERAL (
+		SELECT * FROM sppg_school_quotas q
+		WHERE q.sppg_id = s.sppg_id AND q.npsn = s.npsn AND q.date = CURRENT_DATE
+		ORDER BY q.updated_at DESC, q.id DESC
+		LIMIT 1
+	) q ON TRUE
 `
 
-func (r *pgSppgSchoolRepository) ListSchools(ctx context.Context, sppgID string) ([]models.SppgSchoolQuota, error) {
-	query := fmt.Sprintf(`
-		SELECT %s
-		FROM sppg_school_quotas
-		WHERE sppg_id = $1
-		ORDER BY id ASC
-	`, schoolQuotaColumns)
-
-	rows, err := database.Pool().Query(ctx, query, sppgID)
-	if err != nil {
-		return nil, fmt.Errorf("list schools failed: %w", err)
-	}
-	defer rows.Close()
-
-	var list []models.SppgSchoolQuota
-	for rows.Next() {
-		var s models.SppgSchoolQuota
-		var specBytes []byte
-		var d time.Time
-		err := rows.Scan(
-			&s.ID, &s.SppgID, &s.SchoolID, &s.Npsn, &s.Name, &s.Address, &s.Level, &s.Lat, &s.Lng,
-			&s.Enrolled, &s.Present, &s.ReduceSpecial, &s.AbsenceNote, &s.PresentUpdatedAt,
-			&specBytes, &s.Principal, &s.Validator, &s.ValidatorPhone, &s.Droppoint,
-			&s.Fleet, &d, &s.CreatedAt, &s.UpdatedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("scan school quota failed: %w", err)
-		}
-		s.Date = d.Format("2006-01-02")
-		if len(specBytes) > 0 {
-			_ = json.Unmarshal(specBytes, &s.Specials)
-		}
-		if s.Specials == nil {
-			s.Specials = []models.SpecialDietary{}
-		}
-
-		// Hitung kuota cetak & status presensi
-		s.PackingQuota = calculatePackingQuota(s.Enrolled, s.Present, s.ReduceSpecial, s.PresentUpdatedAt)
-		s.Status = calculateAttendanceStatus(s.PresentUpdatedAt)
-
-		list = append(list, s)
-	}
-	if list == nil {
-		list = []models.SppgSchoolQuota{}
-	}
-	return list, nil
-}
-
-func (r *pgSppgSchoolRepository) GetSchool(ctx context.Context, idOrSchoolID, sppgID string) (*models.SppgSchoolQuota, error) {
-	query := fmt.Sprintf(`
-		SELECT %s
-		FROM sppg_school_quotas
-		WHERE sppg_id = $1 AND (id = $2 OR school_id = $2 OR npsn = $2)
-		LIMIT 1
-	`, schoolQuotaColumns)
-
+// scanQuota memetakan satu baris hasil schoolQuotaProjection ke model.
+func scanQuota(row pgx.Row) (*models.SppgSchoolQuota, error) {
 	var s models.SppgSchoolQuota
 	var specBytes []byte
-	var d time.Time
-	err := database.Pool().QueryRow(ctx, query, sppgID, idOrSchoolID).Scan(
+	if err := row.Scan(
 		&s.ID, &s.SppgID, &s.SchoolID, &s.Npsn, &s.Name, &s.Address, &s.Level, &s.Lat, &s.Lng,
 		&s.Enrolled, &s.Present, &s.ReduceSpecial, &s.AbsenceNote, &s.PresentUpdatedAt,
 		&specBytes, &s.Principal, &s.Validator, &s.ValidatorPhone, &s.Droppoint,
-		&s.Fleet, &d, &s.CreatedAt, &s.UpdatedAt,
-	)
-	if err != nil {
-		return nil, errors.New("sekolah binaan tidak ditemukan")
+		&s.Fleet, &s.Date,
+	); err != nil {
+		return nil, err
 	}
-	s.Date = d.Format("2006-01-02")
 	if len(specBytes) > 0 {
 		_ = json.Unmarshal(specBytes, &s.Specials)
 	}
@@ -115,6 +94,62 @@ func (r *pgSppgSchoolRepository) GetSchool(ctx context.Context, idOrSchoolID, sp
 	s.PackingQuota = calculatePackingQuota(s.Enrolled, s.Present, s.ReduceSpecial, s.PresentUpdatedAt)
 	s.Status = calculateAttendanceStatus(s.PresentUpdatedAt)
 	return &s, nil
+}
+
+// specJSON menyandikan daftar porsi khusus untuk kolom JSONB.
+func specJSON(specials []models.SpecialDietary) []byte {
+	if specials == nil {
+		specials = []models.SpecialDietary{}
+	}
+	raw, _ := json.Marshal(specials)
+	return raw
+}
+
+func (r *pgSppgSchoolRepository) ListSchools(ctx context.Context, sppgID string) ([]models.SppgSchoolQuota, error) {
+	query := schoolQuotaProjection + `
+		WHERE s.sppg_id = $1
+		ORDER BY s.name ASC
+	`
+
+	rows, err := database.Pool().Query(ctx, query, sppgID)
+	if err != nil {
+		return nil, fmt.Errorf("list schools failed: %w", err)
+	}
+	defer rows.Close()
+
+	list := []models.SppgSchoolQuota{}
+	for rows.Next() {
+		s, err := scanQuota(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan school quota failed: %w", err)
+		}
+		list = append(list, *s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate school quota failed: %w", err)
+	}
+	return list, nil
+}
+
+func (r *pgSppgSchoolRepository) GetSchool(ctx context.Context, idOrSchoolID, sppgID string) (*models.SppgSchoolQuota, error) {
+	query := schoolQuotaProjection + `
+		WHERE s.sppg_id = $1
+		  AND (
+			s.id = $2 OR s.npsn = $2
+			OR COALESCE(q.id, 'q:' || s.npsn || ':' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD')) = $2
+			OR EXISTS (
+				SELECT 1 FROM sppg_school_quotas z
+				WHERE z.id = $2 AND z.sppg_id = s.sppg_id AND z.npsn = s.npsn
+			)
+		  )
+		LIMIT 1
+	`
+
+	s, err := scanQuota(database.Pool().QueryRow(ctx, query, sppgID, idOrSchoolID))
+	if err != nil {
+		return nil, errors.New("sekolah binaan tidak ditemukan")
+	}
+	return s, nil
 }
 
 func (r *pgSppgSchoolRepository) UpdateAttendance(ctx context.Context, idOrSchoolID, sppgID string, payload *models.UpdateAttendancePayload) (*models.SppgSchoolQuota, error) {
@@ -134,20 +169,36 @@ func (r *pgSppgSchoolRepository) UpdateAttendance(ctx context.Context, idOrSchoo
 	}
 	specJSON, _ := json.Marshal(specials)
 
+	// Upsert: sekolah binaaan yang belum pernah punya baris kuota hari ini
+	// tetap bisa dimutakhirkan — baris overlay-nya dibuat saat pertama kali disimpan.
 	query := `
-		UPDATE sppg_school_quotas
-		SET present = $1,
-		    reduce_special = $2,
-		    absence_note = $3,
-		    present_updated_at = $4,
-		    specials = $5,
-		    updated_at = NOW()
-		WHERE id = $6 AND sppg_id = $7
+		INSERT INTO sppg_school_quotas (
+			id, sppg_id, school_id, npsn, school_name, address, level, lat, lng,
+			enrolled, present, reduce_special, absence_note, present_updated_at,
+			specials, principal_name, validator_name, validator_phone, droppoint,
+			fleet_assigned, date
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11, $12, $13, $14,
+			$15, $16, $17, $18, $19,
+			$20, CURRENT_DATE
+		)
+		ON CONFLICT (id) DO UPDATE SET
+			enrolled = EXCLUDED.enrolled,
+			present = EXCLUDED.present,
+			reduce_special = EXCLUDED.reduce_special,
+			absence_note = EXCLUDED.absence_note,
+			present_updated_at = EXCLUDED.present_updated_at,
+			specials = EXCLUDED.specials,
+			updated_at = NOW()
 	`
 	_, err = database.Pool().Exec(
 		ctx, query,
-		payload.Present, payload.ReduceSpecial, payload.AbsenceNote,
-		presentTime, specJSON, target.ID, sppgID,
+		target.ID, sppgID, target.SchoolID, target.Npsn, target.Name, target.Address, target.Level,
+		target.Lat, target.Lng,
+		target.Enrolled, payload.Present, payload.ReduceSpecial, payload.AbsenceNote,
+		presentTime, specJSON, target.Principal, target.Validator, target.ValidatorPhone,
+		target.Droppoint, target.Fleet,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update attendance failed: %w", err)
@@ -171,18 +222,31 @@ func (r *pgSppgSchoolRepository) UpdateDroppoint(ctx context.Context, idOrSchool
 	}
 
 	query := `
-		UPDATE sppg_school_quotas
-		SET droppoint = $1,
-		    validator_name = $2,
-		    validator_phone = $3,
-		    principal_name = $4,
-		    updated_at = NOW()
-		WHERE id = $5 AND sppg_id = $6
+		INSERT INTO sppg_school_quotas (
+			id, sppg_id, school_id, npsn, school_name, address, level, lat, lng,
+			enrolled, present, reduce_special, absence_note, present_updated_at,
+			specials, principal_name, validator_name, validator_phone, droppoint,
+			fleet_assigned, date
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11, $12, $13, $14,
+			$15, $16, $17, $18, $19,
+			$20, CURRENT_DATE
+		)
+		ON CONFLICT (id) DO UPDATE SET
+			principal_name = EXCLUDED.principal_name,
+			validator_name = EXCLUDED.validator_name,
+			validator_phone = EXCLUDED.validator_phone,
+			droppoint = EXCLUDED.droppoint,
+			updated_at = NOW()
 	`
 	_, err = database.Pool().Exec(
 		ctx, query,
-		payload.Droppoint, payload.Validator, payload.ValidatorPhone,
-		principal, target.ID, sppgID,
+		target.ID, sppgID, target.SchoolID, target.Npsn, target.Name, target.Address, target.Level,
+		target.Lat, target.Lng,
+		target.Enrolled, target.Present, target.ReduceSpecial, target.AbsenceNote,
+		target.PresentUpdatedAt, specJSON(target.Specials), principal,
+		payload.Validator, payload.ValidatorPhone, payload.Droppoint, target.Fleet,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update droppoint failed: %w", err)
