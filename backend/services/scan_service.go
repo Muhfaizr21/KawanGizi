@@ -36,9 +36,20 @@ const (
 	minHoldingTempC = 60.0
 
 	maxImageBytes          = 8 << 20 // 8 MB
-	aiTimeout              = 30 * time.Second
 	minFreshnessConfidence = 0.70
 	minMenuConfidence      = 0.50
+
+	// defaultAITimeout memberi ruang bagi model YOLO yang lambat; dulu 30 detik
+	// sementara server HTTP memutus koneksi di detik ke-10, jadi pengguna tidak
+	// pernah melihat hasil, hanya "network error".
+	defaultAITimeout = 60 * time.Second
+	// defaultAIHealthTimeout untuk probe /health dari health check.
+	defaultAIHealthTimeout = 3 * time.Second
+	// defaultAIRetryAttempts = 1 percobaan tambahan, dipakai hanya untuk kegagalan
+	// sementara (koneksi putus / 5xx) yang sering terjadi saat service AI bangun
+	// dari cold start.
+	defaultAIRetryAttempts = 2
+	defaultAIRetryDelay    = 500 * time.Millisecond
 )
 
 // qrTokenPattern: token QR boks berformat MBG-... (mis. MBG-2026-SPPG01-SDN01P-B17).
@@ -129,23 +140,72 @@ type ScanService interface {
 	UpdateFeedback(ctx context.Context, id string, rating int, feedback string, tempC *float64) error
 	DeleteScan(ctx context.Context, actorID, id string) error
 	DeleteAllScans(ctx context.Context, actorID string) error
+	// CheckAIHealth memprobe layanan AI tanpa mengirim gambar, untuk health check.
+	CheckAIHealth(ctx context.Context) models.AIDependencyStatus
 }
 
 type scanService struct {
-	repo      repositories.ScanRepository
-	aiURL     string
-	nutrition NutritionService
-	client    *http.Client
+	repo         repositories.ScanRepository
+	aiURL        string
+	nutrition    NutritionService
+	client       *http.Client
+	healthClient *http.Client
+	// retryAttempts dan retryDelay mengatur percobaan ulang saat layanan AI
+	// kelihatan hidup tapi sedang sibuk atau belum siap.
+	retryAttempts int
+	retryDelay    time.Duration
+}
+
+// ScanOption menyesuaikan scanService tanpa mengubah NewScanService yang dipakai
+// banyak call site dan test.
+type ScanOption func(*scanService)
+
+// WithAITimeout menimpa batas waktu satu panggilan ke layanan AI.
+func WithAITimeout(d time.Duration) ScanOption {
+	return func(s *scanService) {
+		if d > 0 {
+			s.client.Timeout = d
+		}
+	}
+}
+
+// WithAIHealthTimeout menimpa batas waktu probe /health.
+func WithAIHealthTimeout(d time.Duration) ScanOption {
+	return func(s *scanService) {
+		if d > 0 {
+			s.healthClient.Timeout = d
+		}
+	}
+}
+
+// WithAIRetry mengatur jumlah percobaan dan jeda antar percobaan saat layanan AI
+// gagal karena masalah sementara.
+func WithAIRetry(attempts int, delay time.Duration) ScanOption {
+	return func(s *scanService) {
+		if attempts > 0 {
+			s.retryAttempts = attempts
+		}
+		if delay > 0 {
+			s.retryDelay = delay
+		}
+	}
 }
 
 // NewScanService injects the repository, AI service URL, and nutrition service (Dependency Injection).
-func NewScanService(repo repositories.ScanRepository, aiURL string, nutrition NutritionService) ScanService {
-	return &scanService{
-		repo:      repo,
-		aiURL:     strings.TrimRight(aiURL, "/"),
-		nutrition: nutrition,
-		client:    &http.Client{Timeout: aiTimeout},
+func NewScanService(repo repositories.ScanRepository, aiURL string, nutrition NutritionService, opts ...ScanOption) ScanService {
+	service := &scanService{
+		repo:          repo,
+		aiURL:         strings.TrimRight(strings.TrimSpace(aiURL), "/"),
+		nutrition:     nutrition,
+		client:        &http.Client{Timeout: defaultAITimeout},
+		healthClient:  &http.Client{Timeout: defaultAIHealthTimeout},
+		retryAttempts: defaultAIRetryAttempts,
+		retryDelay:    defaultAIRetryDelay,
 	}
+	for _, opt := range opts {
+		opt(service)
+	}
+	return service
 }
 
 // Predict forwards the image to the Python AI service (multipart field "image").
@@ -167,13 +227,65 @@ func (s *scanService) Predict(ctx context.Context, image []byte, fileName string
 		return nil, err
 	}
 	if status != http.StatusOK {
-		return nil, fmt.Errorf("AI service membalas HTTP %d", status)
+		return nil, fmt.Errorf("AI service membalas HTTP %d (pastikan AI_BACKEND_URL=%s menunjuk ke layanan AI yang hidup)", status, s.aiURL)
 	}
 	return pred, nil
 }
 
 // postPrediction mengirim satu foto ke endpoint AI dan membalas status HTTP-nya.
+// Kesalahan sementara (koneksi putus, 429, 5xx) dicoba ulang sebentar karena
+// layanan AI di platform ter-hosting sering butuh waktu untuk bangun dari cold start.
 func (s *scanService) postPrediction(ctx context.Context, path string, image []byte, fileName string) (*Prediction, int, error) {
+	var (
+		pred   *Prediction
+		status int
+		err    error
+	)
+	for attempt := 0; attempt < s.retryAttempts; attempt++ {
+		pred, status, err = s.doPrediction(ctx, path, image, fileName)
+		if !isTransientAIError(status, err) {
+			return pred, status, err
+		}
+		if attempt == s.retryAttempts-1 {
+			break
+		}
+		log.Printf("Peringatan: layanan AI gagal sementara (status=%d err=%v), mencoba ulang %d/%d", status, err, attempt+1, s.retryAttempts-1)
+		if !sleepCtx(ctx, s.retryDelay) {
+			return pred, status, err
+		}
+	}
+	return pred, status, err
+}
+
+// isTransientAIError menandai kegagalan yang layak dicoba ulang: layanan tidak
+// menjawab (koneksi refused/timeout) atau sedang menumpuk antrean (429/5xx).
+// 4xx lain berarti permintaan atau konfigurasi yang salah dan tidak akan berubah
+// dengan dicoba ulang.
+func isTransientAIError(status int, err error) bool {
+	if err != nil {
+		return true
+	}
+	return status == http.StatusTooManyRequests || status >= http.StatusInternalServerError
+}
+
+// sleepCtx menunda sebentar tanpa meninggalkan context, sehingga permintaan yang
+// sudah dibatalkan klien tidak tetap hidup selama masa tunggu.
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return true
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
+}
+
+// doPrediction melakukan satu percobaan HTTP tanpa logika retry.
+func (s *scanService) doPrediction(ctx context.Context, path string, image []byte, fileName string) (*Prediction, int, error) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("image", fileName)
@@ -195,7 +307,10 @@ func (s *scanService) postPrediction(ctx context.Context, path string, image []b
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("memanggil AI service: %w", err)
+		if s.aiURL == "" {
+			return nil, 0, fmt.Errorf("AI_BACKEND_URL belum diisi, layanan AI tidak bisa dihubungi: %w", err)
+		}
+		return nil, 0, fmt.Errorf("memanggil AI service di %s: %w", s.aiURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -212,6 +327,54 @@ func (s *scanService) postPrediction(ctx context.Context, path string, image []b
 		return nil, resp.StatusCode, fmt.Errorf("respons AI tidak valid: %w", err)
 	}
 	return pred, http.StatusOK, nil
+}
+
+// CheckAIHealth memprobe GET {AI_BACKEND_URL}/health tanpa mengirim gambar.
+// Nilai balik aman dipakai walau layanan AI mati total: pemanggil hanya perlu
+// tahu apakah pemindaian akan berhasil atau berakhir 502.
+func (s *scanService) CheckAIHealth(ctx context.Context) models.AIDependencyStatus {
+	status := models.AIDependencyStatus{URL: s.aiURL}
+	if s.aiURL == "" {
+		status.Detail = "AI_BACKEND_URL belum diisi"
+		return status
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.aiURL+"/health", nil)
+	if err != nil {
+		status.Detail = fmt.Sprintf("gagal menyusun request: %v", err)
+		return status
+	}
+
+	start := time.Now()
+	resp, err := s.healthClient.Do(req)
+	status.LatencyMS = time.Since(start).Milliseconds()
+	if err != nil {
+		status.Detail = fmt.Sprintf("tidak dapat menghubungi layanan AI: %v", err)
+		return status
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		status.Detail = fmt.Sprintf("layanan AI membalas HTTP %d", resp.StatusCode)
+		return status
+	}
+
+	// Bentuk respons minimal; field lain di /health sengaja diabaikan.
+	var payload struct {
+		Status      string `json:"status"`
+		ModelLoaded *bool  `json:"model_loaded"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<18)).Decode(&payload); err != nil {
+		status.Detail = fmt.Sprintf("respons /health tidak valid: %v", err)
+		return status
+	}
+
+	status.Reachable = true
+	status.ModelsReady = payload.ModelLoaded != nil && *payload.ModelLoaded
+	if !status.ModelsReady {
+		status.Detail = "layanan AI hidup tetapi model belum termuat"
+	}
+	return status
 }
 
 // SubmitScan runs the two-stage verification (QR + visual AI), persists scan_logs,

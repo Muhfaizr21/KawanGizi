@@ -46,7 +46,7 @@ func TestLandingPageRenderFillsPlaceholders(t *testing.T) {
 }
 
 func TestRootServesLandingPageForBrowsers(t *testing.T) {
-	ctrl := NewHealthController(LandingPage{AppEnv: "development", Port: "8080", AIURL: "http://127.0.0.1:8083", WebURL: "http://localhost:5173"})
+	ctrl := NewHealthController(LandingPage{AppEnv: "development", Port: "8080", AIURL: "http://127.0.0.1:8083", WebURL: "http://localhost:5173"}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
@@ -62,7 +62,7 @@ func TestRootServesLandingPageForBrowsers(t *testing.T) {
 }
 
 func TestRootServesJSONForAPIClients(t *testing.T) {
-	ctrl := NewHealthController(LandingPage{AppEnv: "development", Port: "8080"})
+	ctrl := NewHealthController(LandingPage{AppEnv: "development", Port: "8080"}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Accept", "application/json")

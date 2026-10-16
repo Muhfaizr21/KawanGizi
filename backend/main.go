@@ -109,7 +109,10 @@ func main() {
 		time.Duration(cfg.JWTRefreshTTLHours)*time.Hour,
 	)
 	nutritionService := services.NewNutritionService(nutritionRepo)
-	scanService := services.NewScanService(scanRepo, cfg.AIBackendURL, nutritionService)
+	scanService := services.NewScanService(scanRepo, cfg.AIBackendURL, nutritionService,
+		services.WithAITimeout(cfg.AIRequestTimeout),
+		services.WithAIHealthTimeout(cfg.AIHealthCheckTimeout),
+	)
 	portalService := services.NewPortalService(portalRepo)
 	validatorService := services.NewValidatorService(validatorRepo)
 	sppgService := services.NewSppgService(sppgRepo)
@@ -141,7 +144,7 @@ func main() {
 		Port:   cfg.Port,
 		AIURL:  cfg.AIBackendURL,
 		WebURL: cfg.WebClientURL,
-	})
+	}, scanService)
 	itemCtrl := controllers.NewItemController(itemService)
 	authCtrl := controllers.NewAuthController(authService)
 	scanCtrl := controllers.NewScanController(scanService)
@@ -212,11 +215,26 @@ func main() {
 
 	// 7. Setup HTTP Server
 	server := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      handler,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		Addr:    ":" + cfg.Port,
+		Handler: handler,
+		// Batas baca tetap pendek (permintaan pemindaian hanya mengunggah satu
+		// foto), sedangkan batas tulis mengikuti lama inferensi AI lewat config.
+		ReadTimeout:  cfg.ServerReadTimeout,
+		WriteTimeout: cfg.ServerWriteTimeout,
 		IdleTimeout:  60 * time.Second,
+	}
+
+	// 7b. Peringatan dini untuk layanan AI. Kegagalan di sini tidak mematikan
+	// backend (endpoint lain tetap berguna), tapi pemindaian pasti berakhir 502,
+	// jadi harus terlihat di log boot dan bukan baru ketahuan saat dipakai.
+	probeCtx, probeCancel := context.WithTimeout(context.Background(), cfg.AIHealthCheckTimeout+2*time.Second)
+	aiStatus := scanService.CheckAIHealth(probeCtx)
+	probeCancel()
+	if aiStatus.ScanReady() {
+		fmt.Printf("🤖 Layanan AI siap di %s (%.0f ms)\n", aiStatus.URL, float64(aiStatus.LatencyMS))
+	} else {
+		fmt.Printf("⚠️  Layanan AI belum siap di %s: %s — POST /api/scans akan membalas 502\n", aiStatus.URL, aiStatus.Detail)
+		fmt.Printf("   Periksa AI_BACKEND_URL dan pastikan proses AI berjalan di alamat tersebut (GET %s/health)\n", aiStatus.URL)
 	}
 
 	// 8. Start Server in Goroutine

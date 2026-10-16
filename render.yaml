@@ -1,0 +1,74 @@
+# Blueprint Render untuk KawanGizi.
+#
+# Dua service wajib, karena pemindaian butuh keduanya:
+#   1. kawangizi-core-ai  — FastAPI YOLO (model di backend/model_ai)
+#   2. kawangizi-core-api — Go gateway yang memanggil service di atas
+#
+# Kegagalan yang paling sering terjadi: hanya service Go yang di-deploy, lalu
+# AI_BACKEND_URL masih http://127.0.0.1:8083. Backend hidup, tetapi setiap
+# POST /api/scans membalas 502. Periksa `data.ai` di /api/health untuk memastikan
+# service AI benar-benar terjangkau.
+#
+# CATATAN resource: lima model YOLO dimuat saat start. Paket free (512 MB) akan
+# kehabisan memori; pakai instance berbayar minimal 2 GB untuk service AI.
+
+services:
+  # ---------------------------------------------------------------- layanan AI
+  - type: web
+    name: kawangizi-core-ai
+    runtime: python
+    rootDir: backend
+    plan: starter
+    region: singapore
+    buildCommand: pip install --no-cache-dir -r ai_service/requirements.txt
+    # 0.0.0.0 wajib: host default uvicorn hanya mendengarkan di loopback, jadi
+    # request dari service lain akan ditolak.
+    startCommand: uvicorn app.main:app --app-dir ai_service --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Path model dibiarkan kosong: main.py memakai default ke backend/model_ai
+      # bila variabelnya tidak ada. Mengisi variabel dengan string kosong justru
+      # membuat model gagal dimuat.
+
+  # ------------------------------------------------------------------ backend Go
+  - type: web
+    name: kawangizi-core-api
+    runtime: go
+    rootDir: backend
+    buildCommand: go build -o /tmp/kawangizi-api .
+    startCommand: /tmp/kawangizi-api
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Wajib diisi di produksi. Pakai alamat publik service AI di atas.
+      - key: AI_BACKEND_URL
+        value: https://kawangizi-core-ai.onrender.com
+      # Pemindaian menunggu inferensi model; jangan lebih kecil dari
+      # AI_REQUEST_TIMEOUT_SECONDS atau koneksi diputus sebelum respons tiba.
+      - key: AI_REQUEST_TIMEOUT_SECONDS
+        value: "60"
+      - key: SERVER_WRITE_TIMEOUT_SECONDS
+        value: "90"
+      - key: CORS_ORIGINS
+        value: https://kawangizi.rentgoindonesia.com
+      - key: WEB_CLIENT_URL
+        value: https://kawangizi.rentgoindonesia.com
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_SSLMODE
+        value: require
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false

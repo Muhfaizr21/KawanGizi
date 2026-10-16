@@ -331,3 +331,114 @@ func TestSubmitScanDoesNotStoreSamePhotoTwice(t *testing.T) {
 		}
 	})
 }
+
+func TestSubmitScanRetriesTransientAIError(t *testing.T) {
+	// Layanan AI yang baru bangun dari cold start sempat membalas 503 sekali
+	// sebelum siap; pemindaian harus tetap berhasil, bukan langsung 502.
+	var attempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		if attempts == 1 {
+			http.Error(w, "model belum siap", http.StatusServiceUnavailable)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"menu_class_name": "nasi_kuning", "menu_confidence": 0.9,
+			"freshness_class_name": "Fresh", "freshness_confidence": 0.93,
+			"freshness_class_probabilities": map[string]any{"Fresh": 0.93, "Spoiled": 0.07},
+			"latency_ms":                    30,
+		})
+	}))
+	t.Cleanup(server.Close)
+
+	service := NewScanService(&scanRepoStub{}, server.URL, nil, WithAIRetry(2, 10*time.Millisecond))
+	if _, err := submitTestScan(t, service); err != nil {
+		t.Fatalf("percobaan ulang harus membuat pindai berhasil, dapat %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("harus ada 2 percobaan ke layanan AI, dapat %d", attempts)
+	}
+}
+
+func TestSubmitScanDoesNotRetryClientError(t *testing.T) {
+	// 400 berarti payload atau konfigurasi salah; mencoba ulang tidak akan
+	// memperbaikinya dan hanya membebani layanan AI.
+	var attempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	t.Cleanup(server.Close)
+
+	service := NewScanService(&scanRepoStub{}, server.URL, nil, WithAIRetry(3, 10*time.Millisecond))
+	if _, err := submitTestScan(t, service); err == nil || !strings.Contains(err.Error(), ErrAIUnavailable.Error()) {
+		t.Fatalf("expected ErrAIUnavailable, got %v", err)
+	}
+	if attempts != 1 {
+		t.Fatalf("4xx tidak boleh diulang, dapat %d percobaan", attempts)
+	}
+}
+
+func aiHealthServer(t *testing.T, body string) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+func TestCheckAIHealthReportsReadyService(t *testing.T) {
+	server := aiHealthServer(t, `{"status":"ok","model_loaded":true}`)
+	status := NewScanService(&scanRepoStub{}, server.URL, nil).CheckAIHealth(context.Background())
+
+	if !status.ScanReady() {
+		t.Fatalf("layanan AI yang melaporkan model siap harus deemed scan-ready, dapat %+v", status)
+	}
+	if status.URL != server.URL {
+		t.Fatalf("URL laporan = %q, ingin %q", status.URL, server.URL)
+	}
+}
+
+func TestCheckAIHealthReportsModelsNotLoaded(t *testing.T) {
+	server := aiHealthServer(t, `{"status":"unavailable","model_loaded":false}`)
+	status := NewScanService(&scanRepoStub{}, server.URL, nil).CheckAIHealth(context.Background())
+
+	if !status.Reachable {
+		t.Fatalf("layanan AI yang menjawab /health harus dianggap reachable, dapat %+v", status)
+	}
+	if status.ScanReady() {
+		t.Fatal("model yang belum termuat tidak boleh dilaporkan scan-ready")
+	}
+}
+
+func TestCheckAIHealthReportsUnreachableService(t *testing.T) {
+	// Server langsung ditutup: sama seperti AI_BACKEND_URL yang menunjuk ke
+	// alamat tanpa proses, penyebab paling umum scan 502 di hosting.
+	server := aiHealthServer(t, `{}`)
+	url := server.URL
+	server.Close()
+
+	status := NewScanService(&scanRepoStub{}, url, nil, WithAIHealthTimeout(500*time.Millisecond)).CheckAIHealth(context.Background())
+
+	if status.ScanReady() || status.Reachable {
+		t.Fatalf("layanan AI mati tidak boleh dilaporkan reachable, dapat %+v", status)
+	}
+	if status.Detail == "" {
+		t.Fatal("detail kegagalan wajib diisi supaya operator tahu apa yang salah")
+	}
+}
+
+func TestCheckAIHealthReportsMissingURL(t *testing.T) {
+	status := NewScanService(&scanRepoStub{}, "", nil).CheckAIHealth(context.Background())
+
+	if status.ScanReady() || status.Detail == "" {
+		t.Fatalf("AI_BACKEND_URL kosong harus dilaporkan sebagai konfigurasi rusak, dapat %+v", status)
+	}
+}

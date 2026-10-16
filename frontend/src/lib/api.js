@@ -4,6 +4,17 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ||
   `${window.location.protocol}//${window.location.hostname}:8080`
 
+// Fallback di atas menebak port 8080 di host yang sama. Itu benar untuk `npm run
+// dev`, tapi salah untuk build produksi yang disajikan lewat CDN atau reverse
+// proxy: semua permintaan (termasuk scan) gagal dengan "Failed to fetch" tanpa
+// petunjuk. Peringatan ini membuat salah konfigurasi terlihat saat build.
+if (!import.meta.env.VITE_API_BASE_URL) {
+  console.warn(
+    `[api] VITE_API_BASE_URL belum diisi — memakai fallback ${API_BASE}. ` +
+      'Untuk build produksi, isi VITE_API_BASE_URL (lihat frontend/.env.example).'
+  )
+}
+
 let accessToken = localStorage.getItem('mbg_access_token') || null
 let refreshPromise = null
 
