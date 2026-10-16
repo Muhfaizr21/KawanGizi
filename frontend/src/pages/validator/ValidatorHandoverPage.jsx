@@ -20,6 +20,7 @@ import {
   Info,
   ArrowUpRight,
   Plus,
+  Eye,
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -31,6 +32,7 @@ import {
   submitValidatorBast,
   resetValidatorHandover,
 } from '../../lib/api'
+import { BastPrintPortal, BastPreviewModal } from '../../components/validator/BastOfficialDocument'
 
 const TEMP_MIN_WARM = 60
 const TEMP_DANGER = 55
@@ -202,6 +204,7 @@ export function ValidatorHandoverPage() {
   const [toast, setToast] = useState(null)
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
   const [resetBusy, setResetBusy] = useState(false)
+  const [previewBastOpen, setPreviewBastOpen] = useState(false)
 
   const showToast = (message, tone = 'info') => {
     setToast({ message, tone })
@@ -672,14 +675,25 @@ export function ValidatorHandoverPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-2 rounded-full bg-[#185338] hover:bg-[#12422c] text-white px-5 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer"
-            >
-              <Printer className="h-4 w-4" />
-              Cetak Dokumen BAST
-            </button>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPreviewBastOpen(true)}
+                className="inline-flex items-center gap-2 rounded-full bg-white hover:bg-emerald-50 text-[#185338] border border-emerald-300 px-4 py-2.5 text-xs font-bold shadow-2xs transition cursor-pointer"
+              >
+                <Eye className="h-4 w-4" />
+                Pratinjau Dokumen
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-2 rounded-full bg-[#185338] hover:bg-[#12422c] text-white px-5 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer"
+              >
+                <Printer className="h-4 w-4" />
+                Cetak Dokumen BAST
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
@@ -962,6 +976,42 @@ export function ValidatorHandoverPage() {
         loading={resetBusy}
         onCancel={() => !resetBusy && setResetConfirmOpen(false)}
         onConfirm={handleResetSession}
+      />
+
+      {/* Official Government BAST Print Portal (Directly injected to document.body for pristine print/PDF) */}
+      <BastPrintPortal
+        school={school}
+        parentSppg={parentSppg}
+        fleet={fleet}
+        issued={issued}
+        totes={totes}
+        tempLogs={tempLogs}
+        avgTemp={avgTemp}
+        receivedPortions={receivedPortions}
+        orderedPortions={orderedPortions}
+        damagedPortions={damagedPortions}
+        driverStrokes={driverStrokes}
+        validatorStrokes={validatorStrokes}
+        user={user}
+      />
+
+      {/* Interactive On-Screen BAST Paper Preview Modal */}
+      <BastPreviewModal
+        isOpen={previewBastOpen}
+        onClose={() => setPreviewBastOpen(false)}
+        school={school}
+        parentSppg={parentSppg}
+        fleet={fleet}
+        issued={issued}
+        totes={totes}
+        tempLogs={tempLogs}
+        avgTemp={avgTemp}
+        receivedPortions={receivedPortions}
+        orderedPortions={orderedPortions}
+        damagedPortions={damagedPortions}
+        driverStrokes={driverStrokes}
+        validatorStrokes={validatorStrokes}
+        user={user}
       />
     </ValidatorLayout>
   )
