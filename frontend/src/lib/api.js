@@ -8,7 +8,7 @@ export const API_BASE = (
 
 export const AI_API_URL = (
   import.meta.env.VITE_AI_API_URL ||
-  'https://kawangizi.onrender.com'
+  'https://kawangizi-6vju.onrender.com'
 ).replace(/\/+$/, '')
 
 export const AI_API_BASE = AI_API_URL

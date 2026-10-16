@@ -197,6 +197,11 @@ app.add_middleware(
 )
 
 
+@app.get('/')
+async def root():
+    return {"message": "AI Service KawanGizi is Live"}
+
+
 @app.get('/health')
 def health() -> dict:
     loaded = (
