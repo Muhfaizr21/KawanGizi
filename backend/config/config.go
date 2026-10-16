@@ -111,7 +111,7 @@ func LoadConfig() *Config {
 		JWTRefreshTTLHours:  refreshTTL,
 		CORSOrigins:         strings.Split(getEnv("CORS_ORIGINS", "http://kawangizi.miomidev.com,https://kawangizi.miomidev.com,https://kawangizi.rentgoindonesia.com,http://localhost:5173,http://localhost:4173,http://localhost:8081,http://127.0.0.1:8081,http://localhost:8084"), ","),
 
-		AIBackendURL:         getEnv("AI_BACKEND_URL", "http://127.0.0.1:8083"),
+		AIBackendURL:         getEnv("AI_BACKEND_URL", "https://kawangizi-6vju.onrender.com"),
 		AIRequestTimeout:     aiRequestTimeout,
 		AIHealthCheckTimeout: aiHealthTimeout,
 		ServerReadTimeout:    readTimeout,
