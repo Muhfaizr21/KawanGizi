@@ -309,6 +309,10 @@ func (c *AuthController) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 func (c *AuthController) setRefreshCookie(w http.ResponseWriter, r *http.Request, value string, expires time.Time) {
 	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" || os.Getenv("APP_ENV") == "production"
+	sameSite := http.SameSiteLaxMode
+	if isSecure {
+		sameSite = http.SameSiteNoneMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookieName,
 		Value:    value,
@@ -316,12 +320,16 @@ func (c *AuthController) setRefreshCookie(w http.ResponseWriter, r *http.Request
 		Expires:  expires,
 		HttpOnly: true,
 		Secure:   isSecure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 	})
 }
 
 func (c *AuthController) clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
 	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" || os.Getenv("APP_ENV") == "production"
+	sameSite := http.SameSiteLaxMode
+	if isSecure {
+		sameSite = http.SameSiteNoneMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshCookieName,
 		Value:    "",
@@ -329,6 +337,6 @@ func (c *AuthController) clearRefreshCookie(w http.ResponseWriter, r *http.Reque
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   isSecure,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 	})
 }

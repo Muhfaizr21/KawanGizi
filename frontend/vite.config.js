@@ -9,6 +9,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   base: '/', // Required for cPanel root domain deployment
+  server: {
+    port: 8084,
+    host: true,
+    hmr: {
+      clientPort: 8084,
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
