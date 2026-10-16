@@ -183,6 +183,8 @@ app = FastAPI(title='MBG AI Service', version='1.0.0', lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://kawangizi.miomidev.com",
+        "http://kawangizi.miomidev.com",
         "https://kawangizi.rentgoindonesia.com",
         "http://kawangizi.rentgoindonesia.com",
         "http://localhost:5173",
@@ -190,7 +192,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8084",
     ],
-    allow_origin_regex=r"^https?://([a-zA-Z0-9-]+\.)*(rentgoindonesia\.com|onrender\.com)(:\d+)?$",
+    allow_origin_regex=r"^https?://([a-zA-Z0-9-]+\.)*(miomidev\.com|rentgoindonesia\.com|onrender\.com)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

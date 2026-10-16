@@ -18,6 +18,9 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 			origin := r.Header.Get("Origin")
 			if origin != "" {
 				isAllowed := allowed[origin] ||
+					origin == "https://kawangizi.miomidev.com" ||
+					origin == "http://kawangizi.miomidev.com" ||
+					strings.HasSuffix(origin, ".miomidev.com") ||
 					origin == "https://kawangizi.rentgoindonesia.com" ||
 					origin == "http://kawangizi.rentgoindonesia.com" ||
 					strings.HasSuffix(origin, ".rentgoindonesia.com") ||

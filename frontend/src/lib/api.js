@@ -13,6 +13,27 @@
  * 3. HTML meta tag: <meta name="api-base-url" content="...">
  * 4. Fallback ke URL backend VPS produksi atau relative path (bila reverse proxy Nginx digunakan).
  */
+function normalizeBaseUrl(url) {
+  if (!url) return ''
+  let trimmed = String(url).trim()
+  if (trimmed === '' || trimmed === '/' || trimmed.toLowerCase() === 'relative') {
+    return ''
+  }
+  trimmed = trimmed.replace(/\/+$/, '')
+
+  // Cegah browser memblokir request karena 'Mixed Content' jika halaman diakses via HTTPS
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    if (trimmed.startsWith('http://' + window.location.hostname)) {
+      return trimmed.replace(/^http:\/\//i, 'https://')
+    }
+    if (trimmed.startsWith('http://kawangizi.miomidev.com')) {
+      return trimmed.replace(/^http:\/\//i, 'https://')
+    }
+  }
+
+  return trimmed
+}
+
 function resolveApiBase() {
   const envUrl =
     import.meta.env.VITE_API_URL ??
@@ -20,33 +41,26 @@ function resolveApiBase() {
     import.meta.env.VITE_BACKEND_URL
 
   if (envUrl !== undefined && envUrl !== null) {
-    const trimmed = String(envUrl).trim()
-    if (trimmed === '' || trimmed === '/' || trimmed.toLowerCase() === 'relative') {
-      return ''
-    }
-    return trimmed.replace(/\/+$/, '')
+    return normalizeBaseUrl(envUrl)
   }
 
   if (typeof window !== 'undefined') {
     if (window.__API_URL__) {
-      const wUrl = String(window.__API_URL__).trim()
-      return (wUrl === '' || wUrl === '/' || wUrl.toLowerCase() === 'relative') ? '' : wUrl.replace(/\/+$/, '')
+      return normalizeBaseUrl(window.__API_URL__)
     }
     if (window.__ENV__?.VITE_API_URL || window.__ENV__?.VITE_API_BASE_URL) {
-      const wEnv = String(window.__ENV__.VITE_API_URL || window.__ENV__.VITE_API_BASE_URL).trim()
-      return (wEnv === '' || wEnv === '/' || wEnv.toLowerCase() === 'relative') ? '' : wEnv.replace(/\/+$/, '')
+      return normalizeBaseUrl(window.__ENV__.VITE_API_URL || window.__ENV__.VITE_API_BASE_URL)
     }
     if (typeof document !== 'undefined') {
       const meta = document.querySelector('meta[name="api-base-url"]')
       if (meta && meta.getAttribute('content')) {
-        const mVal = meta.getAttribute('content').trim()
-        return (mVal === '' || mVal === '/' || mVal.toLowerCase() === 'relative') ? '' : mVal.replace(/\/+$/, '')
+        return normalizeBaseUrl(meta.getAttribute('content'))
       }
     }
   }
 
-  // Fallback backend VPS produksi / hosting
-  return 'http://kawangizi.miomidev.com'
+  // Fallback backend VPS produksi
+  return normalizeBaseUrl('http://kawangizi.miomidev.com')
 }
 
 /**
@@ -59,32 +73,26 @@ function resolveAiApiBase() {
     import.meta.env.VITE_AI_BACKEND_URL
 
   if (envUrl !== undefined && envUrl !== null) {
-    const trimmed = String(envUrl).trim()
-    if (trimmed === '' || trimmed === '/' || trimmed.toLowerCase() === 'relative') {
-      return ''
-    }
-    return trimmed.replace(/\/+$/, '')
+    return normalizeBaseUrl(envUrl)
   }
 
   if (typeof window !== 'undefined') {
     if (window.__AI_API_URL__) {
-      const wUrl = String(window.__AI_API_URL__).trim()
-      return (wUrl === '' || wUrl === '/' || wUrl.toLowerCase() === 'relative') ? '' : wUrl.replace(/\/+$/, '')
+      return normalizeBaseUrl(window.__AI_API_URL__)
     }
     if (window.__ENV__?.VITE_AI_API_URL) {
-      const wEnv = String(window.__ENV__.VITE_AI_API_URL).trim()
-      return (wEnv === '' || wEnv === '/' || wEnv.toLowerCase() === 'relative') ? '' : wEnv.replace(/\/+$/, '')
+      return normalizeBaseUrl(window.__ENV__.VITE_AI_API_URL)
     }
     if (typeof document !== 'undefined') {
       const meta = document.querySelector('meta[name="ai-api-url"]')
       if (meta && meta.getAttribute('content')) {
-        const mVal = meta.getAttribute('content').trim()
-        return (mVal === '' || mVal === '/' || mVal.toLowerCase() === 'relative') ? '' : mVal.replace(/\/+$/, '')
+        return normalizeBaseUrl(meta.getAttribute('content'))
       }
     }
   }
 
-  return 'https://kawangizi-6vju.onrender.com'
+  // Fallback AI VPS produksi
+  return normalizeBaseUrl('http://kawangizi.miomidev.com')
 }
 
 export const API_BASE = resolveApiBase()
@@ -93,8 +101,7 @@ export const AI_API_BASE = AI_API_URL
 
 if (!import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_BASE_URL && !import.meta.env.VITE_BACKEND_URL) {
   console.info(
-    `[api] Menggunakan backend fallback: ${API_BASE || '(relative path)'}. ` +
-      'Untuk build VPS kustom, sediakan VITE_API_URL.'
+    `[api] Menggunakan backend fallback VPS: ${API_BASE || '(relative path)'}.`
   )
 }
 
