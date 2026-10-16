@@ -75,7 +75,7 @@ export const ROLES_DATA = [
     title: 'Pemindai Visual Kelayakan Porsi di Titik Terakhir',
     desc: 'Validator menggunakan kamera ponsel untuk memindai porsi makanan sesaat sebelum dibagikan. YOLOv8 mendeteksi anomali fisik secara instan, memberikan keputusan lolos/tidak lolos tanpa memerlukan keahlian gizi.',
     points: [
-      'Akses kamera langsung, tanpa unduh aplikasi tambahan',
+      'Akses via PWA ringan langsung dari browser atau pasang di layar utama',
       'Indikator visual: hijau (aman) / merah (tidak layak konsumsi)',
       'Estimasi makronutrien otomatis ditampilkan berdampingan',
       'Riwayat pemindaian harian tersinkron ke buku catatan digital'

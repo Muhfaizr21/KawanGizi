@@ -1,11 +1,11 @@
 // KawanGizi Service Worker (Offline caching + Network-first strategy)
-const CACHE_NAME = 'kawangizi-pwa-v1';
+const CACHE_NAME = 'kawangizi-pwa-v2';
 
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.svg',
+  '/kawangizi-logo.webp',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   '/apple-touch-icon.png'

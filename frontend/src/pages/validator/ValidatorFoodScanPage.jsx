@@ -39,6 +39,7 @@ import {
   uploadUrl,
 } from '../../lib/api'
 import { ImageCapturePanel } from '../../components/shared/ImageCapturePanel'
+import { ImagePreviewModal } from '../../components/shared/ImagePreviewModal'
 import { ScanModeModal } from '../../components/validator/ScanModeModal'
 import { SCAN_MODES, SCAN_SOURCES } from '../../lib/scanMode'
 import { ScanModeResult } from '../../components/validator/ScanModeResult'
@@ -109,6 +110,7 @@ export function ValidatorFoodScanPage() {
 
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState(null)
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
   const [formError, setFormError] = useState('')
   const [actionError, setActionError] = useState('')
 
@@ -667,6 +669,8 @@ export function ValidatorFoodScanPage() {
             onCapture={acceptFile}
             onScanStart={() => setIsLoading(true)}
             onScanRequest={handleScanRequest}
+            onPreviewClick={() => setIsPreviewModalOpen(true)}
+            detections={scanResult?.compartments || scanResult?.detections || []}
             disabled={analyzing || isScanning}
             label=""
             title="Pemindai Visual Kelayakan & Makronutrien AI"
@@ -806,6 +810,7 @@ export function ValidatorFoodScanPage() {
           result={scanResult}
           preview={preview}
           macros={scanResult.macros || scanResult.batchInfo?.macros}
+          onPreviewClick={() => setIsPreviewModalOpen(true)}
         />
 
         {/* Ringkasan menu terdaftar,Panel pemeriksaan yang gagal, dan manfaat
@@ -1415,6 +1420,16 @@ export function ValidatorFoodScanPage() {
         title={toast?.title}
         message={toast?.message}
         onDismiss={() => setToast(null)}
+      />
+
+      {/* Interactive YOLOv8 Image Preview Modal with Zoom, Rotate, and Bounding Boxes */}
+      <ImagePreviewModal
+        isOpen={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        imageUrl={preview}
+        detections={scanResult?.compartments || scanResult?.detections || scanResult?.raw_response?.compartments || []}
+        title="Inspeksi Visual Sekat YOLOv8"
+        subtitle={scanResult?.kelayakan?.ringkasan || "Pindai & Analisis Sekat Gizi KawanGizi"}
       />
     </ValidatorLayout>
   </>

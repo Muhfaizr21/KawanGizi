@@ -11,11 +11,25 @@ const PWAContext = createContext({
 
 export function PWAProvider({ children }) {
   const [isInstalled, setIsInstalled] = useState(false)
-  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [deferredPrompt, setDeferredPrompt] = useState(() => (typeof window !== 'undefined' ? window.__deferredInstallPrompt : null))
   const [isMobile, setIsMobile] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
 
   useEffect(() => {
+    // Check if prompt was captured early by inline script
+    if (typeof window !== 'undefined' && window.__deferredInstallPrompt) {
+      console.log('beforeinstallprompt fired! (early capture in window.__deferredInstallPrompt)')
+      setDeferredPrompt(window.__deferredInstallPrompt)
+    }
+
+    const handleEarlyPrompt = () => {
+      console.log('beforeinstallprompt fired! (via pwa:promptready event)')
+      if (typeof window !== 'undefined' && window.__deferredInstallPrompt) {
+        setDeferredPrompt(window.__deferredInstallPrompt)
+      }
+    }
+    window.addEventListener('pwa:promptready', handleEarlyPrompt)
+
     // 1. Detect Mobile / Tablet Environment
     const ua = navigator.userAgent || ''
     const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet/i.test(ua)
@@ -60,16 +74,23 @@ export function PWAProvider({ children }) {
 
     // 3. Listen for 'beforeinstallprompt'
     const handleBeforeInstallPrompt = (e) => {
+      console.log('beforeinstallprompt fired!', e)
       // Prevent browser default mini-infobar
       e.preventDefault()
       // Store event for later activation
       setDeferredPrompt(e)
+      if (typeof window !== 'undefined') {
+        window.__deferredInstallPrompt = e
+      }
     }
 
     // 4. Listen for 'appinstalled'
     const handleAppInstalled = () => {
       setIsInstalled(true)
       setDeferredPrompt(null)
+      if (typeof window !== 'undefined') {
+        window.__deferredInstallPrompt = null
+      }
       console.log('[PWA] Aplikasi KawanGizi berhasil dipasang (appinstalled).')
     }
 
@@ -79,6 +100,7 @@ export function PWAProvider({ children }) {
     window.addEventListener('appinstalled', handleAppInstalled)
 
     return () => {
+      window.removeEventListener('pwa:promptready', handleEarlyPrompt)
       if (mediaQueryList.removeEventListener) {
         mediaQueryList.removeEventListener('change', handleDisplayModeChange)
       } else if (mediaQueryList.removeListener) {
@@ -91,34 +113,44 @@ export function PWAProvider({ children }) {
 
   // Method to trigger the installation prompt
   const promptInstall = useCallback(async () => {
-    if (!deferredPrompt) {
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? window.__deferredInstallPrompt : null)
+    if (!promptEvent) {
       return null
     }
 
     try {
       // Show the install prompt
-      deferredPrompt.prompt()
+      await promptEvent.prompt()
 
       // Wait for user choice
-      const choiceResult = await deferredPrompt.userChoice
+      const choiceResult = await promptEvent.userChoice
       if (choiceResult && choiceResult.outcome === 'accepted') {
         setIsInstalled(true)
-        setDeferredPrompt(null)
       }
       return choiceResult
     } catch (err) {
       console.error('[PWA] Gagal memicu install prompt:', err)
       return null
+    } finally {
+      // Clear deferredPrompt regardless of whether accepted or dismissed
+      setDeferredPrompt(null)
+      if (typeof window !== 'undefined') {
+        window.__deferredInstallPrompt = null
+      }
     }
   }, [deferredPrompt])
 
   const clearDeferredPrompt = useCallback(() => {
     setDeferredPrompt(null)
+    if (typeof window !== 'undefined') {
+      window.__deferredInstallPrompt = null
+    }
   }, [])
 
   const value = {
     isInstalled,
     deferredPrompt,
+    setDeferredPrompt,
     isMobile,
     isIOS,
     promptInstall,

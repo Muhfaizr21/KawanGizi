@@ -6,6 +6,7 @@ import { ArrowIcon } from '../ui/Icons'
 import { CtaButton } from '../ui/CtaButton'
 import { useAuth } from '../../context/AuthContext'
 import { homeForRole } from '../../lib/api'
+import { User } from 'lucide-react'
 
 function isActive(href, path) {
   if (href === '/') return path === '/' || path === '' || path === '/home'
@@ -20,7 +21,7 @@ export function SiteHeader({ path }) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/90 backdrop-blur-md">
-      <nav aria-label="Utama" className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <nav aria-label="Utama" className="relative mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4">
         {/* Left: Brand Logo */}
         <div className="flex items-center">
           <a href="/" className="flex items-center gap-2.5 text-xl font-black tracking-tight text-gray-900 group">
@@ -52,7 +53,7 @@ export function SiteHeader({ path }) {
           ))}
         </ul>
 
-        {/* Right: Actions */}
+        {/* Right: Actions for Desktop */}
         <div className="hidden md:flex items-center gap-3">
           <a
             href="/mulai"
@@ -68,19 +69,29 @@ export function SiteHeader({ path }) {
           </a>
         </div>
 
-        {/* Mobile Hamburger Toggle */}
-        <button
-          type="button"
-          className="rounded p-2 text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 md:hidden"
-          aria-expanded={open}
-          aria-controls="mobile-menu"
-          aria-label={open ? 'Tutup menu' : 'Buka menu'}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </button>
+        {/* Mobile Header Actions: Direct Login Button + Hamburger Menu */}
+        <div className="flex items-center gap-2 md:hidden">
+          <a
+            href={authTarget}
+            className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-black active:scale-95 transition-all"
+            aria-label={authLabel}
+          >
+            <User className="h-3.5 w-3.5" />
+            <span>{authLabel}</span>
+          </a>
+          <button
+            type="button"
+            className="rounded-lg p-2 text-gray-900 hover:bg-gray-100 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+            aria-label={open ? 'Tutup menu' : 'Buka menu'}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
       </nav>
 
       {/* Mobile Menu Dropdown */}

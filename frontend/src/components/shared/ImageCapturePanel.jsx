@@ -6,7 +6,9 @@ import {
   AlertTriangle,
   ScanLine,
   HelpCircle,
+  Maximize2,
 } from "lucide-react"
+import { ImagePreviewModal } from "./ImagePreviewModal"
 
 export async function convertToWebP(sourceFile, quality = 0.85) {
   return new Promise((resolve, reject) => {
@@ -42,6 +44,8 @@ export const ImageCapturePanel = forwardRef(function ImageCapturePanel(
     onCapture,
     onScanStart,
     onScanRequest,
+    onPreviewClick,
+    detections = [],
     disabled = false,
     label = "",
     hint,
@@ -58,6 +62,7 @@ export const ImageCapturePanel = forwardRef(function ImageCapturePanel(
   const [cameraError, setCameraError] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [facing, setFacing] = useState("environment")
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
@@ -71,6 +76,16 @@ export const ImageCapturePanel = forwardRef(function ImageCapturePanel(
     return () => stopCamera()
   }, [])
 
+  // Ensure video element plays stream immediately on mount
+  useEffect(() => {
+    if (mode === "camera" && videoRef.current && streamRef.current) {
+      if (videoRef.current.srcObject !== streamRef.current) {
+        videoRef.current.srcObject = streamRef.current
+        videoRef.current.play().catch(() => {})
+      }
+    }
+  }, [mode])
+
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop())
@@ -78,33 +93,56 @@ export const ImageCapturePanel = forwardRef(function ImageCapturePanel(
     }
   }
 
-  const startCamera = async (facingMode) => {
-    const fm = facingMode ?? facing
+  const startCamera = async (facingMode = "environment") => {
+    const targetFacing = facingMode || "environment"
     stopCamera()
     setCameraError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: fm, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: targetFacing },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
         audio: false,
       })
       streamRef.current = stream
+      setFacing(targetFacing)
+      setMode("camera")
       if (videoRef.current) {
         videoRef.current.srcObject = stream
-        await videoRef.current.play()
+        try {
+          await videoRef.current.play()
+        } catch (_) {}
       }
-      setMode("camera")
     } catch (err) {
-      setCameraError(
-        err.name === "NotAllowedError"
-          ? "Izin kamera ditolak. Aktifkan akses kamera di pengaturan browser."
-          : `Kamera tidak tersedia: ${err.message}`,
-      )
+      // Fallback if high resolution request is rejected on certain hardware
+      try {
+        const streamFallback = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: targetFacing } },
+          audio: false,
+        })
+        streamRef.current = streamFallback
+        setFacing(targetFacing)
+        setMode("camera")
+        if (videoRef.current) {
+          videoRef.current.srcObject = streamFallback
+          try {
+            await videoRef.current.play()
+          } catch (_) {}
+        }
+      } catch (err2) {
+        setCameraError(
+          err2.name === "NotAllowedError"
+            ? "Izin kamera ditolak. Aktifkan akses kamera di pengaturan browser."
+            : `Kamera tidak tersedia: ${err2.message}`,
+        )
+      }
     }
   }
 
   const flipCamera = async () => {
     const next = facing === "environment" ? "user" : "environment"
-    setFacing(next)
     await startCamera(next)
   }
 
@@ -204,7 +242,7 @@ export const ImageCapturePanel = forwardRef(function ImageCapturePanel(
   // dipilih, sehingga perlu cara memicu kedua sumber tanpa menyalin input.
   useImperativeHandle(ref, () => ({
     openFilePicker: () => uploadRef.current?.click(),
-    openCamera: () => startCamera(facing),
+    openCamera: () => startCamera("environment"),
   }))
 
   return (
@@ -215,73 +253,193 @@ export const ImageCapturePanel = forwardRef(function ImageCapturePanel(
 
       {/* State: Preview Foto Terambil */}
       {mode === "preview" && preview && (
-        <div className="relative rounded-[22px] overflow-hidden border border-emerald-500/40 bg-[#0e2c1c] shadow-lg">
-          <img src={preview} alt="Preview nampan makanan" className="w-full max-h-72 object-cover" />
-          <div className="absolute top-2.5 right-2.5 flex items-center gap-2 z-10">
-            <span className="inline-flex items-center gap-1 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md border border-emerald-400/30">
-              <CheckCircle2 className="h-3 w-3" /> WebP Siap Uji
-            </span>
-            {!disabled && (
-              <button
-                type="button"
-                onClick={reset}
-                title="Hapus & ambil ulang"
-                className="bg-black/60 hover:bg-black/80 backdrop-blur-xs text-white rounded-full p-1.5 shadow-md border border-white/20 transition cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+        <>
+          <div
+            onClick={() => {
+              if (onPreviewClick) {
+                onPreviewClick()
+              } else {
+                setIsPreviewOpen(true)
+              }
+            }}
+            title="Ketuk foto untuk inspeksi visual interaktif (Zoom & Rotasi)"
+            className="relative rounded-[22px] overflow-hidden border border-emerald-500/40 bg-[#0e2c1c] shadow-lg cursor-pointer group"
+          >
+            <img
+              src={preview}
+              alt="Preview nampan makanan"
+              className="w-full max-h-72 object-cover group-hover:scale-[1.01] transition-transform duration-200"
+            />
+            <div className="absolute top-2.5 right-2.5 flex items-center gap-2 z-10">
+              <span className="inline-flex items-center gap-1 bg-emerald-600/90 backdrop-blur-xs text-white text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-md border border-emerald-400/30">
+                <CheckCircle2 className="h-3 w-3" /> WebP Siap Uji
+              </span>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    reset()
+                  }}
+                  title="Hapus & ambil ulang"
+                  className="bg-black/60 hover:bg-black/80 backdrop-blur-xs text-white rounded-full p-1.5 shadow-md border border-white/20 transition cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Bottom Info Bar with Zoom Button */}
+            <div className="p-3 bg-gradient-to-t from-black/85 via-black/50 to-transparent absolute bottom-0 inset-x-0 flex items-center justify-between text-white text-xs">
+              <span className="text-[11px] font-medium text-emerald-200 flex items-center gap-1.5">
+                <Maximize2 className="h-3.5 w-3.5 text-emerald-300" />
+                <span>Ketuk untuk Zoom & Rotasi</span>
+              </span>
+              {!disabled && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    reset()
+                  }}
+                  className="text-[11px] font-bold text-amber-300 hover:text-amber-200 underline cursor-pointer"
+                >
+                  Ambil Ulang
+                </button>
+              )}
+            </div>
           </div>
-          <div className="p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent absolute bottom-0 inset-x-0 flex items-center justify-between text-white text-xs">
-            <span className="text-[11px] font-medium text-emerald-200">Foto nampan berhasil dimuat</span>
-            {!disabled && (
-              <button
-                type="button"
-                onClick={reset}
-                className="text-[11px] font-bold text-amber-300 hover:text-amber-200 underline cursor-pointer"
-              >
-                Ganti / Ambil Ulang
-              </button>
-            )}
-          </div>
-        </div>
+
+          {/* Fallback Internal Modal if parent does not provide onPreviewClick */}
+          {!onPreviewClick && (
+            <ImagePreviewModal
+              isOpen={isPreviewOpen}
+              onClose={() => setIsPreviewOpen(false)}
+              imageUrl={preview}
+              detections={detections}
+              title={title}
+              subtitle="Pratinjau Foto Nampan Makanan"
+            />
+          )}
+        </>
       )}
 
-      {/* State: Kamera WebRTC Langsung (Desktop Fallback) */}
+      {/* State: Kamera WebRTC Full-Screen Immersive Mobile View */}
       {mode === "camera" && (
-        <div className="relative rounded-[22px] overflow-hidden border border-amber-400 shadow-lg bg-black">
-          <video ref={videoRef} autoPlay playsInline muted className="w-full max-h-72 object-cover" />
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute inset-6 border-2 border-dashed border-amber-400/80 rounded-xl animate-pulse" />
-            <span className="absolute top-3 left-1/2 -translate-x-1/2 bg-black/60 text-amber-300 text-[10px] font-mono px-3 py-1 rounded-full">
-              ARAHKAN KE OBJEK MAKANAN
+        <div className="fixed inset-0 z-50 bg-black flex flex-col justify-between overflow-hidden">
+          {/* Full Screen Live Video Feed */}
+          <video
+            ref={(el) => {
+              videoRef.current = el
+              if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                el.srcObject = streamRef.current
+                el.play().catch(() => {})
+              }
+            }}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+          />
+
+          {/* Close (X) Button positioned top-right with safe area support */}
+          <button
+            type="button"
+            onClick={reset}
+            title="Tutup Kamera"
+            aria-label="Tutup Kamera"
+            className="absolute top-6 right-6 pt-safe p-3 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-white border border-white/20 transition active:scale-95 cursor-pointer shadow-lg z-20"
+            style={{ top: "max(1.5rem, env(safe-area-inset-top, 1.5rem))" }}
+          >
+            <X className="h-6 w-6" />
+          </button>
+
+          {/* Top Left Guide Pill */}
+          <div
+            className="absolute top-6 left-6 pt-safe z-20 pointer-events-none"
+            style={{ top: "max(1.5rem, env(safe-area-inset-top, 1.5rem))" }}
+          >
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/15 text-xs font-semibold text-white/90 shadow-md">
+              <ScanLine className="h-4 w-4 text-emerald-400" />
+              <span>Arahkan ke Nampan</span>
             </span>
           </div>
-          <div className="absolute bottom-3 inset-x-3 flex items-center justify-between gap-2">
+
+          {/* Center Food Tray Reticle / Framing Guide */}
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6 sm:p-12 z-10">
+            <div className="relative w-full max-w-sm sm:max-w-md aspect-[4/3] border-2 border-dashed border-white/40 rounded-3xl">
+              <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md text-white text-[10px] font-mono tracking-wider uppercase px-3 py-0.5 rounded-full border border-white/20">
+                ARAHKAN KE OBJEK MAKANAN
+              </span>
+              {/* Corner accents */}
+              <div className="absolute -top-0.5 -left-0.5 w-6 h-6 border-t-3 border-l-3 border-emerald-400 rounded-tl-xl" />
+              <div className="absolute -top-0.5 -right-0.5 w-6 h-6 border-t-3 border-r-3 border-emerald-400 rounded-tr-xl" />
+              <div className="absolute -bottom-0.5 -left-0.5 w-6 h-6 border-b-3 border-l-3 border-emerald-400 rounded-bl-xl" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 border-b-3 border-r-3 border-emerald-400 rounded-br-xl" />
+            </div>
+          </div>
+
+          {/* Main Controls Overlay: Flip Camera, Large Circular Shutter, Gallery Trigger */}
+          <div
+            className="absolute bottom-10 pb-safe pb-8 left-0 right-0 flex justify-center items-center gap-8 z-20"
+            style={{ bottom: "max(2.5rem, env(safe-area-inset-bottom, 2.5rem))" }}
+          >
+            {/* Flip Camera Button */}
             <button
               type="button"
               onClick={flipCamera}
-              title="Ganti kamera"
-              className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+              title="Ganti Lensa Kamera"
+              aria-label="Ganti Lensa Kamera"
+              className="p-4 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md text-white border border-white/25 transition active:scale-90 cursor-pointer shadow-xl flex items-center justify-center"
             >
-              <RefreshCw className="h-4 w-4" />
+              <RefreshCw className="h-6 w-6" />
             </button>
+
+            {/* Large Circular Capture Button (Native Camera Style) */}
             <button
               type="button"
               onClick={captureFromCamera}
-              className="px-6 py-2 rounded-full bg-amber-500 text-white font-bold text-xs hover:bg-amber-600 transition shadow-lg cursor-pointer"
+              title="Ambil Foto"
+              aria-label="Ambil Foto"
+              className="relative p-1.5 rounded-full border-4 border-white shadow-2xl active:scale-95 transition cursor-pointer group"
             >
-              Ambil Foto
+              <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-[#123624] group-hover:bg-[#1a4a32] border-2 border-emerald-400/60 flex items-center justify-center transition-all shadow-inner">
+                <div className="w-8 h-8 rounded-full bg-emerald-400/20 flex items-center justify-center">
+                  <ScanLine className="h-5 w-5 text-emerald-200" />
+                </div>
+              </div>
             </button>
+
+            {/* Gallery Shortcut Button for Visual Balance */}
             <button
               type="button"
-              onClick={reset}
-              title="Batalkan"
-              className="p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition cursor-pointer"
+              onClick={() => {
+                reset()
+                uploadRef.current?.click()
+              }}
+              title="Pilih dari Galeri"
+              aria-label="Pilih dari Galeri"
+              className="p-4 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-md text-white border border-white/25 transition active:scale-90 cursor-pointer shadow-xl flex flex-col items-center justify-center"
             >
-              <X className="h-4 w-4" />
+              <span className="text-[11px] font-bold">Galeri</span>
             </button>
           </div>
+
+          {/* Error Message if Camera Access Fails */}
+          {cameraError && (
+            <div className="absolute inset-0 z-30 bg-black/90 flex flex-col items-center justify-center p-6 text-center text-white space-y-4">
+              <AlertTriangle className="h-12 w-12 text-amber-400" />
+              <p className="text-sm font-semibold max-w-xs">{cameraError}</p>
+              <button
+                type="button"
+                onClick={reset}
+                className="px-6 py-2.5 rounded-full bg-white text-slate-900 font-bold text-xs hover:bg-slate-100 transition cursor-pointer"
+              >
+                Tutup & Kembali
+              </button>
+            </div>
+          )}
+
           <canvas ref={canvasRef} className="hidden" />
         </div>
       )}

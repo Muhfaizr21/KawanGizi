@@ -18,17 +18,36 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="KawanGizi" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <script>
+      window.__deferredInstallPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        console.log('beforeinstallprompt fired!', e);
+        e.preventDefault();
+        window.__deferredInstallPrompt = e;
+        window.dispatchEvent(new CustomEvent('pwa:promptready'));
+      });
+    </script>
   </head>
   <body class="bg-white text-gray-900 font-sans antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
       if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.warn('PWA ServiceWorker registration failed:', err);
-          });
-        });
+        const registerSW = () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('[PWA] Service Worker registered with scope:', registration.scope);
+            })
+            .catch((err) => {
+              console.warn('[PWA] ServiceWorker registration failed:', err);
+            });
+        };
+        if (document.readyState === 'complete') {
+          registerSW();
+        } else {
+          window.addEventListener('load', registerSW);
+        }
       }
     </script>
   </body>

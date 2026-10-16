@@ -1,4 +1,4 @@
-import { ShieldCheck, Salad, AlertTriangle, CheckCircle2, Info } from 'lucide-react'
+import { ShieldCheck, Salad, AlertTriangle, CheckCircle2, Info, Maximize2 } from 'lucide-react'
 
 /**
  * Kartu hasil pemindaian yang menyesuaikan mode analisis.
@@ -82,19 +82,23 @@ function compartmentQuad(compartment) {
   return null
 }
 
-function TrayOverlay({ src, compartments }) {
+function TrayOverlay({ src, compartments, onPreviewClick }) {
   if (!src || !compartments?.length) return null
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-xs">
+    <div
+      onClick={onPreviewClick}
+      title="Ketuk untuk membuka foto full-screen (Zoom & Rotasi)"
+      className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-xs cursor-pointer group"
+    >
       <img
         src={src}
         alt="Foto hidangan dengan analisis sekat nampan"
-        className="block w-full h-auto max-h-[340px] object-cover"
+        className="block w-full h-auto max-h-[340px] object-cover group-hover:scale-[1.01] transition-transform duration-200"
       />
       <svg
         viewBox="0 0 1000 1000"
         preserveAspectRatio="none"
-        className="absolute inset-0 h-full w-full"
+        className="absolute inset-0 h-full w-full pointer-events-none"
         aria-hidden="true"
       >
         {compartments.map((compartment) => {
@@ -135,6 +139,14 @@ function TrayOverlay({ src, compartments }) {
             </span>
           )
         })}
+      </div>
+
+      {/* Interactive Zoom/Rotate Badge Hint */}
+      <div className="absolute bottom-2.5 right-2.5 z-10 pointer-events-none">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/75 backdrop-blur-md text-[10px] font-bold text-white shadow-md border border-white/20">
+          <Maximize2 className="h-3 w-3 text-emerald-400" />
+          <span>Zoom & Putar</span>
+        </span>
       </div>
     </div>
   )
@@ -188,7 +200,7 @@ function CompartmentList({ compartments }) {
   )
 }
 
-export function KelayakanCard({ report, compartments, preview }) {
+export function KelayakanCard({ report, compartments, preview, onPreviewClick }) {
   if (!report) return null
   const style = STATUS_STYLE[report.status_kelayakan] || STATUS_STYLE.Waspada
   const StatusIcon = style.icon
@@ -268,7 +280,7 @@ export function KelayakanCard({ report, compartments, preview }) {
                 {compartments.length} Sekat
               </span>
             </div>
-            <TrayOverlay src={preview} compartments={compartments} />
+            <TrayOverlay src={preview} compartments={compartments} onPreviewClick={onPreviewClick} />
             <CompartmentList compartments={compartments} />
           </div>
         ) : null}
@@ -415,7 +427,7 @@ export function NutrisiCard({ report, macros }) {
   )
 }
 
-export function ScanModeResult({ mode, result, preview, macros }) {
+export function ScanModeResult({ mode, result, preview, macros, onPreviewClick }) {
   if (!result) return null
   if (mode === 'nutrisi') return <NutrisiCard report={result.nutrisi} macros={macros} />
   return (
@@ -423,6 +435,7 @@ export function ScanModeResult({ mode, result, preview, macros }) {
       report={result.kelayakan}
       compartments={result.compartments}
       preview={preview}
+      onPreviewClick={onPreviewClick}
     />
   )
 }

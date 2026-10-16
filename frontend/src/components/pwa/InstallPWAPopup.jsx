@@ -5,7 +5,7 @@ import { usePWA } from '../../context/PWAContext'
 import { Download, X, Smartphone, CheckCircle2, Share, PlusSquare } from 'lucide-react'
 
 export function InstallPWAPopup({ path = '' }) {
-  const { isInstalled, deferredPrompt, isMobile, isIOS, promptInstall } = usePWA()
+  const { isInstalled, deferredPrompt, setDeferredPrompt, isMobile, isIOS, promptInstall } = usePWA()
   const [isDismissed, setIsDismissed] = useState(false)
   const [isInstalling, setIsInstalling] = useState(false)
 
@@ -45,9 +45,8 @@ export function InstallPWAPopup({ path = '' }) {
     return null
   }
 
-  // If deferredPrompt is null and not an iOS mobile device, hide per requirement:
-  // "If deferredPrompt is null (meaning the browser doesn't support it or already prompted), render nothing"
-  if (!deferredPrompt && !isIOS) {
+  // Show if deferredPrompt exists OR if mobile/iOS device
+  if (!deferredPrompt && !isMobile && !isIOS) {
     return null
   }
 
@@ -61,16 +60,27 @@ export function InstallPWAPopup({ path = '' }) {
   }
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      setIsInstalling(true)
-      try {
-        const result = await promptInstall()
-        if (result && result.outcome === 'accepted') {
-          handleDismiss()
-        }
-      } finally {
-        setIsInstalling(false)
+    const promptEvent = deferredPrompt || (typeof window !== 'undefined' ? window.__deferredInstallPrompt : null)
+    if (!promptEvent) {
+      console.error('Install prompt is not available. Either the browser blocked it, it already fired, or PWA criteria (Service Worker/Manifest) are not fully met.')
+      alert('Sistem instalasi instan belum siap. Silakan gunakan menu browser (titik tiga) -> Instal Aplikasi.')
+      return
+    }
+
+    setIsInstalling(true)
+    try {
+      promptEvent.prompt()
+      const { outcome } = await promptEvent.userChoice
+      console.log(`User interaction outcome: ${outcome}`)
+    } catch (err) {
+      console.error('[PWA] Prompt error:', err)
+    } finally {
+      setIsInstalling(false)
+      setDeferredPrompt?.(null)
+      if (typeof window !== 'undefined') {
+        window.__deferredInstallPrompt = null
       }
+      handleDismiss()
     }
   }
 
@@ -157,51 +167,60 @@ export function InstallPWAPopup({ path = '' }) {
           </div>
         </div>
 
-        {/* iOS Specific Instructions (Safari) */}
-        {isIOS && !deferredPrompt ? (
-          <div className="mt-4 p-3 bg-amber-50/80 rounded-2xl border border-amber-200/80 text-xs text-amber-900 space-y-1.5">
-            <p className="font-semibold flex items-center gap-1.5 text-amber-950">
-              <Share className="h-3.5 w-3.5 text-amber-700" />
-              Petunjuk Safari di iPhone / iPad:
-            </p>
-            <ol className="list-decimal list-inside space-y-1 text-[11px] text-amber-800 pl-1">
-              <li>
-                Ketuk tombol <strong>Bagikan (Share)</strong>{' '}
-                <Share className="h-3 w-3 inline text-amber-700 mx-0.5" /> di menu bawah Safari
-              </li>
-              <li>
-                Gulir ke bawah dan pilih <strong>Tambahkan ke Layar Utama</strong>{' '}
-                <PlusSquare className="h-3 w-3 inline text-amber-700 mx-0.5" />
-              </li>
-            </ol>
-            <button
-              onClick={handleDismiss}
-              className="w-full mt-2 py-2 rounded-xl bg-amber-200/80 hover:bg-amber-300/80 text-amber-950 font-bold text-xs transition cursor-pointer text-center"
-            >
-              Saya Mengerti
-            </button>
-          </div>
-        ) : (
-          /* Standard Install Action Buttons */
-          <div className="mt-5 flex items-center gap-2.5">
-            <button
-              onClick={handleDismiss}
-              type="button"
-              className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-bold text-xs transition cursor-pointer text-center"
-            >
-              Nanti Saja
-            </button>
-            <button
-              onClick={handleInstallClick}
-              disabled={isInstalling}
-              type="button"
-              className="flex-2 py-2.5 px-4 rounded-xl bg-[#123624] hover:bg-[#1a4a32] active:scale-[0.98] text-white font-bold text-xs shadow-md shadow-emerald-950/15 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-60"
-            >
-              <Download className="h-4 w-4 text-emerald-300" />
-              <span>{isInstalling ? 'Memproses…' : 'Pasang Aplikasi'}</span>
-            </button>
+        {/* Fallback Instructions: Rendered IF AND ONLY IF deferredPrompt is null */}
+        {!deferredPrompt && (
+          <div className="mt-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-xs text-emerald-950 animate-in fade-in duration-150">
+            {isIOS ? (
+              <div className="space-y-1.5">
+                <p className="font-semibold flex items-center gap-1.5 text-emerald-950">
+                  <Share className="h-3.5 w-3.5 text-emerald-700" />
+                  Petunjuk Safari di iPhone / iPad:
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] text-emerald-800 pl-1">
+                  <li>
+                    Ketuk tombol <strong>Bagikan (Share)</strong>{' '}
+                    <Share className="h-3 w-3 inline text-emerald-700 mx-0.5" /> di menu bawah Safari
+                  </li>
+                  <li>
+                    Gulir ke bawah dan pilih <strong>Tambahkan ke Layar Utama</strong>{' '}
+                    <PlusSquare className="h-3 w-3 inline text-emerald-700 mx-0.5" />
+                  </li>
+                </ol>
+              </div>
+            ) : (
+              <div>
+                <p className="font-bold flex items-center gap-1.5 text-emerald-900">
+                  <Download className="h-4 w-4 text-emerald-700" />
+                  Langkah Pasang di Chrome/Android:
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-emerald-800">
+                  1. Ketuk menu titik tiga (<strong>⋮</strong>) di pojok kanan atas.<br />
+                  2. Pilih <strong>"Instal aplikasi"</strong> atau <strong>"Tambahkan ke Layar Utama"</strong>.
+                </p>
+              </div>
+            )}
           </div>
         )}
+
+        {/* Action Buttons: Batal & Pasang Sekarang */}
+        <div className="mt-5 flex items-center gap-2.5">
+          <button
+            onClick={handleDismiss}
+            type="button"
+            className="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-bold text-xs transition cursor-pointer text-center"
+          >
+            Batal
+          </button>
+          <button
+            onClick={handleInstallClick}
+            disabled={isInstalling}
+            type="button"
+            className="flex-2 py-2.5 px-4 rounded-xl bg-[#123624] hover:bg-[#1a4a32] active:scale-[0.98] text-white font-bold text-xs shadow-md shadow-emerald-950/15 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-60"
+          >
+            <Download className="h-4 w-4 text-emerald-300" />
+            <span>{isInstalling ? 'Memproses…' : 'Pasang Sekarang'}</span>
+          </button>
+        </div>
       </div>
     </div>
   )
