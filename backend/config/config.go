@@ -93,6 +93,11 @@ func LoadConfig() *Config {
 		writeTimeout = aiRequestTimeout + 30*time.Second
 	}
 
+	defaultAIURL := "http://127.0.0.1:8082"
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		defaultAIURL = "http://172.17.0.1:8082"
+	}
+
 	return &Config{
 		Port:   port,
 		AppEnv: appEnv,
@@ -110,11 +115,6 @@ func LoadConfig() *Config {
 		JWTAccessTTLMinutes: accessTTL,
 		JWTRefreshTTLHours:  refreshTTL,
 		CORSOrigins:         strings.Split(getEnv("CORS_ORIGINS", "http://kawangizi.miomidev.com,https://kawangizi.miomidev.com,https://kawangizi.rentgoindonesia.com,http://localhost:5173,http://localhost:4173,http://localhost:8081,http://127.0.0.1:8081,http://localhost:8084"), ","),
-
-		defaultAIURL := "http://127.0.0.1:8082"
-		if _, err := os.Stat("/.dockerenv"); err == nil {
-			defaultAIURL = "http://172.17.0.1:8082"
-		}
 
 		AIBackendURL:         getEnv("AI_BACKEND_URL", defaultAIURL),
 		AIRequestTimeout:     aiRequestTimeout,
