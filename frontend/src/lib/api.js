@@ -1,26 +1,100 @@
 // API client: Bearer access token (in-memory) + httpOnly refresh cookie.
 // On a 401 it attempts a single silent refresh, then retries the request.
 
-export const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL ||
-  'https://kawangizi-core-api.onrender.com'
-).replace(/\/+$/, '')
+/**
+ * Resolusi Base URL Backend (Golang Core API) secara dinamis:
+ * 1. Environment variable Vite saat build / runtime:
+ *    - VITE_API_URL
+ *    - VITE_API_BASE_URL
+ *    - VITE_BACKEND_URL
+ * 2. Window runtime configuration (berguna jika di-inject via script/HTML pada container VPS tanpa rebuild):
+ *    - window.__API_URL__
+ *    - window.__ENV__?.VITE_API_URL atau VITE_API_BASE_URL
+ * 3. HTML meta tag: <meta name="api-base-url" content="...">
+ * 4. Fallback ke URL backend VPS produksi atau relative path (bila reverse proxy Nginx digunakan).
+ */
+function resolveApiBase() {
+  const envUrl =
+    import.meta.env.VITE_API_URL ??
+    import.meta.env.VITE_API_BASE_URL ??
+    import.meta.env.VITE_BACKEND_URL
 
-export const AI_API_URL = (
-  import.meta.env.VITE_AI_API_URL ||
-  'https://kawangizi-6vju.onrender.com'
-).replace(/\/+$/, '')
+  if (envUrl !== undefined && envUrl !== null) {
+    const trimmed = String(envUrl).trim()
+    if (trimmed === '' || trimmed === '/' || trimmed.toLowerCase() === 'relative') {
+      return ''
+    }
+    return trimmed.replace(/\/+$/, '')
+  }
 
+  if (typeof window !== 'undefined') {
+    if (window.__API_URL__) {
+      const wUrl = String(window.__API_URL__).trim()
+      return (wUrl === '' || wUrl === '/' || wUrl.toLowerCase() === 'relative') ? '' : wUrl.replace(/\/+$/, '')
+    }
+    if (window.__ENV__?.VITE_API_URL || window.__ENV__?.VITE_API_BASE_URL) {
+      const wEnv = String(window.__ENV__.VITE_API_URL || window.__ENV__.VITE_API_BASE_URL).trim()
+      return (wEnv === '' || wEnv === '/' || wEnv.toLowerCase() === 'relative') ? '' : wEnv.replace(/\/+$/, '')
+    }
+    if (typeof document !== 'undefined') {
+      const meta = document.querySelector('meta[name="api-base-url"]')
+      if (meta && meta.getAttribute('content')) {
+        const mVal = meta.getAttribute('content').trim()
+        return (mVal === '' || mVal === '/' || mVal.toLowerCase() === 'relative') ? '' : mVal.replace(/\/+$/, '')
+      }
+    }
+  }
+
+  // Fallback backend VPS produksi / hosting
+  return 'https://kawangizi-core-api.onrender.com'
+}
+
+/**
+ * Resolusi Base URL AI FastAPI (Deteksi YOLOv8):
+ */
+function resolveAiApiBase() {
+  const envUrl =
+    import.meta.env.VITE_AI_API_URL ??
+    import.meta.env.VITE_AI_URL ??
+    import.meta.env.VITE_AI_BACKEND_URL
+
+  if (envUrl !== undefined && envUrl !== null) {
+    const trimmed = String(envUrl).trim()
+    if (trimmed === '' || trimmed === '/' || trimmed.toLowerCase() === 'relative') {
+      return ''
+    }
+    return trimmed.replace(/\/+$/, '')
+  }
+
+  if (typeof window !== 'undefined') {
+    if (window.__AI_API_URL__) {
+      const wUrl = String(window.__AI_API_URL__).trim()
+      return (wUrl === '' || wUrl === '/' || wUrl.toLowerCase() === 'relative') ? '' : wUrl.replace(/\/+$/, '')
+    }
+    if (window.__ENV__?.VITE_AI_API_URL) {
+      const wEnv = String(window.__ENV__.VITE_AI_API_URL).trim()
+      return (wEnv === '' || wEnv === '/' || wEnv.toLowerCase() === 'relative') ? '' : wEnv.replace(/\/+$/, '')
+    }
+    if (typeof document !== 'undefined') {
+      const meta = document.querySelector('meta[name="ai-api-url"]')
+      if (meta && meta.getAttribute('content')) {
+        const mVal = meta.getAttribute('content').trim()
+        return (mVal === '' || mVal === '/' || mVal.toLowerCase() === 'relative') ? '' : mVal.replace(/\/+$/, '')
+      }
+    }
+  }
+
+  return 'https://kawangizi-6vju.onrender.com'
+}
+
+export const API_BASE = resolveApiBase()
+export const AI_API_URL = resolveAiApiBase()
 export const AI_API_BASE = AI_API_URL
 
-// Kedua base URL di atas jatuh ke alamat hosting produksi bila env build tidak
-// diisi. Akibatnya `npm run build` diam-diam terkunci ke satu host dan salah
-// konfigurasi tidak terlihat, jadi env build produksi selalu diisi eksplisit
-// (lihat frontend/.env.example).
-if (!import.meta.env.VITE_API_BASE_URL) {
-  console.warn(
-    `[api] VITE_API_BASE_URL belum diisi — memakai fallback ${API_BASE}. ` +
-      'Untuk build produksi, isi VITE_API_BASE_URL (lihat frontend/.env.example).'
+if (!import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_BASE_URL && !import.meta.env.VITE_BACKEND_URL) {
+  console.info(
+    `[api] Menggunakan backend fallback: ${API_BASE || '(relative path)'}. ` +
+      'Untuk build VPS kustom, sediakan VITE_API_URL.'
   )
 }
 
