@@ -46,7 +46,7 @@ function resolveApiBase() {
   }
 
   // Fallback backend VPS produksi / hosting
-  return 'https://kawangizi-core-api.onrender.com'
+  return 'http://kawangizi.miomidev.com'
 }
 
 /**

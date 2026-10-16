@@ -109,7 +109,7 @@ func LoadConfig() *Config {
 		JWTSecret:           getEnv("JWT_SECRET", "kawangizi-dev-secret-ganti-di-produksi"),
 		JWTAccessTTLMinutes: accessTTL,
 		JWTRefreshTTLHours:  refreshTTL,
-		CORSOrigins:         strings.Split(getEnv("CORS_ORIGINS", "https://kawangizi.rentgoindonesia.com,http://localhost:5173,http://localhost:4173,http://localhost:8081,http://127.0.0.1:8081,http://localhost:8084"), ","),
+		CORSOrigins:         strings.Split(getEnv("CORS_ORIGINS", "http://kawangizi.miomidev.com,https://kawangizi.miomidev.com,https://kawangizi.rentgoindonesia.com,http://localhost:5173,http://localhost:4173,http://localhost:8081,http://127.0.0.1:8081,http://localhost:8084"), ","),
 
 		AIBackendURL:         getEnv("AI_BACKEND_URL", "http://127.0.0.1:8083"),
 		AIRequestTimeout:     aiRequestTimeout,
