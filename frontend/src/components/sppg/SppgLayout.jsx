@@ -20,6 +20,8 @@ import {
   Settings,
 } from 'lucide-react'
 
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import { navigate } from '../../App'
 import { SPPG_PROFILE } from '../../data/sppgPortalData'
 import { useAuth } from '../../context/AuthContext'
@@ -124,8 +126,15 @@ export function SppgLayout({
           {/* Top Brand Container */}
           <div className="p-4 pb-3">
             <div className="flex items-center gap-2.5">
-              <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner shrink-0">
-                <CookingPot className="h-5 w-5 text-white" />
+              <div className="h-10 w-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner shrink-0 p-1">
+                <Image
+                  src={KawangiziLogo}
+                  alt="Logo KawanGizi"
+                  width={32}
+                  height={32}
+                  className="object-contain w-auto h-7"
+                  priority
+                />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">

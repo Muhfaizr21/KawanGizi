@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"time"
@@ -1098,11 +1099,12 @@ func (r *pgValidatorScanRepository) GetIncidentBundle(ctx context.Context, userR
 				sev := "medium"
 				sevLabel := "Sedang"
 				handler := "Manajer Dapur SPPG 01 Menteng Sentral"
-				if lvl == 1 {
+				switch lvl {
+				case 1:
 					sev = "high"
 					sevLabel = "Tinggi / Darurat Merah"
 					handler = "Satgas MBG Pusat (Push Siren)"
-				} else if lvl == 3 {
+				case 3:
 					sev = "low"
 					sevLabel = "Rendah"
 					handler = "Satgas MBG Wilayah Jakarta Pusat"
@@ -1110,10 +1112,11 @@ func (r *pgValidatorScanRepository) GetIncidentBundle(ctx context.Context, userR
 
 				statKey := "in_progress"
 				statLabel := "Sedang Ditindaklanjuti"
-				if status == "baru" {
+				switch status {
+				case "baru":
 					statKey = "open"
 					statLabel = "Baru Masuk"
-				} else if status == "selesai" {
+				case "selesai":
 					statKey = "resolved"
 					statLabel = "Selesai"
 				}
@@ -1286,11 +1289,12 @@ func (r *pgValidatorScanRepository) CreateIncident(ctx context.Context, payload 
 	sevLabel := "Sedang"
 	handler := "Manajer Dapur SPPG 01 Menteng Sentral"
 
-	if sev == "high" {
+	switch sev {
+	case "high":
 		level = 1
 		sevLabel = "Tinggi / Darurat Merah"
 		handler = "Satgas MBG Pusat (Push Siren)"
-	} else if sev == "low" {
+	case "low":
 		level = 3
 		sevLabel = "Rendah"
 		handler = "Satgas MBG Wilayah Jakarta Pusat"
@@ -1339,32 +1343,36 @@ func (r *pgValidatorScanRepository) CreateIncident(ctx context.Context, payload 
 	photosJSON, _ := json.Marshal(payload.Photos)
 	feedSeverity := "level2"
 	affectedPortions := 25
-	if sev == "high" {
+	switch sev {
+	case "high":
 		feedSeverity = "level1"
 		affectedPortions = 650
-	} else if sev == "low" {
+	case "low":
 		feedSeverity = "level3"
 		affectedPortions = 5
 	}
 
-	_, _ = tx.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO feedbacks (
 			id, ticket_number, reported_at, school_npsn, school_name,
 			sppg_id, batch_id, menu_package, severity, anomaly_type,
 			affected_portions, reporter_name, reporter_role, reporter_phone,
 			title, description, status, is_kill_switch_executed,
-			evidence_photos, sla_deadline, sla_remaining_minutes, created_at
+			evidence_photos, created_at
 		) VALUES (
 			$1, $1, $2, $3, $4,
 			$5, $6, 'Menu Terjadwal MBG', $7, $8,
 			$9, $10, 'Validator Lapangan', '+62 812-1100-4477',
 			$11, $12, 'open', $13,
-			$14, '+120 Menit', 120, NOW()
+			$14, NOW()
 		)
 	`, ticketID, clockStr, npsn, schoolName, sppgID, batchToken, feedSeverity, payload.Category,
 		affectedPortions, actorName, categoryLabel, payload.Description, sev == "high",
 		string(photosJSON),
 	)
+	if err != nil {
+		log.Printf("⚠️ Insert feedbacks warning: %v\n", err)
+	}
 
 	// 7. Tulis Jejak Audit
 	auditID := "aud-" + uuid.NewString()[:12]

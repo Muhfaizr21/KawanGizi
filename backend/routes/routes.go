@@ -83,6 +83,7 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 	mux.Handle("POST /api/scans", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.Submit)))
 	mux.Handle("POST /api/v1/scan", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.Submit)))
 	mux.Handle("GET /api/scans/recent", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.Recent)))
+	mux.Handle("GET /api/v1/scans/logs", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.Recent)))
 	mux.Handle("PUT /api/scans/{id}", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.UpdateFeedback)))
 	mux.Handle("DELETE /api/scans/all", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.DeleteAllScans)))
 	mux.Handle("DELETE /api/scans/{id}", middlewares.RequirePermission(models.PermScanSubmit)(http.HandlerFunc(deps.ScanCtrl.DeleteScan)))
@@ -272,7 +273,10 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 		mux.Handle("POST /api/validator/handover/reset", middlewares.RequirePermission(models.PermHandoverBast)(http.HandlerFunc(deps.ValidatorScanCtrl.ResetHandover)))
 		mux.Handle("GET /api/validator/incidents", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetIncidents)))
 		mux.Handle("POST /api/validator/incidents", middlewares.RequirePermission(models.PermIncidentSubmit)(http.HandlerFunc(deps.ValidatorScanCtrl.CreateIncident)))
+		mux.Handle("GET /api/v1/incidents", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetIncidents)))
+		mux.Handle("POST /api/v1/incidents", middlewares.RequirePermission(models.PermIncidentSubmit)(http.HandlerFunc(deps.ValidatorScanCtrl.CreateIncident)))
 		mux.Handle("GET /api/validator/history/bundle", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetHistory)))
+		mux.Handle("GET /api/v1/history/summary", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetHistorySummary)))
 		mux.Handle("POST /api/validator/history/surplus", middlewares.RequirePermission(models.PermAttendanceRead)(http.HandlerFunc(deps.ValidatorScanCtrl.AllocateSurplus)))
 		mux.Handle("GET /api/validator/dashboard", middlewares.RequireAuth(http.HandlerFunc(deps.ValidatorScanCtrl.GetDashboard)))
 	}
@@ -288,6 +292,7 @@ func SetupRoutes(deps RouterDependencies) http.Handler {
 	// Rekonsiliasi Presensi & Penerimaan Porsi Siswa MBG
 	if deps.AttendanceCtrl != nil {
 		mux.Handle("GET /api/attendance", middlewares.RequirePermission(models.PermAttendanceRead)(http.HandlerFunc(deps.AttendanceCtrl.List)))
+		mux.Handle("GET /api/v1/attendance", middlewares.RequirePermission(models.PermAttendanceRead)(http.HandlerFunc(deps.AttendanceCtrl.List)))
 		mux.Handle("GET /api/attendance/{id}", middlewares.RequirePermission(models.PermAttendanceRead)(http.HandlerFunc(deps.AttendanceCtrl.GetByID)))
 		mux.Handle("PUT /api/attendance/{id}/quota", middlewares.RequirePermission(models.PermAttendanceManage)(http.HandlerFunc(deps.AttendanceCtrl.AdjustQuota)))
 		mux.Handle("POST /api/attendance/{id}/redistribute", middlewares.RequirePermission(models.PermAttendanceManage)(http.HandlerFunc(deps.AttendanceCtrl.RedistributeSurplus)))

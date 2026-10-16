@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import { navigate } from '../App'
 import loginArt from '../assets/login-art.png'
 import { registerRequest } from '../lib/api'
@@ -72,12 +74,17 @@ export function RegisterPage() {
         {/* Scroll Area: form tetap terjangkau di layar pendek, header & footer tidak terpotong */}
         <div className="flex w-full flex-1 flex-col overflow-y-auto lg:ml-12 xl:ml-24">
           <div className="my-auto w-full max-w-[440px] sm:max-w-[460px] lg:max-w-[480px] py-4 sm:py-6">
-          {/* Minimalist Geometric Logo Mark */}
-          <div className="w-9 h-9 text-black flex items-center justify-start mb-3">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M7 3L2 14L9 11L14 3H7Z" />
-              <path d="M15 11L10 22L17 19L22 11H15Z" />
-            </svg>
+          {/* Official KawanGizi Brand Logo */}
+          <div className="flex items-center gap-3 mb-4">
+            <Image
+              src={KawangiziLogo}
+              alt="Logo KawanGizi"
+              width={48}
+              height={48}
+              className="object-contain w-auto h-11 sm:h-12"
+              priority
+            />
+            <span className="text-2xl font-black tracking-tight text-gray-900">KawanGizi</span>
           </div>
 
           {/* Title & Subtitle */}

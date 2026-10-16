@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +14,8 @@ import (
 type Config struct {
 	Port   string
 	AppEnv string
+
+	DatabaseURL string
 
 	DBHost     string
 	DBPort     int
@@ -94,6 +97,8 @@ func LoadConfig() *Config {
 		Port:   port,
 		AppEnv: appEnv,
 
+		DatabaseURL: getEnv("DATABASE_URL", ""),
+
 		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
 		DBPort:     dbPort,
 		DBUser:     getEnv("DB_USER", "kawangizi"),
@@ -104,7 +109,7 @@ func LoadConfig() *Config {
 		JWTSecret:           getEnv("JWT_SECRET", "kawangizi-dev-secret-ganti-di-produksi"),
 		JWTAccessTTLMinutes: accessTTL,
 		JWTRefreshTTLHours:  refreshTTL,
-		CORSOrigins:         strings.Split(getEnv("CORS_ORIGINS", "http://localhost:5173,http://localhost:4173,http://localhost:8081,http://127.0.0.1:8081"), ","),
+		CORSOrigins:         strings.Split(getEnv("CORS_ORIGINS", "https://kawangizi.rentgoindonesia.com,http://localhost:5173,http://localhost:4173,http://localhost:8081,http://127.0.0.1:8081,http://localhost:8084"), ","),
 
 		AIBackendURL:         getEnv("AI_BACKEND_URL", "http://127.0.0.1:8083"),
 		AIRequestTimeout:     aiRequestTimeout,
@@ -169,6 +174,9 @@ func loadEnvFile(path string) {
 		if _, exists := os.LookupEnv(key); !exists {
 			os.Setenv(key, value)
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("[CONFIG] Peringatan membaca berkas env %s: %v", path, err)
 	}
 }
 

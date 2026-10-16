@@ -20,10 +20,14 @@ import {
   ExternalLink,
   Building2,
   ChevronDown,
+  Users,
 } from 'lucide-react'
 
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import { navigate } from '../../App'
 import { useAuth } from '../../context/AuthContext'
+import { usePWA } from '../../context/PWAContext'
 import { getSelectedSchool, setSelectedSchool } from '../../lib/validatorSchool'
 import { SchoolSwitcherModal } from '../validator/SchoolSwitcherModal'
 import { ValidatorAccountModal } from './ValidatorAccountModal'
@@ -34,6 +38,7 @@ export const VALIDATOR_SIDEBAR_MENU = [
   { id: 'foodscan', label: 'Scan Hidangan', icon: ScanLine, href: '/validator/foodscan', badge: 'AI' },
   { id: 'handover', label: 'Serah Terima', icon: ClipboardCheck, href: '/validator/handover' },
   { id: 'history', label: 'Riwayat & Presensi', icon: History, href: '/validator/history' },
+  { id: 'community', label: 'Forum Komunitas', icon: Users, href: '/validator/komunitas' },
   { id: 'incidents', label: 'Lapor Insiden', icon: AlertTriangle, href: '/validator/incidents', badge: 'Siaga' },
 ]
 
@@ -99,6 +104,7 @@ export function ValidatorLayout({
   const searchInputRef = useRef(null)
 
   const { user, logout } = useAuth()
+  const { isInstalled, promptInstall, deferredPrompt } = usePWA()
   const [activeSchool, setActiveSchool] = useState(() => getSelectedSchool(user))
   const [isSchoolModalOpen, setIsSchoolModalOpen] = useState(false)
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false)
@@ -185,14 +191,16 @@ export function ValidatorLayout({
         >
           <div className="flex flex-col h-full overflow-y-auto p-5 sm:p-6 justify-between [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <div>
-              {/* Donezo Style Logo Brand */}
-              <div className="flex items-center gap-2.5 pb-7 pt-1">
-                <div className="relative flex items-center justify-center">
-                  <div className="h-9 w-9 rounded-full border-[3px] border-[#185338] flex items-center justify-center bg-white shadow-xs">
-                    <div className="h-3.5 w-3.5 rounded-full bg-[#185338]" />
-                  </div>
-                  <div className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 border-2 border-white" />
-                </div>
+              {/* Official Brand Logo */}
+              <div className="flex items-center gap-3 pb-7 pt-1">
+                <Image
+                  src={KawangiziLogo}
+                  alt="Logo KawanGizi"
+                  width={40}
+                  height={40}
+                  className="object-contain w-auto h-9.5 shrink-0"
+                  priority
+                />
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-xl font-black tracking-tight text-slate-900">KawanGizi</span>
@@ -271,6 +279,19 @@ export function ValidatorLayout({
                   )
                 })}
 
+                {/* Pesan & Bantuan Item in Sidebar */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSidebarOpen(false)
+                    setToastMessage('Pusat Bantuan & Tiket WhatsApp KawanGizi siap dihubungi: 0812-9988-7766')
+                  }}
+                  className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-50/80 transition-all text-left cursor-pointer"
+                >
+                  <Mail className="h-4.5 w-4.5 shrink-0 text-slate-400" />
+                  <span>Pesan & Bantuan</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleLogout}
@@ -283,39 +304,47 @@ export function ValidatorLayout({
             </div>
 
             {/* Bottom Dark App Promo Card (Signature Donezo Dark Green Widget) */}
-            <div className="mt-8 relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#0e3b28] via-[#09261a] to-[#04120c] p-4 text-white shadow-lg">
-              {/* Wavy Contour Lines Background */}
-              <svg
-                className="absolute inset-0 w-full h-full opacity-20 pointer-events-none"
-                viewBox="0 0 200 200"
-                preserveAspectRatio="none"
-              >
-                <path d="M-20,60 Q40,140 100,70 T220,110" fill="none" stroke="currentColor" strokeWidth="2.5" />
-                <path d="M-20,90 Q40,170 100,100 T220,140" fill="none" stroke="currentColor" strokeWidth="2" />
-                <path d="M-20,120 Q40,200 100,130 T220,170" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M-20,150 Q40,230 100,160 T220,200" fill="none" stroke="currentColor" strokeWidth="1" />
-              </svg>
-
-              <div className="relative z-10 space-y-2.5">
-                <div className="h-7 w-7 rounded-lg bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
-                  <Smartphone className="h-4 w-4 text-emerald-300" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold tracking-tight text-white">Mode Cepat Validator</h4>
-                  <p className="text-[10px] text-slate-300 leading-tight mt-0.5 opacity-80">
-                    PWA kamera & verifikasi offline
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setToastMessage('PWA Mode Siaga Validator telah terpasang di perangkat Anda.')}
-                  className="w-full mt-1.5 py-2 rounded-xl bg-[#1d6b47] hover:bg-[#238155] text-white text-[11px] font-bold transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+            {!isInstalled && (
+              <div className="mt-8 relative overflow-hidden rounded-[20px] bg-gradient-to-br from-[#0e3b28] via-[#09261a] to-[#04120c] p-4 text-white shadow-lg">
+                {/* Wavy Contour Lines Background */}
+                <svg
+                  className="absolute inset-0 w-full h-full opacity-20 pointer-events-none"
+                  viewBox="0 0 200 200"
+                  preserveAspectRatio="none"
                 >
-                  <span>Pasang PWA Siaga</span>
-                  <ChevronRight className="h-3 w-3" />
-                </button>
+                  <path d="M-20,60 Q40,140 100,70 T220,110" fill="none" stroke="currentColor" strokeWidth="2.5" />
+                  <path d="M-20,90 Q40,170 100,100 T220,140" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <path d="M-20,120 Q40,200 100,130 T220,170" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M-20,150 Q40,230 100,160 T220,200" fill="none" stroke="currentColor" strokeWidth="1" />
+                </svg>
+
+                <div className="relative z-10 space-y-2.5">
+                  <div className="h-7 w-7 rounded-lg bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
+                    <Smartphone className="h-4 w-4 text-emerald-300" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold tracking-tight text-white">Mode Cepat Validator</h4>
+                    <p className="text-[10px] text-slate-300 leading-tight mt-0.5 opacity-80">
+                      PWA kamera & verifikasi offline
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (deferredPrompt) {
+                        await promptInstall()
+                      } else {
+                        setToastMessage('Aplikasi siap diinstal. Tambahkan ke Layar Utama melalui menu peramban Anda.')
+                      }
+                    }}
+                    className="w-full mt-1.5 py-2 rounded-xl bg-[#1d6b47] hover:bg-[#238155] text-white text-[11px] font-bold transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Pasang PWA Siaga</span>
+                    <ChevronRight className="h-3 w-3" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </aside>
 
@@ -366,11 +395,11 @@ export function ValidatorLayout({
 
             {/* Right Topbar Actions & User Avatar */}
             <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-              {/* Donezo School Switcher Pill Button */}
+              {/* Donezo School Switcher Pill Button - Hidden on mobile/tablet, visible on desktop */}
               <button
                 type="button"
                 onClick={() => setIsSchoolModalOpen(true)}
-                className="group flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-full border border-slate-200/90 bg-slate-50/90 hover:bg-emerald-50/60 hover:border-emerald-300 transition-all text-left cursor-pointer shadow-2xs"
+                className="hidden lg:flex group items-center gap-2 sm:gap-2.5 px-3 py-1.5 rounded-full border border-slate-200/90 bg-slate-50/90 hover:bg-emerald-50/60 hover:border-emerald-300 transition-all text-left cursor-pointer shadow-2xs"
                 title="Klik untuk mengganti sekolah pemantauan nutrisi"
               >
                 <div className="h-7 w-7 rounded-full bg-[#185338] text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
@@ -390,11 +419,11 @@ export function ValidatorLayout({
                 <ChevronDown className="h-3.5 w-3.5 text-slate-400 group-hover:text-emerald-800 shrink-0 transition" />
               </button>
 
-              {/* Mail / Help Button */}
+              {/* Mail / Help Button - Hidden on mobile/tablet, visible on desktop */}
               <button
                 type="button"
                 onClick={() => setToastMessage('Pusat Bantuan & Tiket WhatsApp KawanGizi siap dihubungi: 0812-9988-7766')}
-                className="h-9 w-9 rounded-full border border-slate-200/90 flex items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer"
+                className="hidden lg:flex h-9 w-9 rounded-full border border-slate-200/90 items-center justify-center text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition cursor-pointer"
                 title="Pesan & Bantuan"
               >
                 <Mail className="h-4 w-4" />
@@ -501,6 +530,24 @@ export function ValidatorLayout({
                     </div>
 
                     <div className="py-1">
+                      {/* Ganti Sekolah Pemantauan (Akses Mudah Mobile) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsProfileMenuOpen(false)
+                          setIsSchoolModalOpen(true)
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 transition cursor-pointer text-left"
+                      >
+                        <Building2 className="h-4 w-4 text-emerald-700 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold truncate">Ganti Sekolah</p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {activeSchool?.name || 'SDN 01 Menteng Pagi'}
+                          </p>
+                        </div>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => {
@@ -509,7 +556,7 @@ export function ValidatorLayout({
                         }}
                         className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer text-left"
                       >
-                        <Settings className="h-4 w-4 text-slate-400" />
+                        <Settings className="h-4 w-4 text-slate-400 shrink-0" />
                         <span>Pengaturan Akun</span>
                       </button>
                     </div>

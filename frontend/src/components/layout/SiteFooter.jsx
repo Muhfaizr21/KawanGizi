@@ -1,3 +1,6 @@
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
+
 export function SiteFooter() {
   return (
     <footer className="border-t border-gray-200 bg-white text-gray-600">
@@ -5,8 +8,14 @@ export function SiteFooter() {
         <div className="grid grid-cols-1 gap-10 md:grid-cols-12 md:gap-8">
           {/* Brand & Purpose */}
           <div className="md:col-span-5 space-y-3">
-            <a href="/" className="inline-flex items-center gap-2 text-lg font-black tracking-tight text-gray-900">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-600" />
+            <a href="/" className="inline-flex items-center gap-2.5 text-lg font-black tracking-tight text-gray-900 group">
+              <Image
+                src={KawangiziLogo}
+                alt="Logo KawanGizi"
+                width={32}
+                height={32}
+                className="object-contain w-auto h-7 transition-transform group-hover:scale-105"
+              />
               <span>KawanGizi</span>
             </a>
             <p className="max-w-md text-sm leading-relaxed text-gray-600">

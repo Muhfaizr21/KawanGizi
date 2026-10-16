@@ -26,6 +26,9 @@ import {
 } from 'lucide-react'
 import { ValidatorLayout } from '../../components/layout/ValidatorLayout'
 import { useAuth } from '../../context/AuthContext'
+import { navigate } from '../../App'
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import {
   api,
   deleteAllScans,
@@ -575,8 +578,55 @@ export function ValidatorFoodScanPage() {
   }, [scanResult, menuTitle])
 
   return (
-    <ValidatorLayout
-      activeMenu="foodscan"
+    <>
+      {/* Full-Screen Dark Green AI Scanning Overlay */}
+      {isLoading && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#123624]/95 backdrop-blur-md px-6 text-center select-none"
+        >
+          {/* Subtle glowing ambient aura */}
+          <div className="absolute h-64 w-64 rounded-full bg-emerald-500/20 blur-3xl pointer-events-none" />
+
+          <div className="relative z-10 flex flex-col items-center justify-center max-w-sm mx-auto">
+            {/* Pulsing official KawanGizi brand logo */}
+            <div className="relative flex items-center justify-center mb-6">
+              <div className="absolute -inset-4 rounded-full bg-emerald-400/20 blur-xl animate-pulse" />
+              <Image
+                src={KawangiziLogo}
+                alt="Logo KawanGizi"
+                width={80}
+                height={80}
+                className="relative z-10 object-contain h-16 w-16 sm:h-20 sm:w-20 animate-pulse drop-shadow-md"
+                priority
+              />
+            </div>
+
+            {/* Decorative scanner line */}
+            <div className="relative w-44 h-1 bg-emerald-950/80 rounded-full overflow-hidden mb-5 border border-emerald-500/30">
+              <div className="absolute top-0 bottom-0 w-20 bg-gradient-to-r from-transparent via-emerald-400 to-transparent animate-pulse" />
+            </div>
+
+            {/* Spinner indicator */}
+            <div className="relative flex h-10 w-10 items-center justify-center mb-4">
+              <div className="absolute h-full w-full rounded-full border-2 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+              <ScanLine className="h-4 w-4 text-emerald-300 animate-pulse" />
+            </div>
+
+            {/* Scanning status typography */}
+            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+              Memproses Pindai Visual AI YOLOv8...
+            </h3>
+            <p className="text-xs sm:text-sm text-emerald-200 mt-1.5 font-medium max-w-xs leading-relaxed">
+              Mendeteksi sekat 5 bintang gizi & parameter kesegaran
+            </p>
+          </div>
+        </div>
+      )}
+
+      <ValidatorLayout
+        activeMenu="foodscan"
       title="Uji Mutu & Pindai Nutrisi"
       subtitle="Pemeriksaan visual kelengkapan 5 sekat gizi, kepatuhan suhu holding & kelayakan konsumsi sekolah."
       primaryAction={
@@ -628,29 +678,7 @@ export function ValidatorFoodScanPage() {
           />
         </div>
 
-        {/* Loading Spinner saat proses pemindaian AI */}
-        {isScanning && (
-          <div className="rounded-[22px] border border-emerald-900/40 bg-[#123624] p-8 text-center text-white shadow-lg animate-pulse transition">
-            <div className="flex flex-col items-center justify-center space-y-3">
-              <div className="relative flex h-12 w-12 items-center justify-center">
-                <div className="absolute h-full w-full rounded-full border-4 border-emerald-500/30 border-t-emerald-400 animate-spin" />
-                <ScanLine className="h-5 w-5 text-emerald-300 animate-pulse" />
-              </div>
-              <div>
-                <h4 className="text-sm font-extrabold text-white">
-                  {scanMode === SCAN_MODES.NUTRISI
-                    ? 'Menghitung Makronutrisi Porsi...'
-                    : 'Memproses Pindai Visual AI YOLOv8...'}
-                </h4>
-                <p className="text-xs text-emerald-200/80 mt-0.5">
-                  {scanMode === SCAN_MODES.NUTRISI
-                    ? 'Mencocokkan bahan dengan dataset gizi resmi per 100 gram'
-                    : 'Mendeteksi sekat 5 bintang gizi & parameter kesegaran (~45ms)'}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         <ScanModeModal
           open={isModeOpen}
@@ -667,9 +695,18 @@ export function ValidatorFoodScanPage() {
           </p>
         )}
         {actionError && (
-          <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-semibold text-rose-700">
-            {actionError}
-          </p>
+          <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-semibold text-rose-700">
+            <span>{actionError}</span>
+            {actionError.toLowerCase().includes('sesi') && (
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="shrink-0 rounded-lg bg-rose-600 px-3 py-1 text-[11px] font-bold text-white hover:bg-rose-700 transition"
+              >
+                Masuk Ulang
+              </button>
+            )}
+          </div>
         )}
 
         {/* ========================================================================= */}
@@ -1380,6 +1417,7 @@ export function ValidatorFoodScanPage() {
         onDismiss={() => setToast(null)}
       />
     </ValidatorLayout>
+  </>
   )
 }
 

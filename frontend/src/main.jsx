@@ -3,14 +3,17 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { PWAProvider } from './context/PWAContext.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AuthProvider>
-      <ErrorBoundary>
-        <App />
-      </ErrorBoundary>
+      <PWAProvider>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </PWAProvider>
     </AuthProvider>
   </StrictMode>,
 )

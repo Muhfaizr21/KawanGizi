@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -108,10 +109,11 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 
 	c.setRefreshCookie(w, r, rawRefresh, refreshExpires)
 	utils.Success(w, http.StatusOK, "login berhasil", models.AuthResponse{
-		AccessToken: access,
-		ExpiresIn:   int64(accessTTLSeconds),
-		User:        user,
-		Permissions: models.PermissionsFor(user.Role),
+		AccessToken:  access,
+		RefreshToken: rawRefresh,
+		ExpiresIn:    int64(accessTTLSeconds),
+		User:         user,
+		Permissions:  models.PermissionsFor(user.Role),
 	})
 }
 
@@ -122,8 +124,21 @@ func (c *AuthController) Login(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} models.APIResponse
 // @Router /api/auth/refresh [post]
 func (c *AuthController) Refresh(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(refreshCookieName)
-	if err != nil {
+	var rawToken string
+	if cookie, err := r.Cookie(refreshCookieName); err == nil && cookie.Value != "" {
+		rawToken = cookie.Value
+	} else if h := r.Header.Get("X-Refresh-Token"); h != "" {
+		rawToken = strings.TrimSpace(h)
+	} else {
+		var req struct {
+			RefreshToken string `json:"refreshToken"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.RefreshToken != "" {
+			rawToken = strings.TrimSpace(req.RefreshToken)
+		}
+	}
+
+	if rawToken == "" {
 		utils.Error(w, http.StatusUnauthorized, "sesi tidak valid, silakan login ulang")
 		return
 	}
@@ -131,7 +146,7 @@ func (c *AuthController) Refresh(w http.ResponseWriter, r *http.Request) {
 	// authSvc.Refresh sudah mengembalikan user-nya. Jangan panggil Me() dengan
 	// UserID dari context: route ini tidak membawa access token (hanya cookie),
 	// sehingga context kosong dan refresh selalu gagal setelah token di-revoke.
-	user, access, rawRefresh, refreshExpires, err := c.authSvc.Refresh(r.Context(), cookie.Value)
+	user, access, rawRefresh, refreshExpires, err := c.authSvc.Refresh(r.Context(), rawToken)
 	if err != nil {
 		c.clearRefreshCookie(w, r)
 		utils.Error(w, http.StatusUnauthorized, err.Error())
@@ -140,10 +155,11 @@ func (c *AuthController) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	c.setRefreshCookie(w, r, rawRefresh, refreshExpires)
 	utils.Success(w, http.StatusOK, "sesi diperbarui", models.AuthResponse{
-		AccessToken: access,
-		ExpiresIn:   int64(accessTTLSeconds),
-		User:        user,
-		Permissions: models.PermissionsFor(user.Role),
+		AccessToken:  access,
+		RefreshToken: rawRefresh,
+		ExpiresIn:    int64(accessTTLSeconds),
+		User:         user,
+		Permissions:  models.PermissionsFor(user.Role),
 	})
 }
 

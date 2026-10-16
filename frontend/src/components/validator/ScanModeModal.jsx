@@ -56,18 +56,24 @@ const SOURCE_OPTIONS = [
 
 const ACCENT = {
   emerald: {
-    iconBg: 'bg-emerald-50',
-    iconText: 'text-emerald-700',
-    hover: 'hover:border-emerald-500 hover:bg-emerald-50/40',
-    badge: 'bg-emerald-100 text-emerald-800',
+    cardBg: 'bg-[#ebf7f0] hover:bg-[#def1e5]',
+    cardBorder: 'border-emerald-300 hover:border-emerald-500',
+    iconBg: 'bg-[#185338]',
+    iconText: 'text-white',
+    badge: 'bg-emerald-600 text-white',
+    bulletIcon: 'text-emerald-700',
+    ctaText: 'text-[#185338] group-hover:text-emerald-950',
     header: 'bg-[#123624]',
     headerText: 'text-emerald-300',
   },
   amber: {
-    iconBg: 'bg-amber-50',
-    iconText: 'text-amber-700',
-    hover: 'hover:border-amber-500 hover:bg-amber-50/40',
-    badge: 'bg-amber-100 text-amber-800',
+    cardBg: 'bg-[#fef5e7] hover:bg-[#fdeed6]',
+    cardBorder: 'border-amber-300 hover:border-amber-500',
+    iconBg: 'bg-amber-600',
+    iconText: 'text-white',
+    badge: 'bg-amber-600 text-white',
+    bulletIcon: 'text-amber-700',
+    ctaText: 'text-amber-800 group-hover:text-amber-950',
     header: 'bg-amber-600',
     headerText: 'text-amber-100',
   },
@@ -166,32 +172,46 @@ export function ScanModeModal({ open, onSelect, onClose, busy = false }) {
                       setMode(opt.id)
                       setStep('source')
                     }}
-                    className={`group flex flex-col items-start gap-2 rounded-2xl border-2 border-slate-200 bg-white p-4 text-left transition active:scale-[0.98] disabled:opacity-50 ${a.hover}`}
+                    className={`group relative flex flex-col items-start gap-2.5 rounded-2xl border-2 p-4 text-left transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50 shadow-2xs hover:shadow-md ${a.cardBg} ${a.cardBorder}`}
                   >
-                    <span className={`rounded-xl p-2 ${a.iconBg} ${a.iconText}`}>
-                      <Icon className="h-5 w-5" />
-                    </span>
+                    <div className="flex items-center justify-between w-full">
+                      <span className={`rounded-xl p-2.5 shadow-xs transition-transform group-hover:scale-105 ${a.iconBg} ${a.iconText}`}>
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold shadow-2xs ${a.badge}`}>
+                        {opt.tagline}
+                      </span>
+                    </div>
+
                     <div>
                       <p className="text-sm font-extrabold tracking-tight text-slate-900">{opt.title}</p>
-                      <p className={`mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${a.badge}`}>
-                        {opt.tagline}
-                      </p>
                     </div>
+
                     <p className="text-[11px] leading-relaxed text-slate-600">{opt.description}</p>
-                    <ul className="space-y-1 pt-1">
+
+                    <ul className="space-y-1 pt-1 w-full">
                       {opt.bullets.map((b) => (
-                        <li key={b} className="flex items-start gap-1.5 text-[11px] text-slate-600">
-                          <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-slate-400" />
+                        <li key={b} className="flex items-start gap-1.5 text-[11px] text-slate-700">
+                          <Sparkles className={`mt-0.5 h-3 w-3 shrink-0 ${a.bulletIcon}`} />
                           <span>{b}</span>
                         </li>
                       ))}
                     </ul>
+
+                    <div className="mt-2 pt-2 border-t border-black/5 w-full flex items-center justify-between">
+                      <span className={`text-[10px] font-bold tracking-tight ${a.ctaText}`}>
+                        Pilih mode pemindaian ini
+                      </span>
+                      <span className="text-xs font-bold text-slate-600 transition-transform group-hover:translate-x-1">
+                        →
+                      </span>
+                    </div>
                   </button>
                 )
               })}
             </div>
             <p className="border-t border-slate-100 bg-slate-50/60 px-5 py-3 text-[11px] text-slate-500">
-              Kedua mode membaca foto yang sama. Nutriksi dihitung dari dataset gizi resmi, bukan
+              Kedua mode membaca foto yang sama. Nutrisi dihitung dari dataset gizi resmi, bukan
               ditebak dari gambar.
             </p>
           </>
@@ -206,13 +226,27 @@ export function ScanModeModal({ open, onSelect, onClose, busy = false }) {
                     type="button"
                     disabled={busy}
                     onClick={() => onSelect(mode, opt.id)}
-                    className={`flex flex-col items-start gap-2 rounded-2xl border-2 border-slate-200 bg-white p-4 text-left transition active:scale-[0.98] disabled:opacity-50 ${activeAccent.hover}`}
+                    className={`group flex flex-col items-start gap-2.5 rounded-2xl border-2 p-4 text-left transition-all duration-200 cursor-pointer active:scale-[0.98] disabled:opacity-50 shadow-2xs hover:shadow-md ${
+                      mode === SCAN_MODES.NUTRISI
+                        ? 'bg-[#fef5e7] hover:bg-[#fdeed6] border-amber-300 hover:border-amber-500'
+                        : 'bg-[#ebf7f0] hover:bg-[#def1e5] border-emerald-300 hover:border-emerald-500'
+                    }`}
                   >
-                    <span className={`rounded-xl p-2 ${activeAccent.iconBg} ${activeAccent.iconText}`}>
+                    <span className={`rounded-xl p-2.5 shadow-xs transition-transform group-hover:scale-105 ${activeAccent.iconBg} ${activeAccent.iconText}`}>
                       <Icon className="h-5 w-5" />
                     </span>
-                    <p className="text-sm font-extrabold tracking-tight text-slate-900">{opt.title}</p>
-                    <p className="text-[11px] leading-relaxed text-slate-600">{opt.description}</p>
+                    <div>
+                      <p className="text-sm font-extrabold tracking-tight text-slate-900">{opt.title}</p>
+                      <p className="text-[11px] leading-relaxed text-slate-600 mt-0.5">{opt.description}</p>
+                    </div>
+                    <div className="mt-1 pt-2 border-t border-black/5 w-full flex items-center justify-between">
+                      <span className={`text-[10px] font-bold tracking-tight ${activeAccent.ctaText}`}>
+                        Gunakan sumber ini
+                      </span>
+                      <span className="text-xs font-bold text-slate-600 transition-transform group-hover:translate-x-1">
+                        →
+                      </span>
+                    </div>
                   </button>
                 )
               })}

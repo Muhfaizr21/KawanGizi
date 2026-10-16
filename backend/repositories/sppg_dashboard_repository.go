@@ -477,12 +477,13 @@ func (r *pgSppgDashboardRepository) TransitionStage(ctx context.Context, sppgID 
 	stg4Status, stg4Prog := "upcoming", 0
 
 	target := payload.TargetStageID
-	if target == "stage-3" {
+	switch target {
+	case "stage-3":
 		stg3Status, stg3Prog = "active", 35
-	} else if target == "stage-4" {
+	case "stage-4":
 		stg3Status, stg3Prog = "completed", 100
 		stg4Status, stg4Prog = "active", 40
-	} else if target == "stage-2" {
+	case "stage-2":
 		stg2Status, stg2Prog = "active", 50
 	}
 

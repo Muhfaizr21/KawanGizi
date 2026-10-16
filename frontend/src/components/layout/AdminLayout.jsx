@@ -27,6 +27,8 @@ import {
   Settings,
 } from 'lucide-react'
 
+import Image from 'next/image'
+import KawangiziLogo from '@/assets/kawangizi-logo.webp'
 import { navigate } from '../../App'
 import { useAuth } from '../../context/AuthContext'
 
@@ -263,8 +265,15 @@ export function AdminLayout({
             <div className="absolute -bottom-8 -left-8 w-20 h-20 bg-blue-400/20 rounded-full blur-lg pointer-events-none" />
 
             <div className="relative z-10">
-              <div className="mx-auto h-12 w-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center mb-2.5 shadow-inner border border-white/20">
-                <GraduationCap className="h-6 w-6 text-white" />
+              <div className="mx-auto h-12 w-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center mb-2.5 shadow-inner border border-white/20 p-1.5">
+                <Image
+                  src={KawangiziLogo}
+                  alt="Logo KawanGizi"
+                  width={36}
+                  height={36}
+                  className="object-contain w-auto h-8"
+                  priority
+                />
               </div>
               <h2 className="font-extrabold text-lg tracking-tight text-white">KawanGizi</h2>
               <p className="text-blue-100 text-[11px] leading-snug mt-1 font-medium opacity-90">

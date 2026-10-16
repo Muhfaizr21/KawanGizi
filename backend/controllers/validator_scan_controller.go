@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // ValidatorScanController menangani endpoint pemindaian mutu dan sinkronisasi Serah Terima (BAST)
@@ -154,9 +155,32 @@ func (c *ValidatorScanController) CreateIncident(w http.ResponseWriter, r *http.
 	userID := middlewares.UserID(r.Context())
 
 	var payload models.ValidatorCreateIncidentPayload
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		utils.Error(w, http.StatusBadRequest, "Format payload laporan insiden tidak valid")
-		return
+
+	ct := r.Header.Get("Content-Type")
+	if strings.HasPrefix(ct, "multipart/form-data") {
+		_ = r.ParseMultipartForm(10 << 20)
+		payload.Category = r.FormValue("category")
+		payload.Severity = r.FormValue("severity")
+		if payload.Severity == "" {
+			payload.Severity = r.FormValue("severityLevel")
+		}
+		payload.Description = r.FormValue("description")
+		payload.NPSN = r.FormValue("npsn")
+		payload.SPPGID = r.FormValue("sppgId")
+		payload.BatchToken = r.FormValue("batchToken")
+		payload.ReporterName = r.FormValue("reporterName")
+	} else {
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			utils.Error(w, http.StatusBadRequest, "Format payload laporan insiden tidak valid")
+			return
+		}
+	}
+
+	if payload.Severity == "" {
+		payload.Severity = "medium"
+	}
+	if payload.Category == "" {
+		payload.Category = "organoleptic"
 	}
 
 	actorName := payload.ReporterName
@@ -198,6 +222,33 @@ func (c *ValidatorScanController) GetHistory(w http.ResponseWriter, r *http.Requ
 	}
 
 	utils.Success(w, http.StatusOK, "Data riwayat dan rekonsiliasi berhasil dimuat", bundle)
+}
+
+// GetHistorySummary mengembalikan statistik ringkasan eksekutif untuk 4 kartu metrik riwayat
+func (c *ValidatorScanController) GetHistorySummary(w http.ResponseWriter, r *http.Request) {
+	userRole := middlewares.Role(r.Context())
+	userID := middlewares.UserID(r.Context())
+	requestedNPSN := r.URL.Query().Get("npsn")
+	requestedSPPGID := r.URL.Query().Get("sppgId")
+
+	bundle, err := c.svc.GetHistoryBundle(r.Context(), userRole, userID, requestedNPSN, requestedSPPGID, 1)
+	if err != nil {
+		utils.Error(w, http.StatusInternalServerError, "Gagal memuat ringkasan riwayat: "+err.Error())
+		return
+	}
+
+	summary := map[string]any{
+		"totalScans":    bundle.Totals.BoxesScanned,
+		"boxesScanned":  bundle.Totals.BoxesScanned,
+		"present":       bundle.Totals.Present,
+		"quota":         bundle.Totals.Quota,
+		"handed":        bundle.Totals.Handed,
+		"leftover":      bundle.Totals.Leftover,
+		"attendancePct": bundle.Totals.AttendancePct,
+		"reviewRate":    bundle.Totals.ReviewRate,
+	}
+
+	utils.Success(w, http.StatusOK, "Ringkasan riwayat berhasil dimuat", summary)
 }
 
 // AllocateSurplus menyimpan opsi alokasi porsi sisa per kelas dan sinkron ke tabel attendances & audit log

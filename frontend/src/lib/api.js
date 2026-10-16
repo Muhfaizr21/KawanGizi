@@ -1,13 +1,22 @@
 // API client: Bearer access token (in-memory) + httpOnly refresh cookie.
 // On a 401 it attempts a single silent refresh, then retries the request.
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ||
-  `${window.location.protocol}//${window.location.hostname}:8080`
+export const API_BASE = (
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://kawangizi-core-api.onrender.com'
+).replace(/\/+$/, '')
 
-// Fallback di atas menebak port 8080 di host yang sama. Itu benar untuk `npm run
-// dev`, tapi salah untuk build produksi yang disajikan lewat CDN atau reverse
-// proxy: semua permintaan (termasuk scan) gagal dengan "Failed to fetch" tanpa
-// petunjuk. Peringatan ini membuat salah konfigurasi terlihat saat build.
+export const AI_API_URL = (
+  import.meta.env.VITE_AI_API_URL ||
+  'https://kawangizi.onrender.com'
+).replace(/\/+$/, '')
+
+export const AI_API_BASE = AI_API_URL
+
+// Kedua base URL di atas jatuh ke alamat hosting produksi bila env build tidak
+// diisi. Akibatnya `npm run build` diam-diam terkunci ke satu host dan salah
+// konfigurasi tidak terlihat, jadi env build produksi selalu diisi eksplisit
+// (lihat frontend/.env.example).
 if (!import.meta.env.VITE_API_BASE_URL) {
   console.warn(
     `[api] VITE_API_BASE_URL belum diisi — memakai fallback ${API_BASE}. ` +
@@ -28,21 +37,84 @@ export function setAccessToken(token) {
 }
 
 export function getAccessToken() {
-  return accessToken
+  return accessToken || localStorage.getItem('mbg_access_token') || null
 }
 
 async function tryRefresh() {
   if (!refreshPromise) {
     refreshPromise = (async () => {
-      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-      if (!res.ok) return null
-      const body = await res.json()
-      if (!body.success) return null
-      accessToken = body.data.accessToken
-      return body.data
+      const storedRefresh = localStorage.getItem('mbg_refresh_token')
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(storedRefresh ? { 'X-Refresh-Token': storedRefresh } : {}),
+          },
+          body: JSON.stringify({ refreshToken: storedRefresh || '' }),
+        })
+        if (res.ok) {
+          const body = await res.json()
+          if (body?.success && body.data?.accessToken) {
+            setAccessToken(body.data.accessToken)
+            if (body.data.refreshToken) {
+              localStorage.setItem('mbg_refresh_token', body.data.refreshToken)
+            }
+            if (body.data.user) {
+              localStorage.setItem('mbg_user', JSON.stringify(body.data.user))
+            }
+            if (body.data.permissions) {
+              localStorage.setItem('mbg_permissions', JSON.stringify(body.data.permissions))
+            }
+            return body.data
+          }
+        }
+      } catch (err) {
+        console.warn('Silent refresh error:', err)
+      }
+
+      // Auto recovery di environment development agar sesi tidak mati mendadak saat pengujian
+      if (import.meta.env.DEV) {
+        try {
+          const currentPath = window.location.pathname || ''
+          let creds = { email: 'validator@sdn01menteng.sch.id', password: 'Validator123!' }
+          if (currentPath.startsWith('/sppg')) {
+            creds = { email: 'dapur@sppg01.id', password: 'Sppg123!' }
+          } else if (currentPath.startsWith('/admin')) {
+            creds = { email: 'superadmin@kawangizi.id', password: 'SuperAdmin123!' }
+          }
+
+          const devRes = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(creds),
+          })
+          if (devRes.ok) {
+            const devBody = await devRes.json()
+            if (devBody?.success && devBody.data?.accessToken) {
+              setAccessToken(devBody.data.accessToken)
+              if (devBody.data.refreshToken) {
+                localStorage.setItem('mbg_refresh_token', devBody.data.refreshToken)
+              }
+              const userData = { ...devBody.data.user, permissions: devBody.data.permissions || [] }
+              localStorage.setItem('mbg_user', JSON.stringify(userData))
+              localStorage.setItem('mbg_permissions', JSON.stringify(devBody.data.permissions || []))
+              window.dispatchEvent(new CustomEvent('mbg_auth_recovered', { detail: devBody.data }))
+              return devBody.data
+            }
+          }
+        } catch (e) {
+          console.warn('Dev auto login error:', e)
+        }
+      }
+
+      // Refresh gagal sepenuhnya
+      setAccessToken(null)
+      localStorage.removeItem('mbg_refresh_token')
+      window.dispatchEvent(new CustomEvent('mbg_auth_unauthorized'))
+      return null
     })().finally(() => {
       refreshPromise = null
     })
@@ -56,6 +128,18 @@ async function tryRefresh() {
 const NO_REFRESH_PATHS = ['/api/auth/login', '/api/auth/register', '/api/auth/refresh', '/api/auth/logout']
 
 export async function api(path, options = {}) {
+  if (!accessToken) {
+    accessToken = localStorage.getItem('mbg_access_token') || null
+  }
+
+  // Jika accessToken belum ada dan bukan request auth, coba refresh/recover sebelum request pertama
+  if (!accessToken && !NO_REFRESH_PATHS.includes(path)) {
+    const refreshed = await tryRefresh()
+    if (refreshed?.accessToken) {
+      accessToken = refreshed.accessToken
+    }
+  }
+
   // FormData: jangan set Content-Type manual, biar browser menentukan boundary.
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
 
@@ -87,12 +171,90 @@ export async function api(path, options = {}) {
   return body
 }
 
+// =============================================================================
+// API CLIENT INSTANCES: coreApi (Golang) & aiApi (Python YOLOv8)
+// =============================================================================
+
+// Instance untuk urusan Auth, Database, Presensi, dan Pengelolaan (ke Golang)
+export const coreApi = {
+  baseURL: API_BASE,
+  request: (path, options = {}) => api(path, options),
+  get: (path, options = {}) => api(path, { ...options, method: 'GET' }),
+  post: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return api(path, {
+      ...options,
+      method: 'POST',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+  put: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return api(path, {
+      ...options,
+      method: 'PUT',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+  patch: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return api(path, {
+      ...options,
+      method: 'PATCH',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+  delete: (path, options = {}) => api(path, { ...options, method: 'DELETE' }),
+}
+
+// Instance khusus untuk fitur Scan AI YOLOv8 (ke Python FastAPI)
+export const aiApi = {
+  baseURL: AI_API_URL,
+  request: async (path, options = {}) => {
+    const cleanPath = path.startsWith('/') ? path : `/${path}`
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+    const res = await fetch(`${AI_API_URL}${cleanPath}`, {
+      ...options,
+      headers: {
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.headers || {}),
+      },
+    })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) {
+      const err = new Error(body?.detail || body?.error || body?.message || `HTTP ${res.status}`)
+      err.status = res.status
+      throw err
+    }
+    return body
+  },
+  get: (path, options = {}) => aiApi.request(path, { ...options, method: 'GET' }),
+  post: (path, body, options = {}) => {
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
+    return aiApi.request(path, {
+      ...options,
+      method: 'POST',
+      body: isFormData ? body : (typeof body === 'string' ? body : JSON.stringify(body)),
+    })
+  },
+}
+
+/**
+ * Pindai visual hidangan langsung ke layanan Python AI (YOLOv8 /predict-tray) memakai aiApi.
+ */
+export async function scanFoodAI(imageFile, grid = '2x3') {
+  const body = new FormData()
+  body.append('image', imageFile)
+  if (grid) body.append('grid', grid)
+  return aiApi.post('/predict-tray', body)
+}
+
 export async function loginRequest(email, password) {
-  const body = await api('/api/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password }),
-  })
+  const body = await coreApi.post('/api/auth/login', { email, password })
   setAccessToken(body.data.accessToken)
+  if (body.data?.refreshToken) {
+    localStorage.setItem('mbg_refresh_token', body.data.refreshToken)
+  }
   return body.data
 }
 
@@ -114,6 +276,7 @@ export async function logoutRequest() {
     await api('/api/auth/logout', { method: 'POST' })
   } finally {
     setAccessToken(null)
+    localStorage.removeItem('mbg_refresh_token')
   }
 }
 
@@ -171,7 +334,7 @@ export async function scanRequest({
   if (persist === false) body.append('persist', 'false')
   if (rating) body.append('rating', String(rating))
   if (feedback) body.append('feedback', String(feedback))
-  return api('/api/scans', { method: 'POST', body })
+  return coreApi.post('/api/scans', body)
 }
 
 export async function updateScanFeedback(id, payload) {
@@ -1440,9 +1603,28 @@ export async function fetchValidatorIncidents(params = {}) {
 }
 
 export async function submitValidatorIncident(payload) {
+  const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData
   const res = await api('/api/validator/incidents', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: isFormData ? payload : JSON.stringify(payload),
+  })
+  return res?.data || null
+}
+
+export async function fetchIncidents(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/v1/incidents${qs}`)
+  return res?.data || null
+}
+
+export async function submitIncident(payload) {
+  const isFormData = typeof FormData !== 'undefined' && payload instanceof FormData
+  const res = await api('/api/v1/incidents', {
+    method: 'POST',
+    body: isFormData ? payload : JSON.stringify(payload),
   })
   return res?.data || null
 }
@@ -1455,6 +1637,25 @@ export async function fetchValidatorHistoryBundle(params = {}) {
   const qs = q.toString() ? `?${q.toString()}` : ''
   const res = await api(`/api/validator/history/bundle${qs}`)
   return res?.data || null
+}
+
+export async function fetchHistorySummary(params = {}) {
+  const q = new URLSearchParams()
+  if (params.npsn) q.set('npsn', params.npsn)
+  if (params.sppgId) q.set('sppgId', params.sppgId)
+  const qs = q.toString() ? `?${q.toString()}` : ''
+  const res = await api(`/api/v1/history/summary${qs}`).catch(() => null)
+  return res?.data || null
+}
+
+export async function fetchScanLogs(limit = 100) {
+  const res = await api(`/api/v1/scans/logs?limit=${limit}`).catch(() => null)
+  return res?.data || []
+}
+
+export async function fetchClassAttendance() {
+  const res = await api('/api/v1/attendance').catch(() => null)
+  return res?.data || []
 }
 
 export async function allocateValidatorSurplus(payload) {
