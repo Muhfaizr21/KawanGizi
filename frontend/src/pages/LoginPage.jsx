@@ -6,6 +6,30 @@ import { useAuth } from '../context/AuthContext'
 import { homeForRole } from '../lib/api'
 import loginArt from '../assets/login-art.png'
 
+const DEMO_ACCOUNTS = [
+  {
+    role: 'superadmin',
+    label: 'Super Admin',
+    desc: 'BGN Pusat',
+    email: 'superadmin@kawangizi.id',
+    password: 'SuperAdmin123!',
+  },
+  {
+    role: 'sppg',
+    label: 'Dapur SPPG',
+    desc: 'Sentral Pangan',
+    email: 'dapur@sppg01.id',
+    password: 'Sppg123!',
+  },
+  {
+    role: 'validator',
+    label: 'Validator',
+    desc: 'SDN Menteng 01',
+    email: 'validator@sdn01menteng.sch.id',
+    password: 'Validator123!',
+  },
+]
+
 export function LoginPage() {
   const { login } = useAuth()
   const [email, setEmail] = useState('')
@@ -13,6 +37,12 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState(null)
+
+  const handleFillDemo = (demoEmail, demoPassword) => {
+    setEmail(demoEmail)
+    setPassword(demoPassword)
+    setError(null)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -176,6 +206,42 @@ export function LoginPage() {
                 {submitted ? 'Membuka dasbor...' : 'Masuk ke Dasbor'}
               </button>
             </form>
+
+            {/* Quick Fill Demo Accounts */}
+            <div className="mt-6 pt-5 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-xs font-mono font-medium text-gray-500 uppercase tracking-wider">
+                  Coba Akun Demo
+                </span>
+                <span className="text-[11px] font-mono text-gray-400">
+                  (Klik untuk isi otomatis)
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {DEMO_ACCOUNTS.map((acc) => {
+                  const isSelected = email === acc.email
+                  return (
+                    <button
+                      key={acc.role}
+                      type="button"
+                      onClick={() => handleFillDemo(acc.email, acc.password)}
+                      className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition duration-150 cursor-pointer ${
+                        isSelected
+                          ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900 text-gray-900'
+                          : 'border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 text-gray-700'
+                      }`}
+                    >
+                      <span className="text-xs font-bold font-mono tracking-tight leading-tight">
+                        {acc.label}
+                      </span>
+                      <span className="text-[10px] font-mono text-gray-400 mt-0.5 truncate w-full">
+                        {acc.desc}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
